@@ -1,11 +1,87 @@
 import { z } from "zod";
 
-export type Plan = "free" | "pro";
+export type Plan = "free" | "creator" | "pro" | "studio";
 export type Entitlement =
   | "manual_planning"
   | "strategist_pack"
   | "opportunity_refresh"
   | "export_pack";
+
+export type QuotaResetPeriod = "week" | "month";
+
+export interface PlanCatalogEntry {
+  name: "Free" | "Creator" | "Pro" | "Studio";
+  priceUsdMonthly: 0 | 19 | 39 | 79;
+  workspaces: number;
+  members: number;
+  opportunities: { limit: number; resetPeriod: QuotaResetPeriod };
+  strategistPacks: { limit: number; resetPeriod: "month" };
+  manualPlanning: "unlimited";
+  exportHistoryDays: number;
+  metricHistory: { limit: number; unit: "posts" | "days" };
+  commentsAndApprovals: boolean;
+  platformVariants: number;
+}
+
+export const PLAN_CATALOG = {
+  free: {
+    name: "Free",
+    priceUsdMonthly: 0,
+    workspaces: 1,
+    members: 1,
+    opportunities: { limit: 5, resetPeriod: "week" },
+    strategistPacks: { limit: 2, resetPeriod: "month" },
+    manualPlanning: "unlimited",
+    exportHistoryDays: 30,
+    metricHistory: { limit: 10, unit: "posts" },
+    commentsAndApprovals: false,
+    platformVariants: 1,
+  },
+  creator: {
+    name: "Creator",
+    priceUsdMonthly: 19,
+    workspaces: 1,
+    members: 1,
+    opportunities: { limit: 30, resetPeriod: "month" },
+    strategistPacks: { limit: 30, resetPeriod: "month" },
+    manualPlanning: "unlimited",
+    exportHistoryDays: 365,
+    metricHistory: { limit: 365, unit: "days" },
+    commentsAndApprovals: false,
+    platformVariants: 3,
+  },
+  pro: {
+    name: "Pro",
+    priceUsdMonthly: 39,
+    workspaces: 1,
+    members: 2,
+    opportunities: { limit: 100, resetPeriod: "month" },
+    strategistPacks: { limit: 100, resetPeriod: "month" },
+    manualPlanning: "unlimited",
+    exportHistoryDays: 730,
+    metricHistory: { limit: 730, unit: "days" },
+    commentsAndApprovals: true,
+    platformVariants: 5,
+  },
+  studio: {
+    name: "Studio",
+    priceUsdMonthly: 79,
+    workspaces: 3,
+    members: 6,
+    opportunities: { limit: 250, resetPeriod: "month" },
+    strategistPacks: { limit: 250, resetPeriod: "month" },
+    manualPlanning: "unlimited",
+    exportHistoryDays: 730,
+    metricHistory: { limit: 730, unit: "days" },
+    commentsAndApprovals: true,
+    platformVariants: 5,
+  },
+} as const satisfies Record<Plan, PlanCatalogEntry>;
+
+export interface EntitlementPolicy {
+  limit: number | null;
+  resetPeriod: QuotaResetPeriod | null;
+}
 
 export interface EntitlementUsage {
   plan: Plan;
@@ -18,27 +94,34 @@ export type EntitlementDecision =
   | { allowed: true; remaining?: number }
   | { allowed: false; resetAt: string };
 
-const QUOTAS: Record<Plan, Record<Entitlement, number | null>> = {
-  free: {
-    manual_planning: null,
-    strategist_pack: 1,
-    opportunity_refresh: 3,
-    export_pack: 5,
-  },
-  pro: {
-    manual_planning: null,
-    strategist_pack: 50,
-    opportunity_refresh: 100,
-    export_pack: 100,
-  },
-};
-
 export const entitlementUsageSchema: z.ZodType<EntitlementUsage> = z.object({
-  plan: z.enum(["free", "pro"]),
+  plan: z.enum(["free", "creator", "pro", "studio"]),
   used: z.record(z.string(), z.number().int().nonnegative()),
   reserved: z.record(z.string(), z.number().int().nonnegative()),
   resetAt: z.iso.datetime(),
 });
+
+/**
+ * Periodic provider services reset on the catalog period. Manual planning and
+ * export creation do not reset because they are unlimited; export retention is
+ * governed separately by `exportHistoryDays` in the plan catalog.
+ */
+export function getEntitlementPolicy(
+  plan: Plan,
+  entitlement: Entitlement,
+): EntitlementPolicy {
+  const catalog = PLAN_CATALOG[plan];
+
+  switch (entitlement) {
+    case "opportunity_refresh":
+      return catalog.opportunities;
+    case "strategist_pack":
+      return catalog.strategistPacks;
+    case "manual_planning":
+    case "export_pack":
+      return { limit: null, resetPeriod: null };
+  }
+}
 
 function assertPositiveInteger(amount: number): void {
   if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount <= 0) {
@@ -50,7 +133,7 @@ export function checkEntitlement(
   usage: EntitlementUsage,
   entitlement: Entitlement,
 ): EntitlementDecision {
-  const quota = QUOTAS[usage.plan][entitlement];
+  const quota = getEntitlementPolicy(usage.plan, entitlement).limit;
 
   if (quota === null) {
     return { allowed: true };
