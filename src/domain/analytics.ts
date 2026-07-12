@@ -13,6 +13,7 @@ export interface MetricSample {
   metricDefinition: string;
   value: number;
   sampleSize: number;
+  sourceSampleId: string;
   measuredAt?: string;
   provenance: {
     provider: string;
@@ -29,6 +30,7 @@ export const metricSampleSchema: z.ZodType<MetricSample> = z.object({
   metricDefinition: z.string().min(1),
   value: z.number().finite(),
   sampleSize: z.number().int().positive(),
+  sourceSampleId: z.string().min(1),
   measuredAt: z.iso.datetime().optional(),
   provenance: z.object({
     provider: z.string().min(1),
@@ -42,6 +44,21 @@ export const metricSamplesSchema = z.array(metricSampleSchema);
 
 function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function stableDefinitionIdentity(definition: string): string {
+  return encodeURIComponent(definition);
+}
+
+export function metricSampleDedupKey(metric: MetricSample): string {
+  return JSON.stringify([
+    metric.provenance.provider,
+    metric.sourceSampleId,
+    metric.contentId,
+    metric.platform,
+    metric.metricKey,
+    metric.metricDefinition,
+  ]);
 }
 
 function coefficientOfVariation(values: number[]): number {
@@ -101,7 +118,7 @@ export function deriveLearnings(metrics: MetricSample[]): Learning[] {
       );
 
       return {
-        id: `learning-${slug(first.platform)}-${slug(first.metricKey)}`,
+        id: `learning-${slug(first.platform)}-${slug(first.metricKey)}-${stableDefinitionIdentity(first.metricDefinition)}`,
         metricKey: first.metricKey,
         metricDefinition: first.metricDefinition,
         platform: first.platform,

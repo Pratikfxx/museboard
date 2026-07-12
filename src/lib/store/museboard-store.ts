@@ -4,7 +4,11 @@ import { z } from "zod";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { deriveLearnings, metricSamplesSchema } from "@/domain/analytics";
+import {
+  deriveLearnings,
+  metricSampleDedupKey,
+  metricSamplesSchema,
+} from "@/domain/analytics";
 import { entitlementUsageSchema } from "@/domain/entitlements";
 import { buildExportManifest, exportManifestSchema } from "@/domain/export";
 import { opportunitySchema } from "@/domain/opportunities";
@@ -194,6 +198,13 @@ export const useMuseboardStore = create<MuseboardState>()(
         if (!parsed.success) return false;
 
         const receipt: PublishReceipt = parsed.data;
+        const contentItem = get().content.find(
+          ({ id }) => id === receipt.contentId,
+        );
+        if (!contentItem || contentItem.platform !== receipt.platform) {
+          return false;
+        }
+
         set((state) => ({
           publishReceipts: [
             ...state.publishReceipts.filter(({ id }) => id !== receipt.id),
@@ -217,8 +228,27 @@ export const useMuseboardStore = create<MuseboardState>()(
         if (!parsed.success) return false;
 
         set((state) => {
-          const metrics = [...state.metrics, ...parsed.data];
-          return { metrics, learnings: deriveLearnings(metrics) };
+          const deduplicationKeys = new Set(
+            state.metrics.map(metricSampleDedupKey),
+          );
+          const metrics = [...state.metrics];
+          for (const metric of parsed.data) {
+            const key = metricSampleDedupKey(metric);
+            if (deduplicationKeys.has(key)) continue;
+            deduplicationKeys.add(key);
+            metrics.push(metric);
+          }
+
+          const dismissals = new Map(
+            state.learnings
+              .filter(({ dismissedAt }) => dismissedAt !== undefined)
+              .map(({ id, dismissedAt }) => [id, dismissedAt]),
+          );
+          const learnings = deriveLearnings(metrics).map((learning) => {
+            const dismissedAt = dismissals.get(learning.id);
+            return dismissedAt ? { ...learning, dismissedAt } : learning;
+          });
+          return { metrics, learnings };
         });
         return true;
       },

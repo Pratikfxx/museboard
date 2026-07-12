@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { PlannerTask } from "@/domain/planner";
 import { planWeek } from "@/domain/planner";
 import type { Opportunity } from "@/domain/opportunities";
-import { rankOpportunities } from "@/domain/opportunities";
+import {
+  OPPORTUNITY_RANKING_WEIGHTS,
+  rankOpportunities,
+} from "@/domain/opportunities";
 
 const tasks: PlannerTask[] = [
   {
@@ -78,5 +81,43 @@ describe("rankOpportunities", () => {
       "b",
     ]);
     expect(rankOpportunities(opportunities)[0].rankScore).toBe(75.5);
+    expect(OPPORTUNITY_RANKING_WEIGHTS).toEqual({
+      relevance: 0.4,
+      momentum: 0.3,
+      originality: 0.15,
+      creatorFit: 0.15,
+    });
+    expect(rankOpportunities(opportunities)[0].scoreContributions).toEqual({
+      relevance: 32,
+      momentum: 21,
+      originality: 9,
+      creatorFit: 13.5,
+    });
+  });
+
+  it("uses locale-independent ordinal ids to break equal-score ties", () => {
+    const base: Omit<Opportunity, "id" | "title"> = {
+      summary: "A source-backed idea",
+      platform: "youtube_shorts",
+      archetypes: ["tech_education"],
+      signals: {
+        relevance: 80,
+        momentum: 70,
+        originality: 60,
+        creatorFit: 90,
+      },
+      provenance: {
+        provider: "museboard-demo",
+        mode: "sample",
+        fetchedAt: "2026-07-13T09:00:00.000Z",
+      },
+    };
+
+    expect(
+      rankOpportunities([
+        { ...base, id: "ä", title: "Umlaut" },
+        { ...base, id: "z", title: "Zed" },
+      ]).map(({ id }) => id),
+    ).toEqual(["z", "ä"]);
   });
 });

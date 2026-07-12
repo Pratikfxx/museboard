@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { EntitlementUsage } from "@/domain/entitlements";
 import {
   checkEntitlement,
+  commitEntitlement,
+  releaseEntitlement,
   reserveEntitlement,
 } from "@/domain/entitlements";
 
@@ -44,5 +46,26 @@ describe("entitlements", () => {
     const denied = reserveEntitlement(reserved.usage, "strategist_pack", 1);
     expect(denied.decision).toEqual({ allowed: false, resetAt });
     expect(denied.usage).toBe(reserved.usage);
+  });
+
+  it("rejects fractional and non-finite commit or release amounts", () => {
+    const usage: EntitlementUsage = {
+      ...freeUsage,
+      used: {},
+      reserved: { strategist_pack: 1 },
+    };
+
+    expect(() => commitEntitlement(usage, "strategist_pack", 0.5)).toThrow(
+      /positive integer/i,
+    );
+    expect(() => commitEntitlement(usage, "strategist_pack", Number.NaN)).toThrow(
+      /positive integer/i,
+    );
+    expect(() => releaseEntitlement(usage, "strategist_pack", 0.5)).toThrow(
+      /positive integer/i,
+    );
+    expect(() => releaseEntitlement(usage, "strategist_pack", Number.NaN)).toThrow(
+      /positive integer/i,
+    );
   });
 });

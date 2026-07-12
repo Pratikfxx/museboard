@@ -31,8 +31,16 @@ export interface Opportunity {
   };
 }
 
+export const OPPORTUNITY_RANKING_WEIGHTS = Object.freeze({
+  relevance: 0.4,
+  momentum: 0.3,
+  originality: 0.15,
+  creatorFit: 0.15,
+}) satisfies Readonly<Record<keyof Opportunity["signals"], number>>;
+
 export interface RankedOpportunity extends Opportunity {
   rankScore: number;
+  scoreContributions: Record<keyof Opportunity["signals"], number>;
 }
 
 const scoreSchema = z.number().min(0).max(100);
@@ -63,25 +71,55 @@ export function parseOpportunities(payload: unknown): Opportunity[] {
   return opportunitiesSchema.parse(payload);
 }
 
-function score(opportunity: Opportunity): number {
-  const { relevance, momentum, originality, creatorFit } = opportunity.signals;
-  return Number(
-    (
-      relevance * 0.4 +
-      momentum * 0.3 +
-      originality * 0.15 +
-      creatorFit * 0.15
-    ).toFixed(2),
-  );
+function scoreContributions(
+  opportunity: Opportunity,
+): RankedOpportunity["scoreContributions"] {
+  return {
+    relevance: Number(
+      (
+        opportunity.signals.relevance * OPPORTUNITY_RANKING_WEIGHTS.relevance
+      ).toFixed(2),
+    ),
+    momentum: Number(
+      (
+        opportunity.signals.momentum * OPPORTUNITY_RANKING_WEIGHTS.momentum
+      ).toFixed(2),
+    ),
+    originality: Number(
+      (
+        opportunity.signals.originality * OPPORTUNITY_RANKING_WEIGHTS.originality
+      ).toFixed(2),
+    ),
+    creatorFit: Number(
+      (
+        opportunity.signals.creatorFit * OPPORTUNITY_RANKING_WEIGHTS.creatorFit
+      ).toFixed(2),
+    ),
+  };
+}
+
+function ordinalCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 export function rankOpportunities(
   opportunities: Opportunity[],
 ): RankedOpportunity[] {
   return opportunities
-    .map((opportunity) => ({ ...opportunity, rankScore: score(opportunity) }))
+    .map((opportunity) => {
+      const contributions = scoreContributions(opportunity);
+      return {
+        ...opportunity,
+        rankScore: Number(
+          Object.values(contributions)
+            .reduce((sum, contribution) => sum + contribution, 0)
+            .toFixed(2),
+        ),
+        scoreContributions: contributions,
+      };
+    })
     .sort(
       (left, right) =>
-        right.rankScore - left.rankScore || left.id.localeCompare(right.id),
+        right.rankScore - left.rankScore || ordinalCompare(left.id, right.id),
     );
 }

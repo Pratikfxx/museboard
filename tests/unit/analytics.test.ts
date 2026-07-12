@@ -10,6 +10,7 @@ const sparseMetrics: MetricSample[] = Array.from({ length: 2 }, (_, index) => ({
   metricDefinition: "Share of viewers still watching at three seconds",
   value: 0.7,
   sampleSize: 10,
+  sourceSampleId: `sample-sparse-${index}`,
   provenance: {
     provider: "museboard-demo",
     mode: "sample",
@@ -26,6 +27,7 @@ const stableTenByTen: MetricSample[] = Array.from(
     metricDefinition: "Share of viewers who reached the end",
     value: 0.6,
     sampleSize: 10,
+    sourceSampleId: `sample-stable-${index}`,
     provenance: {
       provider: "museboard-demo",
       mode: "sample",
@@ -66,5 +68,28 @@ describe("deriveLearnings", () => {
       "instagram_reels",
       "tiktok_video",
     ]);
+  });
+
+  it("uses metric definition identity in otherwise matching learning ids", () => {
+    const metrics = Array.from({ length: 6 }, (_, index) => ({
+      contentId: `definition-${index}`,
+      platform: "instagram_reels" as const,
+      metricKey: "retention",
+      metricDefinition:
+        index < 3 ? "Still watching at 3 seconds" : "Still watching at 5 seconds",
+      value: 0.5,
+      sampleSize: 10,
+      sourceSampleId: `definition-sample-${index}`,
+      provenance: {
+        provider: "museboard-demo",
+        mode: "sample" as const,
+        importedAt: "2026-07-13T09:00:00.000Z",
+      },
+    }));
+
+    const learnings = deriveLearnings(metrics);
+
+    expect(learnings).toHaveLength(2);
+    expect(new Set(learnings.map(({ id }) => id)).size).toBe(2);
   });
 });

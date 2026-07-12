@@ -40,6 +40,12 @@ export const entitlementUsageSchema: z.ZodType<EntitlementUsage> = z.object({
   resetAt: z.iso.datetime(),
 });
 
+function assertPositiveInteger(amount: number): void {
+  if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount <= 0) {
+    throw new Error("Quota amount must be a positive integer");
+  }
+}
+
 export function checkEntitlement(
   usage: EntitlementUsage,
   entitlement: Entitlement,
@@ -65,9 +71,7 @@ export function reserveEntitlement(
   entitlement: Entitlement,
   amount = 1,
 ): { decision: EntitlementDecision; usage: EntitlementUsage } {
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error("Reservation amount must be a positive integer");
-  }
+  assertPositiveInteger(amount);
 
   const decision = checkEntitlement(usage, entitlement);
   if (!decision.allowed || decision.remaining === undefined) {
@@ -98,8 +102,9 @@ export function commitEntitlement(
   entitlement: Entitlement,
   amount = 1,
 ): EntitlementUsage {
+  assertPositiveInteger(amount);
   const reserved = usage.reserved[entitlement] ?? 0;
-  if (amount <= 0 || amount > reserved) {
+  if (amount > reserved) {
     throw new Error("Cannot commit more quota than is reserved");
   }
 
@@ -121,8 +126,9 @@ export function releaseEntitlement(
   entitlement: Entitlement,
   amount = 1,
 ): EntitlementUsage {
+  assertPositiveInteger(amount);
   const reserved = usage.reserved[entitlement] ?? 0;
-  if (amount <= 0 || amount > reserved) {
+  if (amount > reserved) {
     throw new Error("Cannot release more quota than is reserved");
   }
 
