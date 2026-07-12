@@ -16,7 +16,9 @@ export type ResolvedTheme = Exclude<ThemePreference, "system">;
 export const THEME_STORAGE_KEY = "museboard-theme";
 
 const THEME_CHANGE_EVENT = "museboard:theme-change";
+const THEME_SESSION_FALLBACK_KEY = "museboard-theme-session-fallback";
 const SERVER_SNAPSHOT = "system:light";
+let volatilePreference: ThemePreference | null = null;
 
 type ThemeContextValue = {
   preference: ThemePreference;
@@ -42,6 +44,17 @@ function isThemePreference(value: string | null): value is ThemePreference {
 }
 
 function readPreference(): ThemePreference {
+  if (volatilePreference) return volatilePreference;
+
+  try {
+    const fallbackPreference = window.sessionStorage.getItem(
+      THEME_SESSION_FALLBACK_KEY,
+    );
+    if (isThemePreference(fallbackPreference)) return fallbackPreference;
+  } catch {
+    // Continue to persistent storage when session storage is unavailable.
+  }
+
   try {
     const storedPreference = window.localStorage.getItem(THEME_STORAGE_KEY);
     return isThemePreference(storedPreference) ? storedPreference : "system";
@@ -78,6 +91,30 @@ function applyResolvedTheme(theme: ResolvedTheme): void {
   document.documentElement.style.colorScheme = theme;
 }
 
+function persistPreference(preference: ThemePreference): void {
+  volatilePreference = preference;
+
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+    try {
+      window.sessionStorage.removeItem(THEME_SESSION_FALLBACK_KEY);
+      volatilePreference = null;
+    } catch {
+      // Keep the in-memory value authoritative if a stale fallback cannot clear.
+    }
+    return;
+  } catch {
+    // Fall back to session scope when persistent storage rejects the write.
+  }
+
+  try {
+    window.sessionStorage.setItem(THEME_SESSION_FALLBACK_KEY, preference);
+    volatilePreference = null;
+  } catch {
+    // The module-scoped value keeps the current tab consistent as a last resort.
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const snapshot = useSyncExternalStore(
     subscribe,
@@ -97,12 +134,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [resolvedTheme]);
 
   const setPreference = useCallback((nextPreference: ThemePreference) => {
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, nextPreference);
-    } catch {
-      // The in-memory theme still works when storage is unavailable.
-    }
-
+    persistPreference(nextPreference);
     applyResolvedTheme(resolveTheme(nextPreference, prefersDark()));
     window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   }, []);

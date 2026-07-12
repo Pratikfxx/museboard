@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { THEME_BOOTSTRAP_SCRIPT } from "@/components/ui/theme-bootstrap";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 
 import "./globals.css";
@@ -19,23 +20,6 @@ const productFont = Manrope({
   variable: "--font-manrope",
 });
 
-const themeBootstrapScript = `
-(() => {
-  const key = "museboard-theme";
-  let preference = "system";
-  try {
-    const stored = localStorage.getItem(key);
-    if (stored === "light" || stored === "dark" || stored === "system") {
-      preference = stored;
-    }
-  } catch {}
-  const darkSystem = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
-  const theme = preference === "system" ? (darkSystem ? "dark" : "light") : preference;
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
-})();
-`;
-
 export const metadata: Metadata = {
   title: {
     default: "Museboard",
@@ -52,7 +36,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
       </head>
       <body>
         <ThemeProvider>{children}</ThemeProvider>
