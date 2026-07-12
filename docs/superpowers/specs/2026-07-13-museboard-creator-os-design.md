@@ -1,150 +1,215 @@
 # Museboard Creator OS — Product and Experience Design
 
-**Date:** 2026-07-13
-**Status:** Approved product direction; implementation pending
-**Working name:** Museboard
-**Primary market:** US-first, globally accessible
-**Primary customer:** Broad multi-niche creators with personalized onboarding
+Date: July 13, 2026
+
+Status: Approved direction; implementation planning pending
+
+Working name: Museboard (not yet trademark-cleared)
 
 ## 1. Product thesis
 
-Museboard is a creator operating system that helps creators decide what to make, turn the decision into a realistic production plan, collaborate without losing their voice, and learn what to make next.
+Museboard is a creator operating system for broad, multi-niche creators. It helps a creator decide what to make, shape the idea in their own voice, turn it into a realistic production plan, collaborate with a small team, publish through a trustworthy native-finish workflow, and learn what to make next.
 
-The product is not a caption generator or a generic social scheduler. Its core loop is:
+The product is not positioned as an AI content factory. Its core promise is:
 
-`creator context → sourced opportunity → creator-owned angle → hook and brief → production plan → collaborator review → native publishing handoff → performance learning → next recommendation`
+> Plan content your audience wants, create it in your voice, and learn what to make next.
 
-The first five-minute value moment is a set of relevant, evidence-backed ideas that become a personalized seven-day plan. The product should feel like a thoughtful creative strategist that strengthens the creator's judgment rather than replacing it.
+The first meaningful result appears within five minutes of onboarding: five relevant opportunities, three content pillars, one recommended angle, three hooks, and a feasible seven-day plan.
 
-## 2. Decisions already locked
+## 2. Decisions already made
 
-- Serve broad multi-niche creators through niche-specific onboarding and vocabulary.
-- Lead with a creative-strategist experience; AI suggestions remain editable and explainable.
-- Include team spaces with owners, editors, collaborators, comments, assignments, and approvals.
-- Launch export-first with a polished native-publishing handoff.
-- Prepare Instagram as the first direct connector; add YouTube and TikTok after approval and compliance work.
-- Position and price the product for the US first, using USD.
-- Use a generous free-forever tier with monthly limits so users build a habit before paying.
-- Preserve the selected warm editorial design direction, augmented with a useful daily planner and production stages.
-- Support a first-class light and dark theme, system preference, reduced motion, and accessible contrast.
-- Use Three.js only for optional, pausable atmospheric depth or signal exploration. It must never be required for navigation or understanding.
+- Audience: broad multi-niche creators with niche-personalized onboarding.
+- Initial positioning: US-first and globally accessible, with USD anchor pricing.
+- Product personality: an expert creative strategist that sharpens the creator's own thinking.
+- Collaboration: team spaces for editors, managers, and collaborators are a paid expansion path.
+- Activation: trend-backed ideas should become a personalized seven-day plan.
+- Monetization: a genuinely useful free-forever product with monthly service limits; creators pay after experiencing the workflow.
+- Publishing: export-first hybrid at launch; direct connectors arrive platform-by-platform after approval and compliance work.
+- Visual direction: warm editorial atelier, based on the approved combined mock.
+- Productivity model: the home screen must combine one recommended opportunity, an active production stage, a daily/weekly workload planner, collaborator state, and one audience learning.
+- Themes: polished light and dark themes with an explicit toggle, system-default support, persistence, and no flash on load.
+- 3D: subtle, optional, pausable, and non-essential to navigation or comprehension.
 
-## 3. Product approaches considered
+## 3. Approaches considered
 
-### Approach A — Scheduler first
+### A. Scheduler-first dashboard
 
-Build calendar, platform connections, and direct publishing before creator intelligence.
+Lead with a calendar, publishing queue, and integrations. This is familiar and easier to explain, but it competes directly with Buffer, Later, and Metricool and does not solve the creator's hardest judgment problem.
 
-**Advantage:** Familiar category and obvious utility.
-**Rejected because:** Platform reviews and capability differences delay launch; the product becomes another calendar with weak differentiation.
+### B. AI generation suite
 
-### Approach B — AI generator first
+Lead with captions, scripts, images, and video repurposing. This can create a fast demo, but the market is crowded, output quality is difficult to trust, and the product risks encouraging repetitive content.
 
-Build high-volume hooks, captions, carousels, and scripts around a prompt interface.
+### C. Creator operating system — selected
 
-**Advantage:** Fast to demo and easy to explain.
-**Rejected because:** Crowded market, generic output, poor creator trust, and weak long-term learning.
+Own the full learning loop:
 
-### Approach C — Creator operating system
+`opportunity → creator angle → hook → brief → plan → collaboration → native finish → result → learning`
 
-Own the complete decision and learning loop while launching with a reliable native-publishing handoff.
-
-**Advantage:** Strong differentiation, high habit potential, and a credible path from solo subscription to team workspace.
-**Chosen:** This is the product direction.
+This creates a reason to return weekly, supports both solo and team subscriptions, and differentiates through continuity and judgment instead of raw generation volume.
 
 ## 4. Research grounding
 
-The design is informed by current category and creator research:
+- Creator work is operationally heavy and often solo; Kolsquare's 2025 creator survey reported high stress and that most respondents managed their own workflows. [Kolsquare creator survey](https://7208750.fs1.hubspotusercontent-na1.net/hubfs/7208750/250701%20-%20Creators%20Survey%202025/250701-Voices-of-Creator-Economy-2025_Kolsquare_EN.pdf)
+- Patreon research shows creators feel pressure to publish constantly and report burnout affecting motivation. [Patreon State of Create](https://stateofcreate.co/)
+- Adobe/Harris research indicates strong interest in AI that learns a creator's style alongside material concerns about training consent and unreliable output. [Adobe Creators' Toolkit Report](https://news.adobe.com/news/2025/10/adobe-max-2025-creators-survey)
+- Current tools fragment the loop across research, creation, planning, collaboration, and analytics: [Buffer](https://buffer.com/pricing), [Later](https://later.com/pricing/), [Metricool](https://metricool.com/pricing/), [vidIQ](https://vidiq.com/es/plans/), [OpusClip](https://www.opus.pro/pricing), and [Planable](https://planable.io/pricing/).
+- Universal publishing cannot be presented honestly without platform approvals. Unaudited TikTok direct-post clients and unverified YouTube upload projects face visibility restrictions. [TikTok Content Posting API](https://developers.tiktok.com/doc/content-posting-api-get-started), [YouTube Videos API](https://developers.google.com/youtube/v3/docs/videos).
 
-- Patreon reports creator pressure to publish constantly and burnout that reduces motivation: [State of Create](https://stateofcreate.co/).
-- Kolsquare's 2025 multi-niche creator survey reports high stress and that most creators manage the workflow themselves: [Voices of the Creator Economy](https://7208750.fs1.hubspotusercontent-na1.net/hubfs/7208750/250701%20-%20Creators%20Survey%202025/250701-Voices-of-Creator-Economy-2025_Kolsquare_EN.pdf).
-- Adobe reports strong interest in AI that learns a creator's style alongside substantial concern about training and output reliability: [Creators' Toolkit Report](https://news.adobe.com/news/2025/10/adobe-max-2025-creators-survey).
-- YouTube and TikTok expose audience-specific search and content-gap signals rather than only generic trend lists: [YouTube Trends](https://support.google.com/youtube/answer/11962757), [TikTok Creator Search Insights](https://support.tiktok.com/en/using-tiktok/growing-your-audience/creator-search-insights).
-- Competitors separate strategy, production, scheduling, and analytics across products such as [Buffer](https://buffer.com/pricing), [Later](https://later.com/pricing/), [vidIQ](https://vidiq.com/es/plans/), [OpusClip](https://www.opus.pro/pricing), and [Planable](https://planable.io/pricing/).
-- Universal direct publishing is not a safe launch dependency: unaudited [TikTok clients have visibility limits](https://developers.tiktok.com/doc/content-posting-api-get-started), and uploads from unverified [YouTube API projects default to private](https://developers.google.com/youtube/v3/docs/videos/insert).
-
-## 5. Target users and jobs
+## 5. Primary users and jobs
 
 ### Solo creator
 
-Publishes across one or more platforms while balancing creation with another job or business.
-
-Needs to:
-
-- find timely opportunities without monitoring every platform;
-- choose a differentiated angle before investing production time;
-- write in their own voice;
-- build a realistic cadence around available hours;
-- package content for each platform without blind duplication;
-- understand why content worked and what to try next.
+Needs to find relevant ideas, maintain a sustainable cadence, make content in their own voice, and understand what worked without becoming a full-time analyst.
 
 ### Creator with collaborators
 
-Works with an editor, manager, producer, designer, or community lead.
+Needs clear ownership, approvals, comments, due dates, and visibility across a small production pipeline without adopting enterprise project-management software.
 
-Needs to:
+### Editor or manager
 
-- keep strategy, assets, status, and feedback attached to one content item;
-- assign work with deadlines and context;
-- review versions and resolve comments;
-- know exactly what is approved, ready for native finish, or published.
+Needs the source idea, angle, hook, brief, assets, platform version, deadline, and feedback in one object rather than scattered across chat, documents, and calendars.
 
-### Small creator studio
+### Core jobs to be done
 
-Manages several creator workspaces or distinct content brands.
+1. Show timely opportunities for my niche and audience without making me chase trends all day.
+2. Help me choose an original angle and hook before I invest in production.
+3. Turn my thought into a script and shoot plan that still sounds like me.
+4. Build a cadence around my available time and production complexity.
+5. Adapt one story for each platform without blind duplication.
+6. Keep collaborators aligned from brief through approval.
+7. Export a complete, platform-ready package and record what was published.
+8. Explain what worked, why it may have worked, and what to try next.
 
-Needs to:
+## 6. Release scope
 
-- switch workspaces without mixing voice and audience memory;
-- manage roles and approvals;
-- view capacity and schedule across collaborators;
-- preserve separate data, billing, and audit trails.
+### P0: complete sellable workflow
 
-## 6. Activation and onboarding
+- Public marketing page with clear positioning, product proof, pricing, and call to action.
+- Authentication and persistent creator accounts.
+- Personalized onboarding for niche, audience, goals, voice, platforms, weekly capacity, and boundaries.
+- Creator workspace with profile, content pillars, voice traits, and platform preferences.
+- Evidence-backed opportunity feed with source, freshness, geography, audience fit, and expiry risk.
+- Personalized Idea Board that clusters captured and recommended ideas by content pillar, format, readiness, and strategic goal.
+- Vision Board for creator-uploaded references, links, images, notes, and inspiration, with rights/source metadata and clear separation from live trend evidence.
+- Idea workshop: angle, hook, outline, script, shot list, assets, CTA, and platform variants.
+- Contextual craft guidance inside the workshop for hooks, framing, lighting, audio, pacing, thumbnails, and platform-safe composition; guidance adapts to the current format instead of becoming a generic course library.
+- Daily planner and seven-day workload-aware calendar.
+- Pipeline states from idea through published.
+- Team workspace with roles, assignment, comments, review, and approval.
+- Export/native-finish package with captions, media checklist, platform variants, audio guidance, metadata, and publish checklist.
+- Manual publish receipt: post URL, platform, timestamp, and status.
+- Manual or CSV performance import with clear freshness and platform-native metric definitions.
+- Learning feed that ties recommendations back to a creator's own content and shows sample size/confidence.
+- Free and paid entitlements, Stripe Checkout, Stripe Customer Portal, webhook-driven subscription state, and a local demo billing mode when credentials are absent.
+- Light, dark, and system themes.
+- Responsive desktop and mobile experiences.
 
-Account connection is optional until the creator has seen useful value.
+### P1: reviewed connectors
 
-### Guided onboarding sequence
+- Instagram Professional publishing and insights first.
+- YouTube or TikTok next, based on demand and approval readiness.
+- OAuth capability matrix so the UI only promises actions supported by the connected account and granted scopes.
 
-1. **Outcome:** grow an audience, publish consistently, launch a project, establish expertise, promote work, or repurpose an existing body of content.
-2. **Niche:** broad niche, sub-niches, location, language, audience, creator stage, and admired references.
-3. **Platforms and formats:** current and desired channels, short video, long video, text, carousel, audio, or newsletter.
-4. **Capacity:** available weekly hours, comfortable production complexity, cadence, and preferred batch days.
-5. **Voice:** paste links, posts, or transcripts, or answer a short guided interview. Show the extracted voice profile for correction.
-6. **Boundaries:** avoided topics, sourcing requirements, brand obligations, disclosure needs, rights, humor limits, and phrases to avoid.
-7. **Starter workspace:** three pillars, five sourced ideas, one recommendation, three hooks, and a feasible seven-day plan.
-8. **First commitment:** the creator selects one angle and schedules the first production action.
+### Explicitly not in P0
 
-### Niche personalization
+- Fake live trend feeds or scraped private endpoints.
+- Universal one-click publishing.
+- A universal trending-music API.
+- Spotify audio synchronization or redistribution.
+- Heavy server-side video rendering.
+- Generic benchmark grades that pretend platform metrics are equivalent.
+- Autonomous publishing without creator approval.
 
-The underlying workflow remains shared, but prompts and output vocabulary change by niche. A musician sees releases, performances, snippets, and audio-rights guidance. A technology educator sees sources, claims, demonstrations, and learning outcomes. A lifestyle creator sees story arcs, product obligations, locations, and visual shot planning.
+### Implementation slices and exit gates
 
-### Activation acceptance criteria
+P0 is delivered through five vertical slices. Each slice must pass its exit gate before the next one becomes the active implementation focus.
 
-- A new user can reach a useful personalized opportunity without connecting a social account.
-- The starter result appears within five minutes for a normal onboarding path.
-- The user can edit every inferred field.
-- The onboarding produces a non-empty Today screen and seven-day plan.
-- Returning users resume at the last completed step.
+1. **Foundation and product shell**
+   - Marketing, pricing, authentication, organization membership, theme system, responsive navigation, design tokens, error boundaries, audit primitives, and demo-mode labeling.
+   - Exit: signup/login works locally, tenant isolation tests pass, the light and dark shells match the canonical visual source, and all routes have intentional empty/loading/error states.
+2. **Solo creator loop**
+   - Onboarding, opportunity corpus/ranking, Idea Board, Vision Board, workshop stages, planner, exports, publish receipts, metric import, and deterministic learnings.
+   - Exit: each of the three launch-niche fixtures completes onboarding → opportunity → hook → plan → export → receipt → learning on desktop and mobile.
+3. **Paid services**
+   - Stripe Checkout/Portal, webhook projection, quotas, upgrade/downgrade behavior, and service metering.
+   - Exit: entitlement contract tests pass; local demo billing works without secrets; configured Stripe test mode passes checkout, renewal, cancellation, and duplicate/out-of-order webhook tests.
+4. **Collaboration**
+   - Invites, roles, assignments, comments, approvals, notification inbox, and seat enforcement.
+   - Exit: an owner can invite an editor, complete a version-bound review, invalidate approval with a later edit, and remove the member without orphaning activity history.
+5. **Launch hardening**
+   - Legal/support surfaces, data export/deletion, observability, backup/restore evidence, abuse/rate limits, performance/accessibility QA, production build, and browser verification.
+   - Exit: the acceptance matrix in Section 22 is fully evidenced and no demo/curated state can be mistaken for live provider data.
 
-## 7. Primary information architecture
+The smallest sellable release is slices 1–3: a solo creator can habitually plan and pay for deeper strategist services. Slice 4 enables the Studio plan before it can be marketed. Direct social connectors remain P1.
 
-The top-level navigation is intentionally concise:
+## 7. Activation and onboarding
 
-- **Today:** the next decision, current production work, and workload-aware plan.
-- **Opportunities:** sourced niche signals, saved opportunities, and content gaps.
-- **Create:** the content workshop for angle, hook, outline, script, shots, assets, and platform variants.
-- **Plan:** editorial and production calendar with workload and batch planning.
-- **Learn:** creator-specific findings, experiments, baselines, and recent results.
-- **Team:** members, assignments, comments, approvals, and workspace activity.
+Onboarding is progressive and should take no more than five minutes before first value.
 
-Settings, billing, integrations, privacy, export, and account controls live in the account menu rather than permanent primary navigation.
+1. **Outcome:** grow an audience, publish consistently, launch something, promote work, establish expertise, or repurpose existing work.
+2. **Identity:** broad niche, sub-niches, audience, location, language, creator stage, and admired references.
+3. **Channels:** primary platforms, preferred formats, and current cadence.
+4. **Capacity:** available weekly hours, production comfort, batch preferences, and recovery days.
+5. **Voice:** pasted posts/transcripts or a short guided interview. Museboard extracts editable traits, vocabulary, pacing, opinions, humor, and phrases to avoid.
+6. **Boundaries:** topics to avoid, claims requiring sources, rights/disclosure needs, and brand obligations.
+7. **Starter workspace:** three pillars, five opportunity slots using valid sourced items plus clearly labeled evergreen fallbacks, one recommendation, three hooks, and a seven-day plan.
+8. **Activation action:** the creator chooses and edits one hook. Account connections are offered only after the creator has seen value.
 
-## 8. Today screen — selected visual target
+The starter five do not consume the Free weekly allowance. The normal Free allowance begins after the activation action.
 
-The approved combined mock is the source of truth for the main visual language.
+P0 ships with three fully tested niche archetypes:
 
-### Questions the screen answers
+- **Music creator:** releases, live/performance footage, studio process, snippets, fan community, and audio-rights guidance.
+- **Tech/education creator:** demonstrations, proof sources, claims, diagrams, prerequisites, and learning outcomes.
+- **Lifestyle/business storyteller:** personal narrative, product obligations, locations, visual shot planning, expertise, and community prompts.
+
+Creators can select multiple archetypes and rank a primary one. Shared pillars are merged; conflicting format or tone advice is shown separately instead of silently averaged. Every other niche uses an explicit "General creator" fallback with the same workflow and neutral vocabulary. P0 is US English; language selection is captured for future localization but unsupported languages are not presented as generated-output options.
+
+## 8. Information architecture
+
+### Public routes
+
+- `/` — landing page and product story
+- `/pricing` — plans, limits, FAQ, and upgrade path
+- `/login` and `/signup`
+- `/privacy`, `/terms`, and `/data-policy`
+
+### Product routes
+
+- `/onboarding`
+- `/app/today`
+- `/app/opportunities`
+- `/app/opportunities/ideas`
+- `/app/opportunities/vision`
+- `/app/create/[contentId]`
+- `/app/plan`
+- `/app/learn`
+- `/app/team`
+- `/app/settings/profile`
+- `/app/settings/connections`
+- `/app/settings/billing`
+
+### Navigation
+
+Desktop uses a concise left rail: Today, Opportunities, Create, Plan, Learn, Team. Mobile uses a bottom navigation for Today, Opportunities, Create, and Plan, with Learn, Team, and Settings under a More sheet.
+
+- Header capture accepts plain text, a URL, or a file and creates a draft Idea Board item after confirmation. Search covers the current workspace's content titles, idea/vision items, people, and comments; it never searches across organizations.
+- Opening Create without a `contentId` shows recent drafts plus New from opportunity, New from idea, and Blank content. It does not create an empty record until the user chooses.
+- Notifications open a workspace-scoped inbox for assignments, mentions, review requests, approval changes, export completion, billing status, and failed jobs. Each notification has an exact destination and intentional empty/error state.
+- Quick capture is locally buffered when offline and clearly marked pending until server sync succeeds. Conflicts preserve both drafts.
+
+Opportunities is a compact three-view workspace:
+
+- **For You:** sourced, freshness-labeled opportunities ranked for the creator.
+- **Idea Board:** captured and generated ideas grouped by pillar, format, readiness, and goal.
+- **Vision Board:** creator-curated visual and textual references with source and rights notes. Vision references can inspire an angle but are never presented as evidence that a topic is trending.
+
+The Create workshop exposes contextual craft help beside the active step. Hook guidance appears while choosing a hook; framing, lighting, audio, and safe-zone guidance appears while planning the shoot. This keeps help actionable and avoids a separate, overwhelming tips dashboard.
+
+## 9. Home experience
+
+The home screen answers only:
 
 1. What should I make today?
 2. What is moving toward publication this week?
@@ -152,436 +217,509 @@ The approved combined mock is the source of truth for the main visual language.
 
 ### Desktop hierarchy
 
-- Concise left navigation and creator workspace identity.
-- Editorial greeting and one recommended opportunity.
-- Source, freshness, platforms, and audience-fit evidence.
-- The selected creator angle.
-- Four-stage production spine: Signal → Angle → Hook → Outline.
-- Active-stage choices with one obvious primary action.
-- Subtle, pausable Three.js ribbon or idea sculpture.
-- Inline collaborator state and unresolved feedback.
-- Right-side week planner with duration, state, breathing room, and one gentle workload insight.
-- Bottom learning strip with sample size and confidence.
+- Header: current workspace, date, search/capture, notifications, and theme toggle.
+- Primary opportunity: title, source, freshness, audience fit, why-now explanation, selected angle, and one next action.
+- Production spine: Signal → Angle → Hook → Outline → Script → Shoot → Review → Ready.
+- Daily planner: effort-aware tasks for the current week, breathing room, drag-to-reschedule, and workload guidance.
+- Collaborator context: assignee, reviewer, due date, and the most relevant unresolved comment.
+- Learning strip: one creator-specific observation with sample size, metric definition, and confidence.
 
-### Interaction behavior
+### Mobile hierarchy
 
-- Selecting an angle or hook updates the working brief without navigating away.
-- Changes autosave and show a non-intrusive saved state.
-- The creator can rewrite a suggestion in their voice or edit it directly.
-- The daily planner supports drag-to-reschedule on desktop and explicit move controls on keyboard/mobile.
-- Collaborator comments open in context and never obscure the main action.
-- The Three.js element pauses when off-screen or the tab is hidden and offers a visible pause control.
+- Today action and selected opportunity first.
+- Active stage as a vertical checklist.
+- Swipeable seven-day planner with touch-sized controls.
+- Quick capture, script review, shot checklist, approvals, rescheduling, export status, and publish recovery.
+- No hover-only interactions or 3D-dependent controls.
 
-## 9. Content workshop
+### Planner contract
 
-Every content item is one durable object rather than separate feature silos:
+- Capacity is stored as minutes per week plus one or more preferred production windows and optional recovery days.
+- Tasks use 15-minute increments, an IANA timezone, a due date, stage, dependency list, and one of `planned`, `in_progress`, `done`, `missed`, or `cancelled`.
+- Museboard schedules no more than 80% of declared weekly capacity by default, leaving buffer for capture and recovery. The creator can override with an explicit overload confirmation.
+- Dependencies prevent a downstream task from being recommended as today's action, but never prevent the creator from manually moving it.
+- "Breathing room" is real unused capacity, not a task. A recovery day remains clear unless the creator explicitly schedules into it.
+- An overdue task stays visible with Move, Mark done, Skip, and Re-plan actions; it is never silently rolled forward.
+- Desktop drag-and-drop always has a keyboard-accessible Move action. Mobile uses a date/time picker and day-suggestion sheet rather than drag-only behavior.
+- Timestamps are stored in UTC and displayed in the workspace timezone. DST changes retain the intended local wall-clock time and show a conflict message if the local time does not exist.
+- Workload guidance is deterministic: under 60% capacity is comfortable, 60–80% is focused, 80–100% is heavy, and over 100% is overloaded. It does not make health claims.
 
-`idea → evidence → angle → hooks → outline → script → scene/shot plan → assets → platform variants → schedule → publish handoff → result → learning`
+Acceptance fixtures cover an empty week, an overloaded week, a missed recording task with downstream dependencies, a recovery day, a timezone change, DST transition, and the same reschedule on desktop keyboard and mobile touch.
 
-### Workshop stages
+## 10. Content object and state model
 
-- **Evidence:** source, freshness, geography, audience match, and why-now explanation.
-- **Angle:** creator-owned interpretation and intended audience promise.
-- **Hook:** contrarian, confession, open loop, demonstration, question, or story strategy with editable language.
-- **Outline/script:** modular blocks, claims, sources, pacing, and CTA.
-- **Production:** A-roll, B-roll, shots, overlays, props, aspect ratio, estimated time, and asset checklist.
-- **Variants:** native adaptations for selected platforms with visible differences.
-- **Review:** comments, versions, assignments, approvals, and resolved status.
-- **Handoff:** post-ready package and publish checklist.
+The primary object is a continuous content record:
 
-Generated suggestions must never be represented as certainty or a guarantee of virality.
+`idea → evidence → angle → hooks → outline → script → shot plan → assets → variants → schedule → approvals → export → publish receipt → performance → learning`
 
-## 10. Opportunities and trends
+One `workflow_stage` is the single editorial source of truth:
 
-Opportunities are ranked using:
+`signal → angle → hook → outline → script → shoot → review → ready → published → measured → archived`
 
-- niche and sub-niche fit;
-- audience and goal fit;
-- platform and format fit;
-- geography and language;
-- freshness and expiry risk;
-- source quality;
-- content-gap evidence;
-- similarity to recent creator output;
-- production effort and available capacity.
+- Idea Board items are not content records until promoted; they use only `captured`, `saved`, `promoted`, or `archived`.
+- Advancing from `angle` onward creates an immutable `content_version` snapshot. Editing a stage creates a new current version; history remains readable.
+- Each stage has one optional assignee, due date, task estimate, and stage-specific completion data in `stage_instances`.
+- Entering `review` freezes the submitted version for reviewers. Approval records the exact `content_version_id`.
+- Editing any approved field creates a new version and changes the approval to `stale`; the old approval remains in history.
+- `ready` requires a current approval when the workspace has approval enabled, resolved blocking validations, and at least one exportable platform variant.
+- An export records the exact content and variant versions. Later edits do not mutate the ZIP; they mark it `outdated` and offer a new export.
+- A publish receipt belongs to one platform variant and one export/content version. The same external post URL cannot be attached twice within an organization.
+- `published` means at least one valid receipt exists. `measured` means at least one validated metric snapshot exists. A receipt can be corrected with an audit event but not silently replaced.
+- Every transition records actor, timestamp, previous stage, next stage, version, and optional note.
 
-Every opportunity displays its source, retrieval time, geographic scope when known, and an explanation of why it matches the creator. "Trending music" is guidance to finish natively or use rights-cleared audio; Museboard must not imply that platform audio can be redistributed universally.
+Future connectors use a separate delivery state machine—`draft → approved → scheduled → dispatching → platform_processing → published | failed_retryable | failed_final | cancelled`—so delivery failure cannot corrupt editorial state.
 
-## 11. Planner and calendar
-
-The planner combines editorial intent and production capacity.
-
-### Planner capabilities
-
-- Daily next actions with time estimates.
-- Seven-day view and month view.
-- Production stages, not only publish dates.
-- Drag-to-reschedule plus accessible move controls.
-- Batch-session planning.
-- Breathing-room days and recovery weeks.
-- Workload warnings based on estimated effort and creator capacity.
-- Evergreen fallback content.
-- Team assignments, due dates, blockers, and approval state.
-
-The planner must never punish a creator for taking a break or imply that daily posting is universally optimal.
-
-## 12. Collaboration model
+## 11. Collaboration model
 
 ### Roles
 
-- **Owner:** billing, workspace settings, members, deletion, publishing approval.
-- **Editor:** create and edit content, assets, comments, assignments, and schedules.
-- **Collaborator:** edit assigned content, upload assets, and comment.
-- **Viewer:** read-only access.
+- Owner: billing, workspace settings, membership, all content actions.
+- Editor: create/edit content, upload assets, assign work, comment, submit for review.
+- Viewer: view and comment; cannot change strategy or publish state.
 
-### Collaboration features
+### Interaction rules
 
-- Contextual comments and mentions.
-- Assignment and due date per production stage.
-- Version history for strategy, script, and variants.
-- Optional owner approval before export or publishing.
-- Activity trail for critical changes.
-- Clear presence without noisy real-time indicators.
+- One current assignee and optional reviewer per stage instance.
+- Inline comments attach to the content object or a specific stage.
+- Comments support resolve/reopen and mention notifications.
+- Approval is explicit and version-bound; edits after approval mark the approval stale.
+- The activity log exposes important changes without becoming a noisy feed.
+- Owners invite by email into a specific workspace and role. Invites expire after seven days and support resend, revoke, accept, and decline.
+- A pending invite reserves a seat. When the plan has no seat available, the invite is blocked before email is sent and the exact plan limit is shown.
+- Removing a member revokes future access while preserving authored comments and audit events. Ownership must be transferred before the only owner can leave.
+- Mentions create an in-app notification. Transactional email is opt-in per notification type; delivery failure never hides the in-app item.
+- The notification inbox supports unread/read, mark all read, workspace filtering, and links to the exact version/stage/comment.
+- Cross-workspace access is membership-based; switching workspaces clears cached tenant data before the next workspace renders.
 
-## 13. Native-publishing handoff
+## 12. Trend, opportunity, and music integrity
 
-Version one is export-first and must make the handoff excellent.
+### P0 source strategy
 
-Each export package includes:
+P0 uses an operator-curated US-English opportunity corpus for Instagram, TikTok, and YouTube rather than undocumented scraping or a fake live feed.
 
-- final caption and platform-specific copy;
-- hooks, title, description, hashtags, CTA, and metadata;
-- selected media or an asset checklist;
-- crop/aspect-ratio and safe-zone guidance;
-- audio guidance and rights reminder;
-- disclosure checklist;
-- preferred publish time;
-- plain-text copy controls and a downloadable ZIP where assets exist;
-- a "finish in platform" checklist;
-- manual published URL and timestamp capture.
+- An internal ingestion form accepts a public source URL, source title, publisher/platform, observed time, geography, niche tags, format tags, evidence excerpt written by the operator, expiry time, and rights/usage note.
+- Allowed source classes are official platform trend/search surfaces, official platform reports, public first-party creator/channel pages supplied by the user, and editorial/public datasets whose terms permit linking and summarization. The corpus stores links and short operator summaries, not copied articles or media.
+- P0 does not scrape authenticated creator insights. A creator may paste a URL or add a manual observation; user-provided evidence is labeled `Added by you`.
+- The operator reviews launch archetypes at least twice per week. Time-sensitive opportunities expire after 72 hours unless explicitly renewed from fresh evidence; broader cultural signals expire after seven days; evergreen prompts expire after 30 days.
+- Onboarding receives candidates no older than seven days plus evergreen fallbacks. If fewer than five valid candidates match, Museboard shows the available sourced items and fills the remainder with clearly labeled `Evergreen prompt`, never a fabricated trend.
+- Demo mode uses a frozen corpus labeled `Sample workspace · not live`, with a visible fixture date. Production never silently falls back to demo rows.
 
-The product must distinguish **draft**, **approved**, **scheduled**, **ready for native finish**, and **published**. No fake connected or published state is allowed.
+### Deterministic ranking
 
-## 14. Learning and analytics
+`audience_fit = pillar_match 30% + platform_format_match 20% + stated_goal_match 20% + niche_archetype_match 15% + freshness 10% + prior_learning_adjustment 5%`
 
-The Learn surface prioritizes hypotheses over metric walls.
+Each factor is shown in a "Why this" disclosure. Missing factors contribute zero rather than guessed values. Creator-specific learnings may change the score by no more than five points in P0. The score is never labeled a probability of virality.
 
-Examples:
+### Opportunity and music display
 
-- "Question-led openings held attention longer across your last six Shorts."
-- "Behind-the-scenes posts earned more saves than polished reveals across eight posts."
-- "This conclusion is low-confidence because only three comparable posts are available."
+- Each opportunity shows source, observed/fetched time, expiry, geography when relevant, platform, and why it matches the creator.
+- Stale or unavailable data is labeled clearly and removed from recommended slots after expiry.
+- Music guidance supports TikTok, Instagram Reels, and YouTube Shorts through platform-native discovery links plus operator/user notes. Rights vocabulary is `platform-native only`, `user-owned`, `licensed by user`, `royalty-cleared proof attached`, or `rights unknown`.
+- `rights unknown` blocks inclusion of the audio file in an export but does not block a note reminding the creator to finish natively.
+- A saved-audio item stores the platform URL, title/description, geography, observed time, rights status, and user attestation. Museboard never downloads or redistributes platform audio in P0.
+- When no music source is available, the product offers mood, pacing, and sound-design guidance without naming a "trending" track.
 
-Every learning shows:
+### Craft guidance
 
-- metric definition and platform;
-- sample size;
-- date range and freshness;
-- confidence level;
-- content items used;
-- a suggested next experiment.
+P0 ships with 24 reviewed micro-guides: eight each for short video, long video, and static/text formats, covering hooks, framing, lighting, audio, pacing, thumbnails, safe zones, and disclosure. Every guide records author/source, last-reviewed date, supported formats/platforms, and creator-stage tags. The workshop shows at most one primary and one optional tip for the active stage; if no trustworthy guide matches, it shows none.
 
-Version one supports manual results and CSV import. Provider adapters can later add platform analytics without changing the content model.
+The system avoids mass-produced, repetitive output and asks the creator to add an original perspective before creating variants.
 
-## 15. Monetization
+## 13. Voice and AI behavior
 
-The free plan remains useful forever with monthly limits.
+### Voice contract
 
-### Free
+- A `voice_profile` is an explicit, workspace-owned set of editable traits: tone, pacing, sentence shape, vocabulary to prefer, phrases to avoid, humor, point of view, and example excerpts.
+- Performance learnings are stored separately and never silently rewrite voice traits.
+- Voice extraction is opt-in. The creator previews and confirms traits before they influence generation.
+- The creator can disable, edit, reset, export, or delete the profile. Deletion removes source excerpts and derived traits while preserving unrelated content versions.
+- Connected or uploaded content is not represented as provider training material. Production provider terms, retention, and subprocessors are disclosed; a provider is launch-eligible only if customer API data is excluded from model training by default and its retention posture is documented.
 
-- Personalized onboarding and creator profile.
-- Idea capture and one active weekly plan.
-- Limited sourced opportunities and content briefs per month.
-- Basic calendar and manual publishing handoff.
-- Manual result entry.
+### Strategist service contract
 
-### Creator — target $19/month
+The `StrategistProvider` interface accepts a versioned JSON request containing creator goal, niche archetypes, audience, selected pillar, opportunity/evidence IDs, selected voice traits, boundaries, target platform/format, current stage, and previous creator edits. It returns schema-validated JSON containing distinct angles, three hook strategies, promise labels, outline beats, source references, and safety/rights flags.
 
-- Higher planning and generation limits.
-- Full voice memory and content workshop.
-- Premium export packages.
-- Deeper learning and CSV analytics.
+Every valid result stores provider, model identifier, prompt version, input hash, voice-profile version, opportunity/source IDs, generation time, latency, and output schema version. This provenance is visible in a compact "How this was made" view.
 
-### Pro — target $39/month
+- A complete strategist content pack is metered only after the server receives a schema-valid result and creates a content version.
+- Validation failures, provider timeouts, safety refusals, and automatic retries do not consume allowance.
+- One user-requested regeneration consumes one pack only after it succeeds; manual edits are unlimited.
+- Target p95 generation latency is 15 seconds with a 25-second hard timeout. The interface streams or explains progress, preserves all user input, and allows cancellation.
+- The production cost guardrail is $0.25 maximum provider cost per successful Creator/Pro pack and $0.40 for Studio. Requests that would exceed the configured cap require a cheaper strategy or a clear unavailable state; no hidden overage is charged.
+- One primary provider and one schema-compatible fallback may be configured. Demo/local mode uses deterministic fixtures and is always labeled sample output.
+- Generated content is always an editable draft. High-stakes claims can be marked `source_required` and block `ready` until evidence is attached.
+- Moderation occurs before storage and before provider calls where appropriate. Disallowed requests return a plain-language boundary and do not consume allowance.
+- Provider errors offer retry, simplify, or continue manually. Usage and paid-service limits are visible before an action begins.
 
-- Advanced opportunity intelligence.
-- Cross-platform variants and repurposing.
-- Multiple active plans, larger history, and higher usage.
+## 14. Monetization
 
-### Studio — target $79/month
+The basic planning habit remains usable without a card.
 
+### Free — $0
+
+- One creator workspace.
+- Unlimited idea capture, manual planning, and calendar use.
+- Five sourced opportunities per week.
+- Two complete strategist content packs per month.
+- Basic exports and manual publish receipts.
+- Manual metrics for up to ten published posts.
+
+### Creator — $19/month
+
+- Thirty strategist content packs per month.
+- Full voice profile and source-aware drafting.
+- Full platform-ready exports.
+- Ongoing performance learning.
+- Expanded opportunity feed.
+
+### Pro — $39/month
+
+- One hundred strategist content packs per month.
+- Repurposing and native platform variants.
+- Advanced analytics imports and deeper learnings.
+- One collaborator.
+- Priority generation queue when applicable.
+
+### Studio — $79/month
+
+- Three creator workspaces.
 - Five collaborators.
-- Multiple creator workspaces.
-- Roles, approvals, shared capacity, and workspace reporting.
+- Two hundred fifty strategist content packs per month.
+- Assignments, approvals, shared calendars, and workspace reporting.
 
-Stripe-hosted Checkout and Customer Portal will manage subscription purchase and changes. Entitlements are granted from verified webhook state, not from the browser redirect.
+Annual pricing can be introduced after usage data validates monthly limits. Entitlements live in application data and are projected from Stripe events; the success redirect never grants access by itself.
 
-Prices are launch hypotheses and should remain configurable until customer interviews and willingness-to-pay tests are complete.
+### Action-level entitlement contract
 
-## 16. Visual system and themes
+| Capability | Free | Creator | Pro | Studio |
+|---|---:|---:|---:|---:|
+| Creator workspaces | 1 | 1 | 1 | 3 |
+| Members including owner | 1 | 1 | 2 | 6 |
+| Sourced opportunities | 5/week | 30/month | 100/month | 250/month |
+| Successful strategist packs | 2/month | 30/month | 100/month | 250/month |
+| Manual ideas, planner tasks, edits | Unlimited | Unlimited | Unlimited | Unlimited |
+| Export history | 30 days | 12 months | 24 months | 24 months |
+| Metric history | 10 posts | 12 months | 24 months | 24 months |
+| Comments and approvals | No | No | 1 collaborator | 5 collaborators |
+| Platform variants per content item | 1 | 3 | 5 | 5 |
+
+- Free opportunity allowance resets Monday at 00:00 in the workspace timezone. Paid monthly allowances reset on the Stripe billing-period boundary.
+- Onboarding's starter opportunities and first successful starter pack do not consume allowance.
+- A "pack" is the successful schema-valid creation of angles, three hooks, and an outline for one content version. Failed/cancelled attempts do not count.
+- Upgrade entitlements become active only after the verified Stripe event and current subscription fetch. Downgrades and cancellations take effect at period end; users retain read/export access to existing data.
+- Failed renewal enters a seven-day grace period with clear billing status. Paid generation is paused after grace, while manual planning and data export remain available.
+- Limits are checked in both UI and server transaction. Concurrent requests reserve allowance transactionally and release it on failure.
+
+### Habit loop
+
+- Monday: refresh five Free opportunities and invite the creator to shape one weekly focus.
+- Daily: Today shows one effort-sized next action, not a streak penalty.
+- After publish: request a receipt and schedule a results check at a platform-appropriate interval.
+- Weekly review: summarize completed work, one learning, and one next experiment.
+- Email/in-app reminders are opt-in, frequency-controlled, and stop after inactivity rather than escalating pressure.
+
+Activation metrics are onboarding completion, first hook chosen, and first planner task scheduled. Retention metrics are week-two return, weekly-plan completion, first export, first publish receipt, and first inspected learning. Upgrade events are a successful pack limit, need for longer analytics history, second member invite, or second workspace—not artificial feature interruption.
+
+## 15. Visual system
+
+### Canonical visual source
+
+The implementation sources of truth are [`docs/design/museboard-approved-today-light.png`](../../design/museboard-approved-today-light.png) and [`docs/design/museboard-approved-today-dark.png`](../../design/museboard-approved-today-dark.png), generated at 1487×1058 and reviewed as the 1440×1024 desktop directions.
+
+- **Mandatory:** warm editorial hierarchy, ivory/ink/coral/cobalt palette, left navigation, one dominant opportunity, horizontal production spine, useful right-side week planner, inline collaboration, audience-learning strip, generous spacing, and restrained borders/shadows.
+- **Adaptive:** exact line wraps, sculpture crop, planner width, collaborator placement, and typography scale may change to preserve readability across viewports.
+- **Decorative:** paper texture, paint marks, and woven 3D sculpture may simplify or disappear for dark mode, reduced motion, constrained memory, or WebGL failure.
+- **Intentional change:** the implementation adds a visible light/dark toggle, robust focus/hover/pressed/error states, real scroll behavior, and responsive mobile composition that the static source does not depict.
+
+Component/state inventory for visual QA: navigation default/active/collapsed; opportunity default/saved/expired/loading/error; stage default/complete/active/blocked; hook default/selected/editing/error; planner comfortable/heavy/overloaded/overdue; collaborator pending/active/removed; comment unresolved/resolved; theme light/dark/system; sculpture running/paused/fallback.
 
 ### Light theme
 
-- Sun-washed ivory base.
-- Deep ink text.
+- Sun-washed ivory background.
+- Deep ink primary text.
 - Vermilion/coral primary actions.
 - Cobalt information accents.
-- Pale butter and restrained sage support colors.
-- Minimal tactile texture and editorial whitespace.
+- Pale butter and restrained sage for supportive states.
+- Tactile paper/photo texture only where it strengthens the editorial mood.
 
 ### Dark theme
 
-- Warm charcoal, not pure black.
-- Bone/ivory primary text.
-- Slightly softened coral primary actions.
-- Cobalt shifts lighter for contrast.
-- Tactile texture becomes subtler rather than inverted mechanically.
-- Surfaces remain clearly separated without excessive borders or glow.
+- Warm near-black, not pure black.
+- Soft parchment text instead of stark white.
+- Coral remains the primary action but is tuned for dark-surface contrast.
+- Cobalt becomes brighter and less saturated.
+- Decorative textures and 3D highlights are reduced to prevent glow fatigue.
 
 ### Theme behavior
 
-- Default to the operating-system preference on first visit.
-- Provide a visible light/dark/system toggle in the top bar; mirror the same control in appearance settings.
-- Persist the explicit choice.
-- Apply the theme before first paint to prevent flashing.
-- Theme every state, chart, focus ring, empty state, export preview, and Three.js fallback.
+- Options: Light, Dark, System.
+- The explicit header toggle switches light/dark immediately; a settings control selects System.
+- Preference persists per user and is also cached locally to avoid a flash before authentication data loads.
+- Semantic color tokens drive both themes. No component owns raw theme colors.
+- Every state passes WCAG 2.2 AA contrast targets, including focus, disabled, selected, error, and chart states.
 
-### Spacing and formatting rules
+### Typography and spacing
 
-- Use an 8px base spacing rhythm with intentional 4px exceptions for compact metadata.
-- Desktop content uses generous outer gutters and a readable maximum line length.
-- Body copy defaults to 14–16px; interactive labels do not fall below 13px.
-- Use no more than two font families.
-- Prefer spacing, alignment, and dividers before cards, borders, or shadow.
-- Never nest cards or turn every metric/list item into a card.
-- Maintain consistent heading, label, metadata, and number formatting.
-- Visible dates use the user's locale; stored dates remain UTC.
+- One editorial display serif plus one neutral product sans.
+- Product body text: 14–16px; no essential text smaller than 12px.
+- A consistent 4px spacing base with an 8/12/16/24/32/48/64 scale.
+- Page gutters: 64px desktop, 32px tablet, 16–20px mobile.
+- Minimum interactive target: 44×44px.
+- Long text stays near 65 characters per line.
+- Sections separate through spacing, alignment, and hairlines before backgrounds, borders, or shadows.
 
-## 17. Responsive experience
+### 3D behavior
 
-### Desktop
+- The woven idea sculpture is decorative/contextual and loaded as a client-only enhancement.
+- Static image fallback for reduced motion, failed WebGL, server render, `navigator.connection.saveData`, or measured device-memory/hardware-concurrency thresholds where supported. "Low-power mode" is never claimed as directly detectable.
+- Pause control is visible; animation pauses offscreen and when the tab is hidden.
+- Canvas is `aria-hidden`; equivalent context labels remain in semantic DOM.
+- Initial 3D JavaScript budget is 180KB gzip after lazy-load; texture payload is 350KB maximum; active GPU target is under 32MB; device pixel ratio is capped at 1.5.
+- The sculpture renders on demand when idle, targets 30fps during interaction, pauses when hidden, and disposes geometries, materials, textures, controls, and the renderer on unmount.
+- Navigation, selection, data, and actions remain complete without the canvas.
 
-Full strategy context, multi-column planning, drag-and-drop, analytics detail, and team review.
+## 16. Interaction and state quality
 
-### Tablet
+- Autosave creator work with visible saved/saving/error states.
+- Empty states use onboarding context to provide one meaningful next action.
+- Loading states explain what is being researched or generated and allow cancellation when feasible.
+- Errors identify the failed system, whether data was saved or published, and the safest recovery.
+- Undo is available for reversible planner and content-state actions.
+- Version history protects scripts, hooks, and approvals.
+- "Scheduled", "ready for native finish", and "published" are never visually ambiguous.
+- Desktop supports keyboard navigation and visible focus order.
+- Mobile supports touch-first capture, review, rescheduling, and recovery.
 
-Collapsible navigation, two-column Today layout, touch-friendly planner, and contextual drawers.
+## 17. Export-first publishing
 
-### Mobile
+An export is a complete handoff, not a text download.
 
-Mobile is a production surface, not a compressed desktop dashboard.
+P0 supports Instagram Reels, TikTok video, and YouTube Shorts. Export validation uses versioned platform fixtures for these three targets; other platforms can use a clearly labeled generic package.
 
-Priorities:
+Each package contains:
 
-- quick idea capture;
-- today's next action;
-- script/shot checklist;
-- collaborator review and approval;
-- rescheduling;
-- export status and publish recovery;
-- concise learnings.
+- Platform-specific caption and metadata.
+- Final script and hook.
+- Asset checklist and available media files.
+- Aspect-ratio and safe-zone guidance.
+- Thumbnail/title options where relevant.
+- Audio guidance and rights status.
+- Disclosure/AI-label reminders.
+- CTA and link notes.
+- A publish checklist.
+- A manifest tying the export to content version and approval.
 
-The four-stage production spine becomes a vertical checklist. The week planner becomes an agenda. All drag actions have tap-based alternatives.
+### ZIP contract
 
-## 18. Accessibility and motion
+Filename: `museboard-{project-slug}-{platform}-{yyyy-mm-dd}-v{version}.zip`
 
-Target WCAG 2.2 AA.
+```text
+manifest.json
+README.md
+caption.txt
+script.md
+shot-list.csv
+publish-checklist.md
+metadata/{platform}.json
+assets/{original-file-name}
+```
 
-- Full keyboard navigation and visible focus.
-- Semantic controls and landmarks.
-- Non-color status cues.
-- 44px touch targets where practical.
-- Accessible authentication and form errors.
-- Correct contrast in both themes.
-- Screen-reader summaries for charts and the idea sculpture.
-- Three.js is optional, dynamically loaded, pausable, and replaced by a static fallback for reduced motion, low-power devices, failed WebGL, or server rendering.
-- No continuous animation is required to understand or operate the product.
+`manifest.json` contains schema version, organization/content/version/variant IDs, platform, generated time, approval ID/status, file names with SHA-256 hashes, rights status, disclosures, and validation results. The server streams the ZIP without storing a second public copy; an export record stores the manifest and private object reference when retention is enabled.
 
-## 19. Empty, loading, error, and recovery states
+- Maximum ZIP size: 500MB. Maximum individual asset: 250MB. The UI shows projected size before export.
+- Asset inclusion requires an organization-owned/private upload plus rights status. Links and unknown-rights audio appear as references in `README.md`, never as downloaded files.
+- Exported files are immutable. New content versions create new export versions and mark older exports outdated without deleting them.
+- Validation failure names the exact field/asset and prevents a `complete` export status. No partial ZIP is presented as complete.
+- Desktop provides Download ZIP and field-level Copy actions. Mobile uses the Web Share API for supported files and falls back to a normal download with clear save/open guidance.
+- P0 does not depend on fragile compose deep links. "Open Instagram/TikTok/YouTube" opens the official app/site landing surface after the package is ready and explains what still needs native finishing.
 
-### Empty
+Platform fixtures verify caption/metadata fields, allowed aspect-ratio guidance, disclosure reminders, title/thumbnail presence where relevant, and platform-specific README instructions. A downloadable reference package for each P0 platform is checked into test fixtures and inspected during release QA.
 
-Use onboarding context to recommend one next action. Never show an empty dashboard grid.
+The user can then record a post URL and publication time. Export status is recorded independently for each platform variant.
 
-### Loading
+### Publish receipt, metric import, and learning contract
 
-Explain what is being analyzed, preserve entered work, and allow cancellation where processing may take time.
+P0 accepts manual entry and versioned CSV templates for Instagram Reels, TikTok video, and YouTube Shorts. Each metric fact stores platform, external post URL/ID, published time, fetched/imported time, reporting window, raw platform metric name, normalized semantic category, value, unit, and source file/row. Views, plays, reach, and impressions remain distinct raw metrics; the UI never presents them as the same measure.
 
-### Errors
+- Imports use the workspace timezone for naive timestamps and require confirmation before save.
+- The preview maps columns, shows definitions, flags unknown fields, and reports row-level errors without discarding valid rows.
+- Duplicate identity is `(organization, platform, external_post_id_or_url, metric_name, reporting_window)`. Reimport offers Skip, Replace corrected values, or Cancel.
+- Deleting an import removes its facts and recomputes affected learnings. The audit record keeps metadata, not deleted metric values.
+- Supported v1 comparison dimensions are hook strategy, content pillar, format, opening style, CTA style, and posting-time bucket, within the same platform and format only.
+- A learning requires at least five total posts and at least three posts in each compared group. Creator baseline is the median of the prior 5–20 comparable posts.
+- Effect is reported as a directional association, never causation. Low confidence: minimum threshold only or effect under 10%. Medium: at least five per group and effect ≥10%. High: at least ten per group, effect ≥15%, and the direction is stable in two non-overlapping time windows.
+- A learning displays included posts, excluded posts, exact metric definition, sample size, effect, confidence rule, and last recomputed time.
+- Creators can inspect, dismiss, restore, correct underlying tags, or delete the learning. Dismissed learnings stop influencing ranking.
+- Active learnings can adjust opportunity ranking by no more than the five-point prior-learning factor. Voice traits remain unaffected.
 
-State what failed, what is safe, whether work was saved or published, and the next recovery action. Platform-specific failures name the platform and capability.
+Deterministic fixtures cover sparse data with no learning, a medium-confidence hook association, a high-confidence stable format association, incompatible cross-platform metrics, duplicates, correction/reimport, and deletion/recomputation.
 
-### Recovery
+## 18. Architecture
 
-- Autosave drafts and retain local unsent changes temporarily.
-- Make retries idempotent.
-- Support reconnect and revoke for integrations.
-- Preserve version history for destructive content changes.
-- Provide explicit undo for rescheduling and reversible status changes.
+### Application
 
-## 20. Technical architecture
-
-### Application stack
-
-- Next.js App Router with React and TypeScript.
-- Server Components by default; small client islands for editing, theme, planner interactions, and Three.js.
-- Supabase Postgres, Auth, private Storage, migrations, and row-level security.
+- Next.js App Router with TypeScript.
+- Server Components by default; client components only for interaction-heavy islands.
+- Server-only data-access layer; route handlers for OAuth callbacks, Stripe webhooks, exports, and future connector APIs.
+- Supabase Postgres, Auth, private Storage, migrations, and Row-Level Security.
 - Stripe-hosted Checkout and Customer Portal.
-- Provider adapters for analytics and later publishing connectors.
-- Postgres-backed jobs/outbox for scheduled or asynchronous work.
-- Vercel deployment and cron-triggered idempotent workers when production credentials exist.
+- Three.js/React Three Fiber for the optional idea sculpture.
+- Provider adapters for opportunities, AI strategy, publishing, and analytics.
+- A local demo adapter supplies clearly labeled sample data when external credentials are absent.
 
-### Security boundaries
+### Core data boundaries
 
-- Server-only data-access layer enforces organization membership.
-- RLS provides a second tenant-isolation boundary.
-- Service credentials and social tokens never reach the browser.
-- Assets use private buckets and short-lived signed URLs.
-- Webhooks verify signatures, record event IDs, tolerate duplication, and do not assume ordering.
-- Critical actions write audit events.
+- `organizations`, `memberships`, `creator_profiles`, `voice_profiles`
+- `content_pillars`, `opportunities`, `opportunity_sources`
+- `idea_board_items`, `vision_boards`, `vision_board_items`, `craft_guides`
+- `content_items`, `content_versions`, `stage_instances`, `hooks`, `content_variants`
+- `planner_entries`, `stage_assignments`, `comments`, `approvals`, `notifications`
+- `assets`, `exports`, `export_files`, `publish_receipts`
+- `social_connections`, `publish_attempts`, `metric_facts`
+- `metric_imports`, `learnings`, `learning_samples`, `subscriptions`, `entitlements`, `usage_events`, `audit_events`
 
-### Local and demo operation
+Every tenant-owned record includes `organization_id`. RLS and the server data layer both enforce membership.
 
-The repository must remain usable without external credentials:
+### Data flow
 
-- deterministic demo workspace and realistic seeded data;
-- local auth/data adapter for the product demo when Supabase is not configured;
-- mock provider adapters that are explicitly labeled as demo data;
-- manual export and analytics workflows that genuinely work;
-- no fake successful social connection, checkout, or publish result.
+```mermaid
+flowchart LR
+  O[Onboarding profile] --> R[Opportunity ranking]
+  S[Source adapters] --> R
+  R --> C[Content object]
+  C --> W[Workshop and versions]
+  W --> P[Planner and collaboration]
+  P --> E[Export or connector]
+  E --> M[Publish receipt and metrics]
+  M --> L[Creator-specific learning]
+  L --> R
+```
 
-Production services activate only when their required environment configuration is present.
+### Jobs and idempotency
 
-## 21. Core data model
+- Scheduled jobs and webhooks write to durable tables.
+- Handlers store external event IDs and reject duplicates.
+- Publishing attempts use idempotency keys and explicit retry/final states.
+- External callbacks are treated as unordered and at-least-once.
 
-- `organizations`
-- `memberships`
-- `creator_profiles`
-- `voice_profiles`
-- `content_pillars`
-- `opportunities`
-- `opportunity_sources`
-- `content_items`
-- `content_versions`
-- `content_variants`
-- `production_tasks`
-- `comments`
-- `assignments`
-- `assets`
-- `calendar_entries`
-- `social_connections`
-- `publish_attempts`
-- `metric_facts`
-- `learnings`
-- `subscriptions`
-- `entitlements`
-- `audit_events`
-- `webhook_events`
+### Operational contract
 
-Every tenant-owned row includes `organization_id`. Content variants and performance data remain connected to their source content item.
+- Structured logs include request/job ID, organization ID hash, actor ID hash, route/job name, result, duration, and error class; content, tokens, and secrets are redacted.
+- Error monitoring covers browser, server, jobs, webhooks, export assembly, and deletion jobs with release tags and alert ownership.
+- A private support/admin surface can find an organization by verified identifier, inspect non-content audit/job state, replay safe failed webhooks/jobs, and initiate account export/deletion. Support impersonation is not in P0.
+- Failed jobs retain retry count, next attempt, last safe error, and dead-letter status. Replay is idempotent and audited.
+- Rate limits apply by IP before auth and by organization/user after auth. Generation, invites, uploads, exports, and imports have distinct limits.
+- Feature flags gate AI providers, billing, collaboration, analytics import, and 3D independently, with safe off states.
+- Daily database backups and private-storage versioning are required in production. Launch hardening includes one documented restore drill to a separate environment.
+- Data-export and deletion jobs show user-visible status and alert operators if they exceed the published SLA.
 
-## 22. Testing strategy
+## 19. Security, privacy, and compliance
 
-### Unit tests
+- RLS on every exposed tenant table; authorization also checked near the data source.
+- `service_role` and provider secrets never reach the browser.
+- Social tokens encrypted at rest with a rotatable key before production connectors launch.
+- OAuth uses state, PKCE where supported, exact redirect allowlists, minimum scopes, reconnect, and revoke flows.
+- Private storage, short-lived signed URLs, file type/size/dimension validation, EXIF stripping, and malware scanning for risky uploads.
+- Stripe webhook signature verification, duplicate protection, and out-of-order reconciliation.
+- Data export, account deletion, social disconnect, and token revocation workflows.
+- Privacy policy explains AI usage, subprocessors, retention, deletion, and user controls.
+- Audit events cover membership, billing, approvals, exports, publishing, and deletion.
+- Vision Board accepts HTTPS links and JPG, PNG, WebP, PDF, MP4, and MOV uploads only. P0 limits each workspace to 2GB, each image/PDF to 25MB, and each video to 250MB. Duplicate hashes offer reuse rather than another upload.
+- Link previews store title, hostname, user note, and permitted preview metadata. References are private to the workspace, removable, and never treated as opportunity evidence without a separate operator/user source record.
+- Generation receives only references the creator explicitly selects for that request. Rights status and provenance remain attached; removal prevents future use.
+- US launch defaults to USD, en-US dates/copy, a 13+ minimum age with account attestation, clear cancellation timing, receipts, refund/support contact, FTC sponsorship/disclosure reminders, Terms, Privacy, Data/AI policy, and a legal-review checklist before production billing is enabled.
+- Stripe Tax is not enabled until registrations and product tax codes are reviewed. The product states taxes, trial/renewal terms, and cancellation effect before Checkout.
 
-- Opportunity scoring and explanations.
-- Plan capacity and workload rules.
-- Entitlement checks.
-- Content status transitions.
-- Theme preference resolution.
-- Provider capability mapping.
-- Analytics learning confidence and sample-size rules.
+## 20. Failure and recovery design
 
-### Integration tests
+- **Opportunity source unavailable:** show the last successful fetch time and offer evergreen ideas; never imply freshness.
+- **AI strategy failure:** retain input, show no usage charge where applicable, retry or continue manually.
+- **Autosave conflict:** preserve both versions, explain the conflict, and provide a readable merge choice.
+- **Asset upload failure:** retain draft metadata, show progress/retry, and never lose other form data.
+- **Export failure:** identify the failed asset or validation rule; partial packages are not marked complete.
+- **OAuth failure:** show provider-specific cause and retain current content state.
+- **Publishing uncertainty:** use "checking status" until reconciled; never guess published/failed.
+- **Billing webhook delay:** show pending state; do not grant access from redirect parameters.
+- **Entitlement limit:** explain the exact limit before generation and offer upgrade or manual continuation.
 
-- Onboarding creates a usable workspace.
-- Organization membership and RLS isolation.
-- Content workshop autosave and versioning.
-- Comments, assignments, approvals, and audit trail.
-- Export package generation.
-- Stripe webhook idempotency using fixtures.
-- CSV analytics import and learning generation.
+## 21. Testing and verification
 
-### End-to-end tests
+### Automated
 
-- Free user onboarding to first seven-day plan.
-- Choose opportunity → angle → hook → export.
-- Collaborator comment and owner approval.
-- Planner reschedule with undo.
-- Light, dark, and system-theme persistence.
-- Desktop and mobile primary workflows.
-- Error and recovery paths.
+- Unit tests for ranking explanations, content-state transitions, entitlements, theme preference, export manifests, and metric definitions.
+- Integration tests for onboarding persistence, tenant isolation, comments/approval invalidation, Stripe webhook idempotency, and export assembly.
+- Contract tests for provider adapters using recorded fixtures.
+- End-to-end tests for signup → onboarding → opportunity → hook → plan → collaboration → export → publish receipt → learning.
+- Accessibility checks with automated scanning plus keyboard/manual review.
 
-### Visual and accessibility QA
+### Visual and browser QA
 
-- Compare desktop implementation against the approved combined mock at 1440 × 1024.
-- Inspect mobile at 390 × 844 and tablet at 834 × 1194.
-- Test both themes at full resolution.
-- Run automated accessibility checks and manual keyboard navigation.
-- Verify reduced motion and Three.js fallback.
+- Desktop at 1440×1024 and common laptop widths.
+- Mobile at 390×844 and narrow 320px stress case.
+- Light, dark, and system themes.
+- Reduced motion, WebGL unavailable, slow network, empty data, loading, failure, and long-content states.
+- Full-page screenshots compared against the approved combined mock for hierarchy, spacing, typography, padding, border radius, and theme fidelity.
+- Real exported ZIP/package inspected directly.
+- Supported production matrix: current and previous major desktop Chrome, Safari, and Firefox; current and previous major iOS Safari and Chrome Android.
+- Manual accessibility matrix: keyboard-only desktop, VoiceOver on Safari/iOS, and one Android screen-reader smoke pass.
+- Constrained runs: `saveData`/slow 4G emulation, JavaScript delayed, WebGL unavailable, 4GB-class device emulation, offline quick capture, and mid-request network loss.
 
-## 23. First sellable release scope
+### Performance targets
 
-### Required
+- LCP ≤ 2.5s, INP ≤ 200ms, CLS ≤ 0.1 on representative production pages.
+- 3D is lazy-loaded, paused when hidden, and excluded from the critical rendering path.
+- No route requires 3D or a large media asset to become interactive.
 
-- Marketing/landing route with product positioning and pricing.
-- Authentication-ready shell and deterministic demo access.
-- Personalized onboarding.
-- Today screen matching the approved visual direction.
-- Opportunity feed with source/freshness evidence and demo/local adapter.
-- Angle, hook, outline, and script workshop.
-- Shot/asset checklist and platform variants.
-- Daily planner and calendar.
-- Team roles, comments, assignments, and approvals.
-- Light/dark/system themes.
-- Export/native-finish workflow with downloadable deliverables.
-- Manual/CSV results and actionable learnings.
-- Free/Creator/Pro/Studio entitlement model.
-- Stripe integration boundary and pricing surface; real checkout activates with credentials.
-- Responsive desktop/tablet/mobile workflows.
-- Accessible optional Three.js atmosphere with fallback.
-- Focused automated tests, production build, and browser/visual QA.
+## 22. Acceptance checklist
 
-### Deferred until credentials, review, or licensing exist
+The first release is acceptable when:
 
-- Real social OAuth and direct publishing.
-- Live platform analytics.
-- Automated universal trend feeds.
-- Automated trending-music feed or redistributed platform audio.
-- Production email delivery.
-- Live Stripe purchases and webhook verification.
+1. A new user can understand the product and start free without a card.
+2. Onboarding produces a personalized starter workspace within five minutes.
+3. The user can select a sourced opportunity and understand why it is recommended.
+4. The user can edit an angle, compare hooks, and continue manually if generation is unavailable.
+5. The active content record persists across the complete production spine.
+6. The daily planner shows effort, breathing room, and workload guidance.
+7. A collaborator can comment, receive an assignment, and approve a version.
+8. A later edit correctly marks the old approval stale.
+9. The user can create and inspect a platform-ready export package.
+10. The user can record a published URL and import or enter performance data.
+11. A learning references the creator's own sample size and confidence.
+12. Free and paid entitlements behave consistently in UI and server checks.
+13. Stripe events are verified and idempotent when Stripe credentials are configured.
+14. Light/dark/system themes persist without a flash and remain accessible.
+15. Desktop and mobile primary workflows are fully usable.
+16. Reduced-motion and WebGL-fallback experiences retain all functionality.
+17. Empty, loading, error, retry, and recovery states are understandable.
+18. Tests, lint, typecheck, and production build pass.
+19. Browser QA passes in both themes at desktop and mobile sizes.
+20. No unrelated or hidden demo state is presented as live production data.
 
-Deferred integrations must have honest capability states and documented activation requirements.
+### Concrete release fixtures and evidence
 
-## 24. Acceptance checklist
+The release evidence folder must contain automated results, screenshots, and inspected artifacts for:
 
-- [ ] A first-time visitor understands the product promise and can enter a demo or sign-up path.
-- [ ] A new creator completes personalized onboarding and receives a useful non-empty workspace.
-- [ ] The Today screen clearly answers what to do, what is moving, and what was learned.
-- [ ] Opportunity recommendations show source, freshness, fit, and why-now reasoning.
-- [ ] The creator can select/edit an angle and hook and produce a complete brief.
-- [ ] The daily planner reflects effort, breathing room, and production stages.
-- [ ] Collaborators can be represented with roles, assignments, comments, and approvals.
-- [ ] Export produces an inspectable, usable native-publishing package.
-- [ ] Manual or CSV performance data produces evidence-qualified learnings.
-- [ ] Free-to-paid entitlements are visible and understandable without blocking basic product use.
-- [ ] Light, dark, and system themes render without flash and preserve contrast.
-- [ ] Desktop, tablet, and mobile primary workflows are usable.
-- [ ] Keyboard, reduced-motion, and accessible fallback behavior work.
-- [ ] Empty, loading, error, and recovery states are implemented for the primary workflow.
-- [ ] Focused tests, typecheck, lint, production build, and browser smoke tests pass.
-- [ ] Desktop and mobile screenshots are inspected at full resolution in both themes.
-- [ ] No real external integration is presented as working without live verification.
+1. **Music creator:** US indie musician, TikTok + Instagram Reels, six weekly hours, recovery Thursday. Receives at least three music-relevant sourced/curated opportunities plus explicit evergreen fallbacks, chooses a hook, schedules within 80% capacity, and exports a TikTok package without redistributing audio.
+2. **Tech educator:** US software educator, YouTube Shorts + long video, four weekly hours, claims marked source-required. Cannot enter `ready` until evidence is attached; exports valid Shorts metadata.
+3. **Lifestyle/business storyteller:** multi-niche creator with sponsored-content boundary and one collaborator. Completes version-bound comment/approval, then edits and observes stale approval.
+4. **Sparse account:** no historical posts. Sees no fabricated performance learning and can complete the manual workflow.
+5. **Quota exhaustion:** Free creator uses two successful packs, sees the exact reset/upgrade choice before a third, and continues manual editing without data loss.
+6. **Provider failure:** timeout preserves input, consumes no quota, and allows deterministic/manual continuation.
+7. **Analytics import:** duplicate and corrected rows preview correctly; incompatible platform metrics remain separate; deletion recomputes learnings.
+8. **Mobile export:** a 390×844 device completes hook selection, move-task action, package generation, Share/download fallback, and publish receipt.
+9. **Offline capture:** a captured idea survives reload, syncs when online, and preserves both versions on conflict.
+10. **Theme/accessibility:** light/dark/system load without flash; keyboard and screen-reader paths reach every primary action; reduced-motion/WebGL-fallback behavior remains complete.
 
-## 25. Remaining risks
+Pass/fail thresholds: onboarding starter result under 30 seconds in deterministic mode and under 60 seconds with configured AI; non-AI route response p95 under 800ms in staging; export generation under 15 seconds for a 100MB fixture; no axe serious/critical violations; zero cross-tenant access in RLS/integration suites; all listed browser workflows complete without P0 defects.
 
-- Social platform review timing and changing API capabilities.
-- Trend-data availability and licensing.
-- Music-rights complexity.
-- AI inference cost on a generous free tier.
-- Generic output if voice memory and evidence are weak.
-- Metric incompatibility across platforms.
-- Users perceiving export-first as incomplete unless the native handoff is exceptionally polished.
-- The Museboard working name may require trademark and domain clearance before public launch.
+## 23. Remaining external dependencies and risks
 
-The mitigation is to make the creator-decision and production workflow valuable before any connection, keep expensive services metered, expose evidence and confidence, and treat each live connector as a separately verified capability.
+- Production Supabase, Stripe, email, and Vercel credentials are required for public launch.
+- Social provider apps, review, permissions, privacy/deletion flows, and domain verification are required before direct publishing.
+- Live opportunity data requires approved/licensed providers; P0 must distinguish curated/demo/manual sources from live sources.
+- Music discovery and use remain platform- and license-specific.
+- The working name Museboard requires domain, trademark, and app-store conflict checks before public branding.
+
+## 24. Highest-leverage post-launch work
+
+Interview six to eight active creators across music, tech/education, and lifestyle/business after they complete the full free workflow. Measure time-to-first-plan, first content pack completion, export completion, weekly return, and the moment they encounter a paid service limit. Use those observations to tune onboarding, free limits, and the first direct connector.
