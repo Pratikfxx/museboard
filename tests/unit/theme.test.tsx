@@ -212,4 +212,33 @@ describe("theme menu keyboard behavior", () => {
     expect(trigger).toHaveFocus();
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
+
+  it.each([
+    { key: "{Enter}", label: "Enter" },
+    { key: " ", label: "Space" },
+  ])(
+    "closes and restores trigger focus when a menu item is activated with $label",
+    async ({ key }) => {
+      const user = userEvent.setup();
+      renderThemeToggle();
+
+      const trigger = screen.getByRole("button", { name: /theme/i });
+      await user.click(trigger);
+      const light = screen.getByRole("menuitemradio", { name: /light/i });
+      await waitFor(() =>
+        expect(
+          screen.getByRole("menuitemradio", { name: /system/i }),
+        ).toHaveFocus(),
+      );
+      await user.keyboard("{Home}");
+      expect(light).toHaveFocus();
+
+      await user.keyboard(key);
+
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      expect(trigger).toHaveAccessibleName("Theme: light");
+      expect(localStorage.getItem("museboard-theme")).toBe("light");
+    },
+  );
 });

@@ -131,6 +131,7 @@ export function ThemeToggle() {
                 onClick={() => {
                   setPreference(value);
                   setIsOpen(false);
+                  triggerRef.current?.focus();
                 }}
                 ref={(node) => {
                   itemRefs.current[index] = node;
