@@ -12,6 +12,7 @@ test("visitor can activate a sample workspace without an account or card", async
 
   await page.getByRole("button", { name: "Plan my next week" }).click();
   await page.getByRole("button", { name: "Music creator" }).click();
+  await page.getByRole("textbox", { name: "What should we call you?" }).fill("Maya Chen");
   await page.getByRole("button", { name: "Continue to formats" }).click();
   await page.getByRole("checkbox", { name: "Instagram Reels" }).check();
   await page.getByRole("checkbox", { name: "TikTok video" }).check();
