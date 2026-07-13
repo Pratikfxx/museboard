@@ -23,6 +23,10 @@ async function completeMusicCreatorFlow() {
   );
   await user.click(screen.getByRole("button", { name: /music creator/i }));
 
+  await user.type(
+    screen.getByRole("textbox", { name: /what should we call you/i }),
+    "Maya Chen",
+  );
   const audience = screen.getByRole("textbox", {
     name: /who do you make things for/i,
   });
@@ -83,6 +87,7 @@ describe("creator onboarding", () => {
     const store = useMuseboardStore.getState();
     expect(store.creator?.outcome).toBe("plan_week");
     expect(store.creator?.archetype).toBe("music");
+    expect(store.creator?.name).toBe("Maya Chen");
     expect(store.creator?.archetypes).toEqual(["music"]);
     expect(store.creator?.audience).toBe(
       "Independent artists learning to release consistently",
