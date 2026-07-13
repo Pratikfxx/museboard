@@ -6,6 +6,7 @@ import type { PlannerTask } from "@/domain/planner";
 import type {
   Comment,
   ContentItem,
+  ContentPlatform,
   CreatorArchetype,
   DataMode,
   HookOption,
@@ -16,10 +17,34 @@ import type {
 export const DEMO_NOW = "2026-07-13T09:00:00.000Z";
 export const DEMO_RESET_AT = "2026-08-01T00:00:00.000Z";
 
+export const CREATOR_OUTCOMES = [
+  "plan_week",
+  "find_ideas",
+  "build_system",
+] as const;
+
+export type CreatorOutcome = (typeof CREATOR_OUTCOMES)[number];
+
 export interface CreatorProfile {
   name: string;
+  outcome: CreatorOutcome;
   archetype: CreatorArchetype;
+  archetypes: CreatorArchetype[];
+  audience: string;
+  platforms: ContentPlatform[];
   weeklyCapacityMinutes: number;
+  voiceTraits: string[];
+  boundaries: string[];
+  contentPillars: [string, string, string];
+}
+
+export interface StarterWorkspace {
+  creator: CreatorProfile;
+  opportunities: Opportunity[];
+  selectedOpportunityId: string;
+  hooks: HookOption[];
+  content: ContentItem[];
+  plannerTasks: PlannerTask[];
 }
 
 export interface DemoMuseboardData {

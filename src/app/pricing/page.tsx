@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MarketingShell } from "@/components/marketing/marketing-shell";
+import { manualPlanningLabel } from "@/components/marketing/plan-copy";
 import { PLAN_CATALOG, type Plan } from "@/domain/entitlements";
 
 export const metadata: Metadata = {
@@ -37,7 +38,7 @@ export default function PricingPage() {
               plural(plan.members, "member"),
               `${plan.opportunities.limit} opportunities per ${plan.opportunities.resetPeriod}`,
               `${plan.strategistPacks.limit} strategist packs per ${plan.strategistPacks.resetPeriod}`,
-              "Unlimited manual planning",
+              manualPlanningLabel(plan.manualPlanning),
               `${plan.exportHistoryDays}-day export history`,
               `${plan.metricHistory.limit} ${plan.metricHistory.unit} of metric history`,
               `${plan.platformVariants} platform ${plan.platformVariants === 1 ? "variant" : "variants"}`,

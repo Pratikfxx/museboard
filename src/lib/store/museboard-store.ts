@@ -2,7 +2,11 @@
 
 import { z } from "zod";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import {
+  createJSONStorage,
+  persist,
+  type StateStorage,
+} from "zustand/middleware";
 
 import {
   deriveLearnings,
@@ -15,6 +19,7 @@ import { opportunitySchema } from "@/domain/opportunities";
 import { plannerTaskSchema } from "@/domain/planner";
 import {
   commentSchema,
+  contentPlatformSchema,
   contentItemSchema,
   creatorArchetypeSchema,
   dataModeSchema,
@@ -30,18 +35,157 @@ import type {
 } from "@/domain/schema";
 import { approveCurrentVersion, transitionStage } from "@/domain/workflow";
 import {
+  CREATOR_OUTCOMES,
   createDemoState,
   type CreatorProfile,
   type DemoMuseboardData,
+  type StarterWorkspace,
 } from "@/lib/demo/fixtures";
 
 export const MUSEBOARD_STORAGE_KEY = "museboard-demo-v1";
+const fallbackStorage = new Map<string, string>();
+const creatorOutcomeSchema = z.enum(CREATOR_OUTCOMES);
+
+const safeStateStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      const value = window.localStorage.getItem(name);
+      if (value === null) {
+        fallbackStorage.delete(name);
+      } else {
+        fallbackStorage.set(name, value);
+      }
+      return value;
+    } catch {
+      return fallbackStorage.get(name) ?? null;
+    }
+  },
+  setItem: (name, value) => {
+    fallbackStorage.set(name, value);
+    try {
+      window.localStorage.setItem(name, value);
+    } catch {
+      // The in-memory copy keeps the current workspace usable in this tab.
+    }
+  },
+  removeItem: (name) => {
+    fallbackStorage.delete(name);
+    try {
+      window.localStorage.removeItem(name);
+    } catch {
+      // The in-memory copy is already cleared.
+    }
+  },
+};
 
 const creatorProfileSchema: z.ZodType<CreatorProfile> = z.object({
   name: z.string().trim().min(1),
+  outcome: creatorOutcomeSchema,
   archetype: creatorArchetypeSchema,
+  archetypes: z.array(creatorArchetypeSchema).min(1),
+  audience: z.string().trim().min(1),
+  platforms: z.array(contentPlatformSchema).min(1),
   weeklyCapacityMinutes: z.number().int().positive(),
+  voiceTraits: z.array(z.string().trim().min(1)).min(1),
+  boundaries: z.array(z.string().trim().min(1)).min(1),
+  contentPillars: z.tuple([
+    z.string().trim().min(1),
+    z.string().trim().min(1),
+    z.string().trim().min(1),
+  ]),
 });
+
+const starterWorkspaceSchema: z.ZodType<StarterWorkspace> = z
+  .object({
+    creator: creatorProfileSchema,
+    opportunities: z.array(opportunitySchema).length(5),
+    selectedOpportunityId: z.string().min(1),
+    hooks: z.array(hookOptionSchema).length(3),
+    content: z.array(contentItemSchema).length(1),
+    plannerTasks: z.array(plannerTaskSchema).min(1),
+  })
+  .superRefine((workspace, context) => {
+    const { creator, content, hooks, opportunities, plannerTasks } = workspace;
+    const [starterContent] = content;
+    const selectedOpportunity = opportunities.find(
+      ({ id }) => id === workspace.selectedOpportunityId,
+    );
+
+    if (!creator.archetypes.includes(creator.archetype)) {
+      context.addIssue({
+        code: "custom",
+        message: "Primary archetype must be included in creator archetypes",
+        path: ["creator", "archetypes"],
+      });
+    }
+    if (!selectedOpportunity) {
+      context.addIssue({
+        code: "custom",
+        message: "Selected opportunity must exist in the starter opportunities",
+        path: ["selectedOpportunityId"],
+      });
+    }
+    if (
+      opportunities.some(
+        ({ archetypes, platform }) =>
+          !archetypes.includes(creator.archetype) ||
+          !creator.platforms.includes(platform),
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Starter opportunities must match creator archetype and platforms",
+        path: ["opportunities"],
+      });
+    }
+    if (
+      starterContent.archetype !== creator.archetype ||
+      starterContent.opportunityId !== workspace.selectedOpportunityId
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Starter content must use the creator archetype and selected opportunity",
+        path: ["content", 0],
+      });
+    }
+    if (
+      hooks.some(({ contentId }) => contentId !== starterContent.id) ||
+      !hooks.some(
+        ({ id }) => id === starterContent.versions[0].selectedHookId,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "All starter hooks must belong to the personalized content",
+        path: ["hooks"],
+      });
+    }
+
+    const weekStart = new Date(starterContent.createdAt).getTime();
+    const weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000;
+    const scheduledMinutes = plannerTasks.reduce(
+      (total, { estimatedMinutes }) => total + estimatedMinutes,
+      0,
+    );
+    if (
+      scheduledMinutes > creator.weeklyCapacityMinutes * 0.8 ||
+      plannerTasks.some(({ contentId, scheduledFor }) => {
+        const scheduledAt = new Date(scheduledFor ?? "").getTime();
+        return (
+          contentId !== starterContent.id ||
+          !Number.isFinite(scheduledAt) ||
+          scheduledAt < weekStart ||
+          scheduledAt >= weekEnd
+        );
+      })
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Starter planner tasks must form a feasible seven-day schedule",
+        path: ["plannerTasks"],
+      });
+    }
+  });
 
 const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   schemaVersion: z.literal(1),
@@ -63,7 +207,7 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
 
 interface MuseboardActions {
   resetDemo: () => void;
-  completeOnboarding: (profile: CreatorProfile) => void;
+  completeOnboarding: (workspace: StarterWorkspace) => void;
   selectOpportunity: (opportunityId: string) => void;
   chooseHook: (contentId: string, hookId: string, at?: string) => void;
   moveTask: (contentId: string, stage: WorkflowStage, at?: string) => void;
@@ -113,9 +257,17 @@ export const useMuseboardStore = create<MuseboardState>()(
 
       resetDemo: () => set(createDemoState()),
 
-      completeOnboarding: (profile) => {
-        const parsed = creatorProfileSchema.parse(profile);
-        set({ onboardingComplete: true, creator: parsed });
+      completeOnboarding: (workspace) => {
+        const parsed = starterWorkspaceSchema.parse(workspace);
+        set({
+          onboardingComplete: true,
+          creator: parsed.creator,
+          opportunities: parsed.opportunities,
+          selectedOpportunityId: parsed.selectedOpportunityId,
+          hooks: parsed.hooks,
+          content: parsed.content,
+          plannerTasks: parsed.plannerTasks,
+        });
       },
 
       selectOpportunity: (opportunityId) => {
@@ -266,7 +418,7 @@ export const useMuseboardStore = create<MuseboardState>()(
     {
       name: MUSEBOARD_STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeStateStorage),
       partialize: persistedState,
       merge: (persisted, current) => {
         const parsed = persistedMuseboardSchema.safeParse(persisted);

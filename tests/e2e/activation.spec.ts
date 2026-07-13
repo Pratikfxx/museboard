@@ -26,7 +26,19 @@ test("visitor can activate a sample workspace without an account or card", async
     .poll(() =>
       page.evaluate(() => {
         const raw = localStorage.getItem("museboard-demo-v1");
-        return raw ? JSON.parse(raw).state?.onboardingComplete : false;
+        if (!raw) return false;
+        const state = JSON.parse(raw).state;
+        return (
+          state?.onboardingComplete === true &&
+          state.creator?.archetypes?.[0] === "music" &&
+          state.opportunities?.length === 5 &&
+          state.content?.length === 1 &&
+          state.content[0]?.archetype === "music" &&
+          state.hooks?.length === 3 &&
+          state.plannerTasks?.every(
+            (task: { scheduledFor?: string }) => task.scheduledFor,
+          )
+        );
       }),
     )
     .toBe(true);
@@ -45,4 +57,26 @@ test("pricing is explicit about the free workflow and exact plan limits", async 
   await expect(page.getByText("5 opportunities per week")).toBeVisible();
   await expect(page.getByText("250 opportunities per month")).toBeVisible();
   await expect(page.getByText("Unlimited manual planning").first()).toBeVisible();
+});
+
+test("landing previews the approved Today workspace instead of a constructed mock", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const preview = page.getByRole("img", {
+    name: "Approved Museboard Today workspace in light theme",
+  });
+  await expect(preview).toBeVisible();
+  await expect
+    .poll(() =>
+      preview.evaluate(
+        (image: HTMLImageElement) =>
+          image.complete && image.naturalWidth >= image.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await expect(
+    page.getByRole("article", { name: "A Museboard content decision" }),
+  ).toHaveCount(0);
 });

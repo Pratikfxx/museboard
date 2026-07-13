@@ -1,6 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
+
+function starterWorkspace() {
+  return buildStarterWorkspace({
+    outcome: "plan_week",
+    archetype: "tech_education",
+    audience: "Curious builders",
+    platforms: ["instagram_reels"],
+    weeklyCapacityMinutes: 300,
+    voice: "Clear, practical, and direct",
+    boundaries: "No hype",
+    firstHook: "The useful part takes less than a minute.",
+  });
+}
 
 function metricSample(index: number) {
   return {
@@ -44,11 +58,9 @@ describe("Museboard demo store", () => {
   });
 
   it("keeps explicit sample mode while completing onboarding", () => {
-    useMuseboardStore.getState().completeOnboarding({
-      name: "Aarav",
-      archetype: "tech_education",
-      weeklyCapacityMinutes: 300,
-    });
+    const workspace = starterWorkspace();
+    workspace.creator.name = "Aarav";
+    useMuseboardStore.getState().completeOnboarding(workspace);
 
     const state = useMuseboardStore.getState();
     expect(state.dataMode).toBe("sample");
@@ -69,12 +81,9 @@ describe("Museboard demo store", () => {
 
   it("clears optional user selections when the demo is reset", () => {
     const state = useMuseboardStore.getState();
-    state.completeOnboarding({
-      name: "Aarav",
-      archetype: "tech_education",
-      weeklyCapacityMinutes: 300,
-    });
-    state.selectOpportunity("opportunity-desk");
+    const workspace = starterWorkspace();
+    state.completeOnboarding(workspace);
+    state.selectOpportunity(workspace.opportunities[1].id);
 
     useMuseboardStore.getState().resetDemo();
 

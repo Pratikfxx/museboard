@@ -18,12 +18,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
-import type { Opportunity } from "@/domain/opportunities";
 import type {
   ContentPlatform,
   CreatorArchetype,
 } from "@/domain/schema";
-import { DEMO_NOW } from "@/lib/demo/fixtures";
+import type { CreatorOutcome } from "@/lib/demo/fixtures";
+import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
 const ONBOARDING_STORAGE_KEY = "museboard-onboarding-draft-v1";
@@ -31,11 +31,9 @@ const ONBOARDING_CHANGE_EVENT = "museboard:onboarding-change";
 const TOTAL_STEPS = 8;
 let volatileDraft: string | null = null;
 
-type Outcome = "plan_week" | "find_ideas" | "build_system";
-
 interface OnboardingDraft {
   step: number;
-  outcome?: Outcome;
+  outcome?: CreatorOutcome;
   archetype?: CreatorArchetype;
   audience: string;
   platforms: ContentPlatform[];
@@ -80,30 +78,6 @@ const ARCHETYPE_DEFAULTS: Record<
     boundaries: "Avoid hustle theatre, shame, and unrealistic overnight results",
     firstHook: "Consistency gets easier when the system asks less of you.",
   },
-};
-
-const OPPORTUNITY_TITLES: Record<CreatorArchetype, readonly string[]> = {
-  music: [
-    "Let listeners choose the chorus turn",
-    "The eight seconds before the hook",
-    "One sound, three different moods",
-    "The lyric that changed the track",
-    "Build the drop with your audience",
-  ],
-  tech_education: [
-    "Teach the shortcut through one real task",
-    "The mistake your first version made",
-    "One concept, three visual examples",
-    "The tiny system behind the result",
-    "Make the jargon pass the plain-language test",
-  ],
-  lifestyle_business: [
-    "The ritual that makes starting lighter",
-    "Show the system behind a calm week",
-    "A boundary that improved the work",
-    "One small decision with a visible result",
-    "Turn the weekly reset into a conversation",
-  ],
 };
 
 const platformOptions = [
@@ -197,36 +171,6 @@ function clearDraft(): void {
   window.dispatchEvent(new Event(ONBOARDING_CHANGE_EVENT));
 }
 
-function createStarterOpportunities(
-  archetype: CreatorArchetype,
-  audience: string,
-): Opportunity[] {
-  const platforms: ContentPlatform[] = [
-    "instagram_reels",
-    "tiktok_video",
-    "youtube_shorts",
-  ];
-
-  return OPPORTUNITY_TITLES[archetype].map((title, index) => ({
-    id: `starter-${archetype}-${index + 1}`,
-    title,
-    summary: `A sample angle for ${audience.toLocaleLowerCase()} that can become a concrete short-form post.`,
-    platform: platforms[index % platforms.length],
-    archetypes: [archetype],
-    signals: {
-      relevance: 94 - index * 2,
-      momentum: 82 - index,
-      originality: 78 + index * 2,
-      creatorFit: 96 - index,
-    },
-    provenance: {
-      provider: "museboard-onboarding",
-      mode: "sample",
-      fetchedAt: DEMO_NOW,
-    },
-  }));
-}
-
 function ChoiceButton({
   children,
   description,
@@ -305,41 +249,19 @@ export function OnboardingFlow() {
   }
 
   function finishOnboarding() {
-    if (!draft.archetype) return;
+    if (!draft.archetype || !draft.outcome) return;
 
-    const opportunities = createStarterOpportunities(draft.archetype, draft.audience);
-    useMuseboardStore.getState().completeOnboarding({
-      name: `${draft.archetype.replaceAll("_", " ")} creator`,
+    const workspace = buildStarterWorkspace({
+      outcome: draft.outcome,
       archetype: draft.archetype,
+      audience: draft.audience,
+      platforms: draft.platforms,
       weeklyCapacityMinutes: draft.weeklyCapacityMinutes,
+      voice: draft.voice,
+      boundaries: draft.boundaries,
+      firstHook: draft.firstHook,
     });
-    useMuseboardStore.setState({
-      opportunities,
-      selectedOpportunityId: opportunities[0].id,
-      plannerTasks: [
-        {
-          id: `starter-${draft.archetype}-hook`,
-          title: `Shape the hook: ${draft.firstHook}`,
-          estimatedMinutes: 30,
-          priority: 95,
-          opportunityScore: 92,
-        },
-        {
-          id: `starter-${draft.archetype}-outline`,
-          title: "Outline the first short-form post",
-          estimatedMinutes: 45,
-          priority: 86,
-          opportunityScore: 90,
-        },
-        {
-          id: `starter-${draft.archetype}-record`,
-          title: "Record a rough first take",
-          estimatedMinutes: 60,
-          priority: 78,
-          opportunityScore: 84,
-        },
-      ],
-    });
+    useMuseboardStore.getState().completeOnboarding(workspace);
     clearDraft();
     router.push("/app/today");
   }

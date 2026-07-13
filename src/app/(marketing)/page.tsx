@@ -7,8 +7,10 @@ import {
   Sparkle,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
+import approvedTodayLight from "../../../docs/design/museboard-approved-today-light.png";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 
 export const metadata: Metadata = {
@@ -69,31 +71,19 @@ export default function MarketingPage() {
               <p className="mt-4 text-sm text-muted">No card. No social connection. Sample data is always labeled.</p>
             </div>
 
-            <article className="relative rounded-[2rem] border border-border bg-surface p-6 shadow-xl sm:p-8" aria-label="A Museboard content decision">
-              <div className="flex items-center justify-between gap-4 border-b border-border pb-5">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.15em] text-coral">Today’s decision</p>
-                  <h2 className="mt-1 font-display text-3xl">Make one useful thing.</h2>
-                </div>
-                <span className="rounded-full bg-sage/25 px-3 py-2 text-xs font-bold text-success">Sample · not live</span>
-              </div>
-              <ol className="mt-6 space-y-5">
-                {[
-                  ["Signal", "Your audience keeps asking how you begin."],
-                  ["Angle", "Show the ritual, not a polished result."],
-                  ["Hook", "Starting is a skill you can make easier."],
-                  ["Plan", "Outline Tuesday · record Thursday"],
-                ].map(([label, value], index) => (
-                  <li className="flex gap-4" key={label}>
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-butter/30 text-sm font-bold text-warning">{index + 1}</span>
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">{label}</p>
-                      <p className="mt-1 font-semibold leading-6">{value}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </article>
+            <figure className="overflow-hidden rounded-[2rem] border border-border bg-surface p-2 shadow-xl sm:p-3">
+              <Image
+                alt="Approved Museboard Today workspace in light theme"
+                className="h-auto w-full rounded-[1.4rem]"
+                placeholder="blur"
+                priority
+                sizes="(min-width: 1024px) 50vw, (min-width: 640px) 80vw, calc(100vw - 2rem)"
+                src={approvedTodayLight}
+              />
+              <figcaption className="px-3 pb-2 pt-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                Approved product direction · Today workspace
+              </figcaption>
+            </figure>
           </div>
         </section>
 
