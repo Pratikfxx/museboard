@@ -226,6 +226,9 @@ export class StrategistProvider {
     options: { signal?: AbortSignal } = {},
   ): Promise<StrategistResult> {
     const request = strategistRequestSchema.parse(payload);
+    if (options.signal?.aborted) {
+      throw new Error("Strategist request cancelled. Your draft was preserved.");
+    }
     const decision = this.quota.reserve();
     if (!decision.allowed) {
       throw new Error(`Strategist pack limit reached. Resets ${decision.resetAt}.`);

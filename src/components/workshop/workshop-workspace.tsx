@@ -34,6 +34,15 @@ function validStage(stage?: string): WorkshopStage | undefined {
   return stages.find((candidate) => candidate === stage);
 }
 
+function workshopStage(stage?: string): WorkshopStage | undefined {
+  if (stage === "signal") return "evidence";
+  return validStage(stage);
+}
+
+function domainStage(stage: WorkshopStage) {
+  return stage === "evidence" ? "signal" : stage;
+}
+
 function lines(value: string): string[] {
   return value.split("\n").map((line) => line.trim()).filter(Boolean);
 }
@@ -62,11 +71,12 @@ function WorkshopEditor({
   const creator = useMuseboardStore((state) => state.creator);
   const opportunities = useMuseboardStore((state) => state.opportunities);
   const saveWorkshopVersion = useMuseboardStore((state) => state.saveWorkshopVersion);
+  const moveTask = useMuseboardStore((state) => state.moveTask);
   const item = content.find(({ id }) => id === contentId);
   const currentVersion = item?.versions.find(({ id }) => id === item.currentVersionId) ?? item?.versions.at(-1);
   const itemHooks = hooks.filter((hook) => hook.contentId === item?.id);
   const opportunity = opportunities.find(({ id }) => id === item?.opportunityId);
-  const startingStage = voiceMode ? "script" : validStage(initialStage) ?? validStage(item?.stage) ?? "hook";
+  const startingStage = voiceMode ? "script" : validStage(initialStage) ?? workshopStage(item?.stage) ?? "hook";
   const [stage, setStage] = useState<WorkshopStage>(startingStage);
   const [selectedHookId, setSelectedHookId] = useState(currentVersion?.selectedHookId ?? itemHooks[0]?.id ?? "");
   const [manualHook, setManualHook] = useState(currentVersion?.selectedHookText ?? itemHooks.find(({ id }) => id === (currentVersion?.selectedHookId ?? itemHooks[0]?.id))?.text ?? "");
@@ -78,23 +88,35 @@ function WorkshopEditor({
   const [saveStatus, setSaveStatus] = useState("Saved to this browser · no server sync");
   const [error, setError] = useState("");
   const [editRevision, setEditRevision] = useState(0);
+  const editRevisionRef = useRef(0);
   const lastSavedRevision = useRef(0);
   const pendingPatch = useRef<WorkshopVersionPatch | undefined>(undefined);
   const latestId = item?.currentVersionId;
 
-  const flushPendingDraft = useCallback(() => {
-    if (editRevision === 0 || editRevision === lastSavedRevision.current) return;
+  const flushPendingDraft = useCallback((updateStatus = true) => {
+    const revision = editRevisionRef.current;
+    if (revision === 0 || revision === lastSavedRevision.current) return;
     const liveItem = useMuseboardStore.getState().content.find(({ id }) => id === contentId);
     const patch = pendingPatch.current;
     if (!liveItem || !patch) return;
-    lastSavedRevision.current = editRevision;
-    saveWorkshopVersion({ contentId: liveItem.id, patch });
-    setSaveStatus("Saved · version added to this browser");
-  }, [contentId, editRevision, saveWorkshopVersion]);
+    lastSavedRevision.current = revision;
+    useMuseboardStore.getState().saveWorkshopVersion({ contentId: liveItem.id, patch });
+    pendingPatch.current = undefined;
+    if (updateStatus) setSaveStatus("Saved · version added to this browser");
+  }, [contentId]);
 
   useEffect(() => {
     const timer = window.setTimeout(flushPendingDraft, 500);
     return () => window.clearTimeout(timer);
+  }, [editRevision, flushPendingDraft]);
+
+  useEffect(() => {
+    const handlePageHide = () => flushPendingDraft(false);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      flushPendingDraft(false);
+    };
   }, [flushPendingDraft]);
 
   const evidence = currentVersion?.evidence ?? (opportunity?.evidence ?? []).map((entry, index) => ({
@@ -108,18 +130,20 @@ function WorkshopEditor({
     return <section className={styles.empty}><h1>No draft selected.</h1><Link href="/app/opportunities">Choose an opportunity</Link></section>;
   }
   const activeItem = item;
-  const activeVersion = currentVersion;
 
   function changeEditor(value: string, setter: (next: string) => void, patch: WorkshopVersionPatch) {
     setter(value);
-    pendingPatch.current = patch;
-    setEditRevision((revision) => revision + 1);
+    pendingPatch.current = { ...pendingPatch.current, ...patch };
+    editRevisionRef.current += 1;
+    setEditRevision(editRevisionRef.current);
     setSaveStatus("Saving…");
   }
 
   function chooseHook() {
     const hook = itemHooks.find(({ id }) => id === selectedHookId);
     if (!hook) return;
+    lastSavedRevision.current = editRevisionRef.current;
+    pendingPatch.current = undefined;
     saveWorkshopVersion({
       contentId: activeItem.id,
       patch: { selectedHookId: hook.id, selectedHookText: manualHook.trim() || hook.text },
@@ -130,11 +154,18 @@ function WorkshopEditor({
   }
 
   function goToStage(next: WorkshopStage) {
-    flushPendingDraft();
     setError("");
     if (next === "ready") {
+      const state = useMuseboardStore.getState();
+      const liveItem = state.content.find(({ id }) => id === contentId);
+      const liveVersion = liveItem?.versions.find(({ id }) => id === liveItem.currentVersionId) ?? liveItem?.versions.at(-1);
+      if (!liveItem || !liveVersion) return;
       const draft = {
-        ...activeVersion,
+        ...liveVersion,
+        ...pendingPatch.current,
+        angle,
+        selectedHookId,
+        selectedHookText: manualHook,
         outline: lines(outline),
         script,
         shotList: lines(shotList),
@@ -144,7 +175,13 @@ function WorkshopEditor({
         setError("Attach evidence for source-required claims before marking this ready.");
         return;
       }
-      saveWorkshopVersion({ contentId: activeItem.id, patch: draft, nextStage: "ready" });
+      lastSavedRevision.current = editRevisionRef.current;
+      pendingPatch.current = undefined;
+      saveWorkshopVersion({ contentId: liveItem.id, patch: draft, nextStage: "ready" });
+      setSaveStatus("Saved · ready version added to this browser");
+    } else {
+      flushPendingDraft();
+      moveTask(activeItem.id, domainStage(next));
     }
     setStage(next);
   }
@@ -175,7 +212,7 @@ function WorkshopEditor({
         ))}
       </nav>
 
-      {error ? <div className={styles.alert} role="alert"><Info aria-hidden="true" size={20} /><span>{error}</span><button onClick={() => setStage("script")} type="button">Continue manually</button></div> : null}
+      {error ? <div className={styles.alert} role="alert"><Info aria-hidden="true" size={20} /><span>{error}</span><button onClick={() => goToStage("script")} type="button">Continue manually</button></div> : null}
 
       <div className={styles.layout}>
         <main className={styles.editor}>
@@ -195,7 +232,7 @@ function WorkshopEditor({
           ) : null}
 
           {stage === "hook" ? (
-            <section><p className={styles.kicker}>Three credible openings</p><h2>Pick the one that sounds like you.</h2><fieldset className={styles.hookList}><legend className={styles.srOnly}>Hook choices</legend>{itemHooks.map((hook) => <label key={hook.id} data-selected={selectedHookId === hook.id}><input checked={selectedHookId === hook.id} name="workshop-hook" onChange={() => { setSelectedHookId(hook.id); setManualHook(hook.text); }} type="radio" /><span><strong>{hook.id.includes("1") ? "Plain-spoken" : hook.id.includes("2") ? "Specific" : "Invitation"}</strong><em>{hook.text}</em><small>{hook.rationale}</small></span></label>)}</fieldset><label className={styles.field}>Manual hook edit<textarea aria-label="Manual hook edit" onChange={(event) => { setManualHook(event.target.value); setSaveStatus("Unsaved hook edit · choose Use this hook to create a version"); }} rows={3} value={manualHook} /></label><button className={styles.primaryButton} onClick={chooseHook} type="button">Use this hook <ArrowRight aria-hidden="true" size={18} /></button></section>
+            <section><p className={styles.kicker}>Three credible openings</p><h2>Pick the one that sounds like you.</h2><fieldset className={styles.hookList}><legend className={styles.srOnly}>Hook choices</legend>{itemHooks.map((hook) => <label key={hook.id} data-selected={selectedHookId === hook.id}><input checked={selectedHookId === hook.id} name="workshop-hook" onChange={() => { setSelectedHookId(hook.id); setManualHook(hook.text); }} type="radio" /><span><strong>{hook.id.includes("1") ? "Plain-spoken" : hook.id.includes("2") ? "Specific" : "Invitation"}</strong><em>{hook.text}</em><small>{hook.rationale}</small></span></label>)}</fieldset><label className={styles.field}>Manual hook edit<textarea aria-label="Manual hook edit" onChange={(event) => changeEditor(event.target.value, setManualHook, { selectedHookId, selectedHookText: event.target.value })} rows={3} value={manualHook} /></label><button className={styles.primaryButton} onClick={chooseHook} type="button">Use this hook <ArrowRight aria-hidden="true" size={18} /></button></section>
           ) : null}
 
           {stage === "outline" ? (

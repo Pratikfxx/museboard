@@ -21,6 +21,7 @@ export interface StarterWorkspaceInput {
   voice: string;
   boundaries: string;
   firstHook: string;
+  now?: string;
 }
 
 const CONTENT_PILLARS: Record<
@@ -107,6 +108,7 @@ function createOpportunities({
   archetype,
   audience,
   platforms,
+  now = DEMO_NOW,
 }: StarterWorkspaceInput): Opportunity[] {
   return OPPORTUNITY_TITLES[archetype].map((title, index) => ({
     id: `starter-${archetype}-opportunity-${index + 1}`,
@@ -136,12 +138,12 @@ function createOpportunities({
     provenance: {
       provider: "museboard-onboarding",
       mode: "sample",
-      fetchedAt: DEMO_NOW,
+      fetchedAt: now,
       sourceClass: "creator_submission",
       sourceLabel: "Museboard onboarding sample",
       sourceUrl: `https://museboard.example/sample/${archetype}/${index + 1}`,
-      observedAt: DEMO_NOW,
-      expiresAt: addDays(DEMO_NOW, 7),
+      observedAt: now,
+      expiresAt: addDays(now, 7),
     },
   }));
 }
@@ -166,6 +168,7 @@ function createPlannerTasks(
   contentId: string,
   firstHook: string,
   weeklyCapacityMinutes: number,
+  anchor: string,
 ): PlannerTask[] {
   const candidates: PlannerTask[] = [
     {
@@ -206,7 +209,7 @@ function createPlannerTasks(
     estimatedMinutes: task.estimatedMinutes,
     priority: task.priority,
     opportunityScore: task.opportunityScore,
-    scheduledFor: addDays(DEMO_NOW, dayOffsets[index]),
+    scheduledFor: addDays(anchor, dayOffsets[index]),
   }));
 }
 
@@ -215,6 +218,7 @@ export function buildStarterWorkspace(
 ): StarterWorkspace {
   const audience = input.audience.trim();
   const firstHook = input.firstHook.trim();
+  const generatedAt = input.now ?? DEMO_NOW;
   const opportunities = createOpportunities({ ...input, audience });
   const selectedOpportunity = opportunities[0];
   const contentId = `starter-${input.archetype}-content`;
@@ -224,6 +228,7 @@ export function buildStarterWorkspace(
     contentId,
     firstHook,
     input.weeklyCapacityMinutes,
+    generatedAt,
   );
   const content: ContentItem = {
     id: contentId,
@@ -242,11 +247,11 @@ export function buildStarterWorkspace(
         angle: selectedOpportunity.summary,
         selectedHookId: hooks[0].id,
         script: `Opening: ${firstHook}\nAudience: ${audience}\nVoice: ${input.voice.trim()}`,
-        createdAt: DEMO_NOW,
+        createdAt: generatedAt,
       },
     ],
-    createdAt: DEMO_NOW,
-    updatedAt: DEMO_NOW,
+    createdAt: generatedAt,
+    updatedAt: generatedAt,
   };
 
   return {

@@ -180,6 +180,49 @@ describe("content workshop", () => {
     expect(useMuseboardStore.getState().content[0].stage).not.toBe("ready");
     expect(screen.getByRole("button", { name: /continue manually/i })).toBeVisible();
   });
+
+  it("commits an immediate Angle to Ready transition from live editor state", async () => {
+    const user = userEvent.setup();
+    const { contentId } = renderWorkshop();
+    const beforeCount = useMuseboardStore.getState().content[0].versions.length;
+
+    await user.click(screen.getByRole("button", { name: /^angle$/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: /^angle$/i }), {
+      target: { value: "A live creator edit that must survive Ready." },
+    });
+    await user.click(screen.getByRole("button", { name: /^ready$/i }));
+
+    const active = useMuseboardStore.getState().content.find(({ id }) => id === contentId)!;
+    expect(active.stage).toBe("ready");
+    expect(active.versions).toHaveLength(beforeCount + 1);
+    expect(active.versions.at(-1)?.angle).toBe("A live creator edit that must survive Ready.");
+  });
+
+  it("flushes a dirty editor on unmount", () => {
+    const view = renderWorkshop({ stage: "script" });
+    fireEvent.change(screen.getByRole("textbox", { name: /script draft/i }), {
+      target: { value: "A last line saved while leaving the page." },
+    });
+
+    view.unmount();
+
+    expect(useMuseboardStore.getState().content.find(({ id }) => id === view.contentId)?.versions.at(-1)?.script)
+      .toBe("A last line saved while leaving the page.");
+  });
+
+  it("persists stage navigation without creating a draft version", async () => {
+    const user = userEvent.setup();
+    const view = renderWorkshop();
+    const beforeCount = useMuseboardStore.getState().content[0].versions.length;
+
+    await user.click(screen.getByRole("button", { name: /^script$/i }));
+    expect(useMuseboardStore.getState().content[0].stage).toBe("script");
+    expect(useMuseboardStore.getState().content[0].versions).toHaveLength(beforeCount);
+    view.unmount();
+    render(<WorkshopWorkspace contentId={view.contentId} />);
+
+    expect(screen.getByRole("heading", { name: /write the script/i })).toBeVisible();
+  });
 });
 
 describe("StrategistProvider", () => {
@@ -248,5 +291,13 @@ describe("StrategistProvider", () => {
 
     await expect(pending).rejects.toThrow(/cancelled/i);
     expect(cancelQuota.events).toEqual(["reserve", "release"]);
+
+    const preCancelledQuota = quotaHarness();
+    const preCancelled = new AbortController();
+    preCancelled.abort();
+    const preCancelledProvider = new StrategistProvider({ quota: preCancelledQuota.quota });
+    await expect(preCancelledProvider.generatePack(request(), { signal: preCancelled.signal }))
+      .rejects.toThrow(/cancelled/i);
+    expect(preCancelledQuota.events).toEqual([]);
   });
 });

@@ -2,7 +2,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { PlannerWorkspace } from "@/components/planner/planner-workspace";
+import {
+  localDateTimeToUtc,
+  PlannerWorkspace,
+} from "@/components/planner/planner-workspace";
 import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
@@ -123,5 +126,20 @@ describe("creator planner", () => {
     expect(
       useMuseboardStore.getState().plannerTasks.find(({ id }) => id === overdue.id)?.status,
     ).toBe("done");
+  });
+
+  it("rolls the visible planner to an injected current week", () => {
+    activatePlanner();
+    render(<PlannerWorkspace now="2026-08-05T12:00:00.000Z" />);
+
+    expect(screen.getByRole("group", { name: /monday, aug 3/i })).toBeVisible();
+    expect(screen.getByRole("group", { name: /sunday, aug 9/i })).toBeVisible();
+  });
+
+  it("rejects DST gaps and resolves repeated local times to the earlier instant", () => {
+    expect(() => localDateTimeToUtc("2026-03-08", "02:30", "America/New_York"))
+      .toThrow(/does not exist/i);
+    expect(localDateTimeToUtc("2026-11-01", "01:30", "America/New_York"))
+      .toBe("2026-11-01T05:30:00.000Z");
   });
 });

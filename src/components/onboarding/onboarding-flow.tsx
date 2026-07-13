@@ -260,6 +260,7 @@ export function OnboardingFlow() {
       voice: draft.voice,
       boundaries: draft.boundaries,
       firstHook: draft.firstHook,
+      now: new Date().toISOString(),
     });
     useMuseboardStore.getState().completeOnboarding(workspace);
     clearDraft();

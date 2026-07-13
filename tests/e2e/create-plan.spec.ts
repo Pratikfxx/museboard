@@ -66,13 +66,19 @@ test("workshop stages and planner move persist in the sample workflow", async ({
   })).toContain("Show the reset");
 
   await page.reload();
+  await expect(page.getByRole("textbox", { name: /script draft/i })).toBeEditable();
   await page.getByRole("button", { name: /outline/i }).click();
   await expect(page.getByRole("textbox", { name: /outline beats/i })).toHaveValue(/show the reset/i);
 
   await page.goto("/app/plan");
   const moveButton = page.getByRole("button", { name: /move record/i }).first();
   await moveButton.click();
-  const sheet = page.getByRole("dialog", { name: /move record/i });
+  let sheet = page.getByRole("dialog", { name: /move record/i });
+  await expect(sheet.getByLabel(/day/i)).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(moveButton).toBeFocused();
+  await moveButton.click();
+  sheet = page.getByRole("dialog", { name: /move record/i });
   await sheet.getByLabel(/day/i).selectOption("2026-07-17");
   await sheet.getByLabel(/time/i).selectOption("10:15");
   await sheet.getByRole("button", { name: /move task/i }).click();
