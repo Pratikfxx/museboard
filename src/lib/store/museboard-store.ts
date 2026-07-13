@@ -43,6 +43,7 @@ import {
   releaseEntitlement,
   reserveEntitlement,
   type EntitlementDecision,
+  type Plan,
 } from "@/domain/entitlements";
 import { exportRecordSchema } from "@/domain/export";
 import {
@@ -400,6 +401,7 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
 
 interface MuseboardActions {
   resetDemo: () => void;
+  setDemoPlan: (plan: Plan) => boolean;
   completeOnboarding: (workspace: StarterWorkspace) => void;
   selectOpportunity: (opportunityId: string) => void;
   saveOpportunity: (opportunityId: string) => void;
@@ -527,6 +529,20 @@ export const useMuseboardStore = create<MuseboardState>()(
       ...createDemoState(),
 
       resetDemo: () => set(createDemoState()),
+
+      setDemoPlan: (plan) => {
+        const parsedPlan = z.enum(["free", "creator", "pro", "studio"]).safeParse(plan);
+        if (!parsedPlan.success || get().dataMode !== "sample") return false;
+        set((state) => ({
+          entitlementUsage: {
+            plan: parsedPlan.data,
+            used: {},
+            reserved: {},
+            resetAt: state.entitlementUsage.resetAt,
+          },
+        }));
+        return true;
+      },
 
       completeOnboarding: (workspace) => {
         const parsed = starterWorkspaceSchema.parse(workspace);
