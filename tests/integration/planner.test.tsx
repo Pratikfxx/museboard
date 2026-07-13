@@ -42,7 +42,7 @@ describe("creator planner", () => {
 
   it("explains real capacity, the default buffer, recovery days, dependencies, and deterministic load", () => {
     const workspace = activatePlanner();
-    render(<PlannerWorkspace />);
+    render(<PlannerWorkspace now="2026-07-13T09:00:00.000Z" />);
 
     expect(screen.getByRole("heading", { name: /your production week/i })).toBeVisible();
     expect(screen.getByText(/225 min capacity/i)).toBeVisible();
@@ -60,7 +60,7 @@ describe("creator planner", () => {
   it("moves a task with the keyboard-accessible sheet, persists the UTC instant, and undoes it", async () => {
     const user = userEvent.setup();
     activatePlanner();
-    render(<PlannerWorkspace />);
+    render(<PlannerWorkspace now="2026-07-13T09:00:00.000Z" />);
     const task = useMuseboardStore.getState().plannerTasks.find(({ title }) => /record/i.test(title))!;
     const before = task.scheduledFor;
 
@@ -84,7 +84,7 @@ describe("creator planner", () => {
 
   it("supports desktop drag as an enhancement without removing the Move control", () => {
     activatePlanner();
-    render(<PlannerWorkspace />);
+    render(<PlannerWorkspace now="2026-07-13T09:00:00.000Z" />);
     const task = useMuseboardStore.getState().plannerTasks[0];
     const card = screen.getByRole("article", { name: task.title });
     const friday = screen.getByRole("group", { name: /friday/i });
@@ -113,7 +113,7 @@ describe("creator planner", () => {
           : task,
       ),
     });
-    render(<PlannerWorkspace />);
+    render(<PlannerWorkspace now="2026-07-13T09:00:00.000Z" />);
 
     const card = screen.getByRole("article", { name: overdue.title });
     expect(within(card).getByText(/overdue/i)).toBeVisible();
@@ -134,6 +134,9 @@ describe("creator planner", () => {
 
     expect(screen.getByRole("group", { name: /monday, aug 3/i })).toBeVisible();
     expect(screen.getByRole("group", { name: /sunday, aug 9/i })).toBeVisible();
+    expect(screen.getByText(/0 minutes currently planned/i)).toBeVisible();
+    expect(screen.getByRole("heading", { name: /outside this week/i })).toBeVisible();
+    expect(screen.getAllByText(/overdue · choose what happens next/i)).toHaveLength(3);
   });
 
   it("rejects DST gaps and resolves repeated local times to the earlier instant", () => {
@@ -141,5 +144,41 @@ describe("creator planner", () => {
       .toThrow(/does not exist/i);
     expect(localDateTimeToUtc("2026-11-01", "01:30", "America/New_York"))
       .toBe("2026-11-01T05:30:00.000Z");
+  });
+
+  it("normalizes late onboarding timestamps to an offered planner slot", () => {
+    const workspace = buildStarterWorkspace({
+      outcome: "plan_week",
+      archetype: "music",
+      audience: "Independent musicians",
+      platforms: ["instagram_reels"],
+      weeklyCapacityMinutes: 240,
+      voice: "Direct and warm",
+      boundaries: "No fake urgency",
+      firstHook: "The chorus changed at the last minute.",
+      now: "2026-07-13T23:58:41.000Z",
+    });
+
+    expect(workspace.plannerTasks.every(({ scheduledFor }) => scheduledFor?.slice(11, 16) === "09:00"))
+      .toBe(true);
+  });
+
+  it("keeps a DST scheduling error visible inside the active Move dialog", async () => {
+    const user = userEvent.setup();
+    activatePlanner();
+    useMuseboardStore.setState((state) => ({
+      creator: state.creator ? { ...state.creator, timezone: "Pacific/Apia" } : state.creator,
+    }));
+    render(<PlannerWorkspace now="2011-12-28T12:00:00.000Z" />);
+
+    await user.click(screen.getByRole("button", { name: /move record/i }));
+    const dialog = screen.getByRole("dialog", { name: /move record/i });
+    await user.selectOptions(within(dialog).getByLabelText(/day/i), "2011-12-30");
+    await user.selectOptions(within(dialog).getByLabelText(/time/i), "10:15");
+    await user.click(within(dialog).getByRole("button", { name: /move task/i }));
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/does not exist/i);
+    expect(within(dialog).getByLabelText(/time/i)).toHaveFocus();
+    expect(dialog).toBeVisible();
   });
 });

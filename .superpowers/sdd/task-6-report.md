@@ -5,14 +5,15 @@
 - Added the complete workshop route at `/app/create/[contentId]` with Evidence, Angle, Hooks, Outline, Script, Shoot, Review, and Ready stages.
 - Added immutable draft version appends, dirty-only 500 ms autosave, unload/pagehide flushing, atomic Ready transitions from live editor state, durable stage navigation without redundant versions, browser-persistence hydration, visible save state, version history, source-required claim gating, voice-mode disclosure, manual angle/hook/script editing, shot lists, assets, and craft guidance.
 - Added a deterministic Zod-validated strategist provider with complete provenance, 25 second timeout, cancellation including pre-aborted requests, and reserve/commit/release quota semantics.
-- Added the creator planner at `/app/plan` with a deterministic 80% planning ceiling, 15-minute rounding, current-week derivation, load labels, recovery days, dependency context, overdue actions, IANA timezone conversion, explicit DST gap/repeat policy, UTC persistence, desktop drag enhancement, keyboard-contained Move dialog/mobile sheet, opener focus restoration, and undo.
+- Added the creator planner at `/app/plan` with a deterministic 80% planning ceiling, 15-minute rounding, a stable real-current week, an explicit outside-this-week queue, load labels, recovery days, dependency context, overdue actions, IANA timezone conversion, explicit DST gap/repeat policy, UTC persistence, desktop drag enhancement, a keyboard-contained Move dialog/mobile sheet, dialog-local scheduling errors with focus recovery, opener focus restoration, and undo.
+- Normalized onboarding starter tasks to offered 15-minute planner slots, including late-night onboarding, so every generated task can be moved and edited through the same product workflow.
 - Extended persisted demo contracts for workshop fields, planner state, timezone/recovery preferences, and safe reset/onboarding behavior.
 - Preserved explicit `Sample workspace · not live` and browser-only persistence disclosures.
 
 ## Verification
 
-- Focused integration: `16/16` passed.
-- Full Vitest suite: `12` files, `85/85` tests passed.
+- Focused integration: `18/18` passed, including rolling-week/outside-queue behavior, late-night starter scheduling, and a skipped-calendar-day timezone failure inside the active dialog.
+- Full Vitest suite: `12` files, `87/87` tests passed.
 - TypeScript: passed.
 - ESLint: passed with zero warnings/errors.
 - Production build: passed; all 12 routes generated, including dynamic `/app/create/[contentId]` and static `/app/plan`.

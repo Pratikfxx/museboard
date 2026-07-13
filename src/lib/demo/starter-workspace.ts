@@ -104,6 +104,12 @@ function addDays(isoDate: string, days: number): string {
   return date.toISOString();
 }
 
+function normalizedPlannerAnchor(isoDate: string): string {
+  const date = new Date(isoDate);
+  date.setUTCHours(9, 0, 0, 0);
+  return date.toISOString();
+}
+
 function createOpportunities({
   archetype,
   audience,
@@ -219,6 +225,7 @@ export function buildStarterWorkspace(
   const audience = input.audience.trim();
   const firstHook = input.firstHook.trim();
   const generatedAt = input.now ?? DEMO_NOW;
+  const plannerAnchor = normalizedPlannerAnchor(generatedAt);
   const opportunities = createOpportunities({ ...input, audience });
   const selectedOpportunity = opportunities[0];
   const contentId = `starter-${input.archetype}-content`;
@@ -228,7 +235,7 @@ export function buildStarterWorkspace(
     contentId,
     firstHook,
     input.weeklyCapacityMinutes,
-    generatedAt,
+    plannerAnchor,
   );
   const content: ContentItem = {
     id: contentId,

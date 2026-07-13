@@ -64,8 +64,15 @@ function addLocalDays(date: string, amount: number) {
 }
 
 function weekdayIndex(date: string, timezone: string) {
-  const instant = localDateTimeToUtc(date, "12:00", timezone);
-  const short = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: timezone }).format(new Date(instant));
+  let instant: string;
+  let displayZone = timezone;
+  try {
+    instant = localDateTimeToUtc(date, "12:00", timezone);
+  } catch {
+    instant = `${date}T12:00:00.000Z`;
+    displayZone = "UTC";
+  }
+  const short = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: displayZone }).format(new Date(instant));
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(short);
 }
 
@@ -77,8 +84,12 @@ export function weekDates(anchorInstant: string, timezone: string) {
 }
 
 function dayLabel(date: string, timezone: string) {
-  const instant = localDateTimeToUtc(date, "12:00", timezone);
-  return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: timezone }).format(new Date(instant));
+  try {
+    const instant = localDateTimeToUtc(date, "12:00", timezone);
+    return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: timezone }).format(new Date(instant));
+  } catch {
+    return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`));
+  }
 }
 
 function MoveDialog({
@@ -92,13 +103,15 @@ function MoveDialog({
   timezone: string;
   days: string[];
   onClose: () => void;
-  onMove: (date: string, time: string) => void;
+  onMove: (date: string, time: string) => string | undefined;
 }) {
   const parts = task.scheduledFor ? partsInZone(task.scheduledFor, timezone) : { date: days[0], time: "09:00" };
   const [date, setDate] = useState(days.includes(parts.date) ? parts.date : days[0]);
   const [time, setTime] = useState(parts.time);
+  const [error, setError] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const dayRef = useRef<HTMLSelectElement>(null);
+  const timeRef = useRef<HTMLSelectElement>(null);
   const times = Array.from({ length: 49 }, (_, index) => {
     const minutes = 7 * 60 + index * 15;
     return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
@@ -129,14 +142,22 @@ function MoveDialog({
     }
   }
 
+  function submitMove() {
+    const moveError = onMove(date, time);
+    if (!moveError) return;
+    setError(moveError);
+    queueMicrotask(() => timeRef.current?.focus());
+  }
+
   return (
     <div className={styles.scrim} onKeyDown={handleKeyDown} onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
       <section aria-modal="true" aria-label={`Move ${task.title}`} className={styles.dialog} ref={dialogRef} role="dialog">
         <header><div><p>Accessible reschedule</p><h2>Move {task.title}</h2></div><button aria-label="Close move dialog" onClick={onClose} type="button">×</button></header>
-        <label>Day<select aria-label="Day" onChange={(event) => setDate(event.target.value)} ref={dayRef} value={date}>{days.map((value) => <option key={value} value={value}>{dayLabel(value, timezone)}</option>)}</select></label>
-        <label>Time<select aria-label="Time" onChange={(event) => setTime(event.target.value)} value={time}>{times.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+        <label>Day<select aria-label="Day" onChange={(event) => { setDate(event.target.value); setError(""); }} ref={dayRef} value={date}>{days.map((value) => <option key={value} value={value}>{dayLabel(value, timezone)}</option>)}</select></label>
+        <label>Time<select aria-describedby={error ? "move-time-error" : undefined} aria-invalid={error ? true : undefined} aria-label="Time" onChange={(event) => { setTime(event.target.value); setError(""); }} ref={timeRef} value={time}>{times.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+        {error ? <p className={styles.dialogError} id="move-time-error" role="alert">{error}</p> : null}
         <p>Shown in {timezone}. Repeated clock-change times use the earlier instant; nonexistent times are rejected.</p>
-        <div><button onClick={onClose} type="button">Cancel</button><button className={styles.moveConfirm} onClick={() => onMove(date, time)} type="button">Move task</button></div>
+        <div><button onClick={onClose} type="button">Cancel</button><button className={styles.moveConfirm} onClick={submitMove} type="button">Move task</button></div>
       </section>
     </div>
   );
@@ -144,8 +165,6 @@ function MoveDialog({
 
 export function PlannerWorkspace({ now }: { now?: string } = {}) {
   const creator = useMuseboardStore((state) => state.creator);
-  const dataMode = useMuseboardStore((state) => state.dataMode);
-  const content = useMuseboardStore((state) => state.content);
   const tasks = useMuseboardStore((state) => state.plannerTasks);
   const plannerUndo = useMuseboardStore((state) => state.plannerUndo);
   const reschedule = useMuseboardStore((state) => state.reschedulePlannerTask);
@@ -155,16 +174,14 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
   const [draggingId, setDraggingId] = useState<string>();
   const [status, setStatus] = useState("");
   const openerRef = useRef<HTMLButtonElement | undefined>(undefined);
+  const [currentInstant] = useState(() => now ?? new Date().toISOString());
   const timezone = creator?.timezone ?? "UTC";
-  const sampleInstants = tasks.flatMap(({ scheduledFor }) => scheduledFor ? [scheduledFor] : []).sort();
-  const sampleAnchor = sampleInstants[Math.floor(sampleInstants.length / 2)];
-  const realNow = new Date().toISOString();
-  const weekAnchor = now ?? (dataMode === "sample" && sampleAnchor ? sampleAnchor : realNow);
-  const comparisonNow = now ?? (dataMode === "sample" ? content[0]?.createdAt ?? weekAnchor : realNow);
-  const days = useMemo(() => weekDates(weekAnchor, timezone), [weekAnchor, timezone]);
+  const days = useMemo(() => weekDates(currentInstant, timezone), [currentInstant, timezone]);
   const capacity = creator?.weeklyCapacityMinutes ?? 300;
   const ceiling = Math.floor((capacity * 0.8) / 15) * 15;
-  const planned = tasks.filter(({ status: taskStatus }) => taskStatus !== "cancelled" && taskStatus !== "done").reduce((sum, task) => sum + Math.ceil(task.estimatedMinutes / 15) * 15, 0);
+  const planned = tasks
+    .filter((task) => task.status !== "cancelled" && task.status !== "done" && task.scheduledFor && days.includes(partsInZone(task.scheduledFor, timezone).date))
+    .reduce((sum, task) => sum + Math.ceil(task.estimatedMinutes / 15) * 15, 0);
   const load = plannerLoadLabel(planned, capacity);
   const loadTitle = `${load[0].toUpperCase()}${load.slice(1)} week`;
   const moving = tasks.find(({ id }) => id === movingId);
@@ -186,8 +203,11 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
       reschedule(task.id, instant, timezone);
       closeMove();
       setStatus(`Moved ${task.title} to ${dayLabel(date, timezone)}.`);
+      return undefined;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "That local time could not be scheduled.");
+      const message = error instanceof Error ? error.message : "That local time could not be scheduled.";
+      setStatus(message);
+      return message;
     }
   }
 
@@ -200,8 +220,26 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
   }
 
   function overdue(task: PlannerTask) {
-    return task.status === "missed" || Boolean(task.dueAt && new Date(task.dueAt) < new Date(comparisonNow));
+    const dueAt = task.dueAt ?? task.scheduledFor;
+    return task.status === "missed" || Boolean(dueAt && new Date(dueAt) < new Date(currentInstant));
   }
+
+  function taskCard(task: PlannerTask) {
+    return (
+      <article aria-label={task.title} className={styles.task} draggable key={task.id} onDragStart={(event) => { setDraggingId(task.id); event.dataTransfer?.setData("text/plain", task.id); }}>
+        <div className={styles.taskTop}><DotsSixVertical aria-hidden="true" size={18} /><span>{task.stage ?? "creative block"}</span><small>{task.estimatedMinutes}m</small></div>
+        <h2>{task.title}</h2>
+        {task.dependencies?.length ? <p>After {task.dependencies.map((id) => taskTitle.get(id) ?? id).join(", ")}</p> : null}
+        {overdue(task) ? <strong className={styles.overdue}>Overdue · choose what happens next</strong> : null}
+        <div className={styles.taskActions}>
+          <button onClick={(event) => openMove(task.id, event.currentTarget)} type="button">Move {task.title}</button>
+          {overdue(task) ? <><button aria-label={`Mark done ${task.title}`} onClick={() => { updateStatus(task.id, "done"); setStatus(`Marked ${task.title} done.`); }} type="button"><Check aria-hidden="true" size={15} /> Mark done</button><button aria-label={`Skip ${task.title}`} onClick={() => { updateStatus(task.id, "cancelled"); setStatus(`Skipped ${task.title}.`); }} type="button"><SkipForward aria-hidden="true" size={15} /> Skip</button><button aria-label={`Re-plan ${task.title}`} onClick={(event) => openMove(task.id, event.currentTarget)} type="button"><CalendarBlank aria-hidden="true" size={15} /> Re-plan</button></> : null}
+        </div>
+      </article>
+    );
+  }
+
+  const outsideTasks = tasks.filter((task) => !task.scheduledFor || !days.includes(partsInZone(task.scheduledFor, timezone).date));
 
   return (
     <>
@@ -218,28 +256,19 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
 
         <div className={styles.week}>
           {days.map((date) => {
-            const dayTasks = tasks.filter((task) => task.scheduledFor && (partsInZone(task.scheduledFor, timezone).date === date || (date === days[0] && overdue(task))));
+            const dayTasks = tasks.filter((task) => task.scheduledFor && partsInZone(task.scheduledFor, timezone).date === date);
             const recovery = creator?.recoveryDays?.includes(weekdayIndex(date, timezone));
             const label = dayLabel(date, timezone);
             return (
               <section aria-label={label} className={styles.day} key={date} onDragOver={(event) => event.preventDefault()} onDrop={() => dropOn(date)} role="group">
                 <header><div><strong>{label.split(", ")[0]}</strong><small>{label.split(", ")[1]}</small></div>{recovery ? <span><MoonStars aria-hidden="true" size={15} /> {label.split(", ")[0]} · recovery day</span> : null}</header>
-                <div className={styles.dayTasks}>{dayTasks.length ? dayTasks.map((task) => (
-                  <article aria-label={task.title} className={styles.task} draggable key={task.id} onDragStart={(event) => { setDraggingId(task.id); event.dataTransfer?.setData("text/plain", task.id); }}>
-                    <div className={styles.taskTop}><DotsSixVertical aria-hidden="true" size={18} /><span>{task.stage ?? "creative block"}</span><small>{task.estimatedMinutes}m</small></div>
-                    <h2>{task.title}</h2>
-                    {task.dependencies?.length ? <p>After {task.dependencies.map((id) => taskTitle.get(id) ?? id).join(", ")}</p> : null}
-                    {overdue(task) ? <strong className={styles.overdue}>Overdue · choose what happens next</strong> : null}
-                    <div className={styles.taskActions}>
-                      <button onClick={(event) => openMove(task.id, event.currentTarget)} type="button">Move {task.title}</button>
-                      {overdue(task) ? <><button aria-label={`Mark done ${task.title}`} onClick={() => { updateStatus(task.id, "done"); setStatus(`Marked ${task.title} done.`); }} type="button"><Check aria-hidden="true" size={15} /> Mark done</button><button aria-label={`Skip ${task.title}`} onClick={() => { updateStatus(task.id, "cancelled"); setStatus(`Skipped ${task.title}.`); }} type="button"><SkipForward aria-hidden="true" size={15} /> Skip</button><button aria-label={`Re-plan ${task.title}`} onClick={(event) => openMove(task.id, event.currentTarget)} type="button"><CalendarBlank aria-hidden="true" size={15} /> Re-plan</button></> : null}
-                    </div>
-                  </article>
-                )) : <p className={styles.open}>Open buffer</p>}</div>
+                <div className={styles.dayTasks}>{dayTasks.length ? dayTasks.map(taskCard) : <p className={styles.open}>Open buffer</p>}</div>
               </section>
             );
           })}
         </div>
+
+        {outsideTasks.length ? <section aria-labelledby="outside-week-heading" className={styles.outsideWeek}><div><p>Needs a decision</p><h2 id="outside-week-heading">Outside this week</h2><span>Overdue, future, and unscheduled work stays visible until you move, finish, or skip it.</span></div><div className={styles.outsideGrid}>{outsideTasks.map(taskCard)}</div></section> : null}
 
         <footer className={styles.statusBar}><p aria-live="polite" role="status">{status}</p>{plannerUndo ? <button onClick={() => { undo(); setStatus(`Restored ${plannerUndo.before.title} to its previous time.`); }} type="button"><ArrowCounterClockwise aria-hidden="true" size={18} /> Undo move</button> : null}</footer>
       </div>
