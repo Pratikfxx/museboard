@@ -51,3 +51,37 @@ Complete and locally verified on `codex/museboard-app`. The public workspace is 
 - The full 20-case Playwright command is not green because the existing Today visual suite has no `mobile-chrome` snapshot baselines. The first failure was `[mobile-chrome] Today light desktop matches the approved hierarchy`; an isolated rerun reached screenshot comparison and reported missing `today-desktop-light-mobile-chrome-darwin.png`. The generated unapproved image was moved out of the worktree. No Task 5 browser case failed.
 - Deployments that need the internal preview must provision `MUSEBOARD_OWNER_PREVIEW_TOKEN` and the matching secure, HttpOnly `museboard-owner-preview` cookie through the future owner sign-in boundary. With no secret configured, the route fails closed as 404.
 - Local file hashing uses browser Web Crypto and intentionally retains no `File`, `Blob`, copied body, or blob URL. Very large local files remain constrained by browser memory even though aggregate demo quota semantics are 2GB.
+
+## Fix wave 1
+
+### Status
+
+All five Important and two Minor review findings are fixed with fresh regression coverage.
+
+### RED
+
+- The expanded focused suite initially reported 9 failures across 17 tests: factor rows exposed raw inputs instead of weighted contributions; source class was absent; craft context stayed on the first opportunity; uppercase padded hashes were not canonicalized; the Vision file component had no injectable lifecycle seam; all file preflight/race tests failed; and all 24 guides claimed every format and creator stage.
+- A final provider-boundary regression then failed because direct file metadata could bypass the new per-file 25MB image/PDF limit even though the picker rejected it.
+
+### GREEN
+
+- Focused opportunities integration: 20/20 passed.
+- Full Vitest: 10 files, 69/69 tests passed.
+- Typecheck: `tsc --noEmit` exited 0.
+- Lint: `eslint .` exited 0.
+- Production build: Next.js compiled, typechecked, and rendered all Task 5 routes; exit 0.
+- Task 5 browser smoke: 1/1 Chromium case passed across its desktop and 390 × 844 mobile phases without public-workflow console/page errors or horizontal overflow. Unrelated Today visual projects were not run.
+
+### Changes
+
+- File selection now invalidates the prior request immediately, clears prior hash/error/meta state, and owns async completion through a monotonically increasing request token. A stale digest or rejection cannot overwrite the current file.
+- MIME, integer size, the 25MB image/PDF ceiling, the 250MB MP4/MOV ceiling, and remaining 2GB quota are checked before `arrayBuffer()` or Web Crypto. The Add action stays disabled while hashing or without the current file digest.
+- SHA-256 values normalize with `trim().toLowerCase()` before validation, duplicate detection, schema parsing, IDs, and persistence. The store uses `safeParse` and returns a form-safe error instead of throwing.
+- Ranking rows now expose each factor's configured weight and weighted point contribution from `rankOpportunity`; the displayed contributions reconcile to the score. Source class appears beside the exact source label.
+- The 24 guides now have real, deterministic format and creator-stage scope rather than every/every tags. Shaping an opportunity or promoting an idea updates both the local craft context and persisted selected opportunity; idea-only work correctly maps to Angle instead of Ready.
+- RTL exercises real file input changes, rejected-file no-read behavior, prior-state clearing, A→B digest races resolved out of order, direct provider limits, canonical persistence, weighted factors, source class, and opportunity/Idea Board guide transitions.
+
+### Concerns
+
+- Web Crypto digest work itself cannot be cancelled once started; request ownership prevents stale state commits but does not reclaim browser CPU already spent on an obsolete digest.
+- Guide matching intentionally has no generic fallback. Unsupported exact stage/platform/format/creator-stage combinations show zero reviewed guides instead of presenting loosely related advice as contextual.

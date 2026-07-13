@@ -14,19 +14,24 @@ import {
   type ChangeEvent,
   type FormEvent,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import { CraftGuideDrawer } from "@/components/opportunities/craft-guide-drawer";
 import { OpportunityStory } from "@/components/opportunities/opportunity-story";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { rankOpportunities, type IdeaRecord } from "@/domain/opportunities";
+import {
+  rankOpportunities,
+  type IdeaRecord,
+} from "@/domain/opportunities";
 import type { WorkflowStage } from "@/domain/schema";
 import {
   ALLOWED_VISION_MIME_TYPES,
   CRAFT_GUIDES,
   VISION_WORKSPACE_QUOTA_BYTES,
   matchCraftGuides,
+  preflightVisionFile,
   type CreatorStage,
   type VisionReferenceInput,
 } from "@/lib/providers/opportunities";
@@ -129,7 +134,11 @@ function WorkspaceHeader({
   );
 }
 
-function ForYouView() {
+function ForYouView({
+  onActivateOpportunity,
+}: {
+  onActivateOpportunity: (opportunityId: string) => void;
+}) {
   const opportunities = useMuseboardStore((state) => state.opportunities);
   const decisions = useMuseboardStore((state) => state.opportunityDecisions);
   const ideas = useMuseboardStore((state) => state.ideas);
@@ -193,6 +202,7 @@ function ForYouView() {
             }}
             onShape={() => {
               const id = shapeOpportunity(opportunity.id);
+              if (id) onActivateOpportunity(opportunity.id);
               setStatus(
                 id
                   ? `Shaped ${opportunity.title} on the Idea Board.`
@@ -257,7 +267,11 @@ function groupedIdeas(ideas: IdeaRecord[], grouping: IdeaGrouping) {
   }, {});
 }
 
-function IdeaBoardView() {
+function IdeaBoardView({
+  onActivateOpportunity,
+}: {
+  onActivateOpportunity: (opportunityId: string) => void;
+}) {
   const ideas = useMuseboardStore((state) => state.ideas);
   const promoteIdea = useMuseboardStore((state) => state.promoteIdea);
   const [grouping, setGrouping] = useState<IdeaGrouping>("pillar");
@@ -310,6 +324,7 @@ function IdeaBoardView() {
                     <button
                       onClick={() => {
                         const contentId = promoteIdea(idea.id);
+                        if (contentId) onActivateOpportunity(idea.opportunityId);
                         setStatus(
                           contentId
                             ? `${idea.title} is ready in the Angle workshop.`
@@ -365,7 +380,13 @@ async function sha256(file: globalThis.File): Promise<string> {
   ).join("");
 }
 
-function VisionBoardView() {
+export type VisionFileHasher = (file: globalThis.File) => Promise<string>;
+
+export function VisionBoardView({
+  hashFile = sha256,
+}: {
+  hashFile?: VisionFileHasher;
+}) {
   const references = useMuseboardStore((state) => state.visionReferences);
   const selectedIds = useMuseboardStore((state) => state.selectedReferenceIds);
   const addReference = useMuseboardStore((state) => state.addVisionReference);
@@ -385,39 +406,73 @@ function VisionBoardView() {
   }>();
   const [mimeType, setMimeType] = useState<string>("image/jpeg");
   const [hash, setHash] = useState("");
+  const [hashing, setHashing] = useState(false);
   const [rights, setRights] = useState<VisionReferenceInput["rightsStatus"]>(
     "unknown",
   );
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const fileRequestId = useRef(0);
   const usedBytes = references.reduce(
     (total, reference) => total + reference.sizeBytes,
     0,
   );
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
+    const requestId = ++fileRequestId.current;
     const file = event.target.files?.[0];
+    setHash("");
     setError("");
     setStatus("");
+    setHashing(false);
+    setFileMeta(undefined);
     if (!file) {
-      setFileMeta(undefined);
-      setHash("");
+      return;
+    }
+    const preflight = preflightVisionFile(file, usedBytes);
+    if (!preflight.ok) {
+      setError(preflight.error);
       return;
     }
     setTitle((current) => current || file.name.replace(/\.[^.]+$/u, ""));
-    setMimeType(file.type || "application/octet-stream");
+    setMimeType(preflight.mimeType);
     setFileMeta({
       fileName: file.name,
       sizeBytes: file.size,
-      mimeType: file.type || "application/octet-stream",
+      mimeType: preflight.mimeType,
     });
+    setHashing(true);
+    setStatus(`Hashing ${file.name} locally…`);
     try {
-      setHash(await sha256(file));
-      setStatus("File metadata and SHA-256 prepared locally. Nothing uploaded.");
+      const digest = (await hashFile(file)).trim().toLowerCase();
+      if (requestId !== fileRequestId.current) return;
+      if (!/^[a-f\d]{64}$/u.test(digest)) {
+        setError("This browser returned an invalid SHA-256 hash.");
+        setStatus("");
+        return;
+      }
+      setHash(digest);
+      setStatus(
+        `${file.name} metadata and SHA-256 prepared locally. Nothing uploaded.`,
+      );
     } catch {
+      if (requestId !== fileRequestId.current) return;
       setHash("");
+      setStatus("");
       setError("This browser could not calculate the local SHA-256 hash.");
+    } finally {
+      if (requestId === fileRequestId.current) setHashing(false);
     }
+  }
+
+  function chooseReferenceKind(nextKind: "url" | "file") {
+    ++fileRequestId.current;
+    setKind(nextKind);
+    setHash("");
+    setFileMeta(undefined);
+    setHashing(false);
+    setError("");
+    setStatus("");
   }
 
   function submitReference(event: FormEvent<HTMLFormElement>) {
@@ -465,7 +520,7 @@ function VisionBoardView() {
             <input
               checked={kind === "url"}
               name="reference-kind"
-              onChange={() => setKind("url")}
+              onChange={() => chooseReferenceKind("url")}
               type="radio"
             />
             <LinkSimple aria-hidden="true" size={18} /> URL
@@ -474,7 +529,7 @@ function VisionBoardView() {
             <input
               checked={kind === "file"}
               name="reference-kind"
-              onChange={() => setKind("file")}
+              onChange={() => chooseReferenceKind("file")}
               type="radio"
             />
             <File aria-hidden="true" size={18} /> File metadata
@@ -561,7 +616,12 @@ function VisionBoardView() {
             <strong>{bytesLabel(usedBytes)} of 2 GB</strong>
             <span>Demo quota semantics · metadata is browser-local</span>
           </div>
-          <button type="submit">
+          <button
+            disabled={
+              kind === "file" && (hashing || !fileMeta || hash.length !== 64)
+            }
+            type="submit"
+          >
             <Plus aria-hidden="true" size={18} /> Add reference metadata
           </button>
         </div>
@@ -650,7 +710,15 @@ export function OpportunitiesWorkspace({ view }: { view: OpportunityView }) {
     (state) => state.selectedOpportunityId,
   );
   const content = useMuseboardStore((state) => state.content);
+  const ideas = useMuseboardStore((state) => state.ideas);
+  const selectOpportunity = useMuseboardStore(
+    (state) => state.selectOpportunity,
+  );
+  const [activeContextId, setActiveContextId] = useState(
+    selectedOpportunityId ?? opportunities[0]?.id,
+  );
   const active =
+    opportunities.find(({ id }) => id === activeContextId) ??
     opportunities.find(({ id }) => id === selectedOpportunityId) ??
     opportunities[0];
   const activeContent = content.find(
@@ -658,18 +726,31 @@ export function OpportunitiesWorkspace({ view }: { view: OpportunityView }) {
   );
   const guides = active
     ? matchCraftGuides(CRAFT_GUIDES, {
-        stage: craftStage(activeContent?.stage),
+        stage: activeContent?.stage
+          ? craftStage(activeContent.stage)
+          : ideas.some(({ opportunityId }) => opportunityId === active.id)
+            ? "angle"
+            : "signal",
         platform: active.platform,
         format: active.format,
         creatorStage: creatorStage(content.length),
       })
     : [];
 
+  function activateOpportunity(opportunityId: string) {
+    setActiveContextId(opportunityId);
+    selectOpportunity(opportunityId);
+  }
+
   return (
     <div className={styles.opportunitiesPage}>
       <WorkspaceHeader guides={guides} view={view} />
-      {view === "for-you" ? <ForYouView /> : null}
-      {view === "ideas" ? <IdeaBoardView /> : null}
+      {view === "for-you" ? (
+        <ForYouView onActivateOpportunity={activateOpportunity} />
+      ) : null}
+      {view === "ideas" ? (
+        <IdeaBoardView onActivateOpportunity={activateOpportunity} />
+      ) : null}
       {view === "vision" ? <VisionBoardView /> : null}
     </div>
   );

@@ -1144,3 +1144,8 @@
     border-radius: 16px 16px 0 0;
   }
 }
+
+.composerFooter button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}

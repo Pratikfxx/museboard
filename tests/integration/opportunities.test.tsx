@@ -1,13 +1,26 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { OpportunitiesWorkspace } from "@/components/opportunities/opportunities-workspace";
+import {
+  OpportunitiesWorkspace,
+  VisionBoardView,
+  type VisionFileHasher,
+} from "@/components/opportunities/opportunities-workspace";
 import { OwnerOpportunityConsole } from "@/components/opportunities/owner-opportunity-console";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import type { Opportunity } from "@/domain/opportunities";
 import {
   CRAFT_GUIDES,
+  VISION_IMAGE_PDF_MAX_BYTES,
+  VISION_VIDEO_MAX_BYTES,
   VISION_WORKSPACE_QUOTA_BYTES,
   matchCraftGuides,
   previewCuratedOpportunity,
@@ -51,10 +64,17 @@ describe("Opportunity integrity", () => {
     const breakdown = within(story).getByRole("list", {
       name: /ranking factor breakdown/i,
     });
-    expect(within(breakdown).getByText(/relevance/i)).toBeVisible();
-    expect(within(breakdown).getByText(/momentum/i)).toBeVisible();
-    expect(within(breakdown).getByText(/originality/i)).toBeVisible();
-    expect(within(breakdown).getByText(/creator fit/i)).toBeVisible();
+    expect(within(breakdown).getByText(/relevance · 40% weight/i)).toBeVisible();
+    expect(within(breakdown).getByText(/36.8 points/i)).toBeVisible();
+    expect(within(breakdown).getByText(/momentum · 30% weight/i)).toBeVisible();
+    expect(within(breakdown).getByText(/22.8 points/i)).toBeVisible();
+    expect(within(breakdown).getByText(/originality · 15% weight/i)).toBeVisible();
+    expect(within(breakdown).getByText(/12.15 points/i)).toBeVisible();
+    expect(within(breakdown).getByText(/creator fit · 15% weight/i)).toBeVisible();
+    expect(within(breakdown).getByText(/14.1 points/i)).toBeVisible();
+    expect(
+      within(story).getByText(/creator submission source class/i),
+    ).toBeVisible();
   });
 
   it("caps an otherwise perfect rank when evidence is missing", () => {
@@ -184,6 +204,58 @@ describe("Opportunity integrity", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it("moves craft context to the opportunity the creator actively shapes", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "Craft guide" }));
+    expect(
+      screen.getByRole("heading", { name: /reel · open on the useful contrast/i }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /close craft guide/i }));
+
+    const chorus = screen.getByRole("article", {
+      name: /build the chorus in public/i,
+    });
+    await user.click(within(chorus).getByRole("button", { name: /shape idea/i }));
+    await user.click(screen.getByRole("button", { name: "Craft guide" }));
+
+    expect(
+      screen.getByRole("heading", {
+        name: /tiktok · choose one defensible point of view/i,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: /reel · open on the useful contrast/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("moves craft context to the idea promoted from the Idea Board", async () => {
+    const user = userEvent.setup();
+    const state = useMuseboardStore.getState();
+    state.shapeOpportunity(state.opportunities[0].id);
+    state.shapeOpportunity(state.opportunities[1].id);
+    state.selectOpportunity(state.opportunities[0].id);
+    renderWorkspace("ideas");
+    const chorus = screen.getByRole("article", {
+      name: /build the chorus in public/i,
+    });
+
+    await user.click(
+      within(chorus).getByRole("button", { name: /promote to workshop/i }),
+    );
+    await user.click(screen.getByRole("button", { name: "Craft guide" }));
+
+    expect(
+      screen.getByRole("heading", {
+        name: /tiktok · choose one defensible point of view/i,
+      }),
+    ).toBeVisible();
+    expect(useMuseboardStore.getState().selectedOpportunityId).toBe(
+      state.opportunities[1].id,
+    );
+  });
 });
 
 describe("Vision board integrity", () => {
@@ -243,6 +315,203 @@ describe("Vision board integrity", () => {
         rightsStatus: "pirated" as never,
       }),
     ).toMatchObject({ ok: false, error: expect.stringMatching(/rights/i) });
+
+    expect(
+      validateVisionReference({
+        kind: "url",
+        title: "Normalized hash",
+        url: "https://example.com/normalized",
+        mimeType: "image/jpeg",
+        sizeBytes: 0,
+        sha256: `  ${"A".repeat(64)}  `,
+        rightsStatus: "owned",
+      }),
+    ).toMatchObject({ ok: true, input: { sha256: validHash } });
+
+    expect(
+      validateVisionReference({
+        kind: "file",
+        title: "Oversized image metadata",
+        fileName: "large.png",
+        mimeType: "image/png",
+        sizeBytes: VISION_IMAGE_PDF_MAX_BYTES + 1,
+        sha256: validHash,
+        rightsStatus: "owned",
+      }),
+    ).toMatchObject({ ok: false, error: expect.stringMatching(/25 mb/i) });
+  });
+
+  it("preflights picked files before reading bytes", async () => {
+    const user = userEvent.setup();
+    render(<VisionBoardView />);
+    await user.click(screen.getByRole("radio", { name: /file metadata/i }));
+    const picker = screen.getByLabelText(/choose local file/i);
+    const unsupported = new File(["binary"], "unsafe.exe", {
+      type: "application/x-msdownload",
+    });
+    const arrayBuffer = vi.fn();
+    Object.defineProperty(unsupported, "arrayBuffer", { value: arrayBuffer });
+
+    fireEvent.change(picker, { target: { files: [unsupported] } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/supported/i);
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: /add reference metadata/i }),
+    ).toBeDisabled();
+  });
+
+  it.each([
+    ["large.png", "image/png", VISION_IMAGE_PDF_MAX_BYTES + 1, /25 mb/i],
+    ["large.mp4", "video/mp4", VISION_VIDEO_MAX_BYTES + 1, /250 mb/i],
+  ])("rejects %s before hashing", async (name, type, size, message) => {
+    const user = userEvent.setup();
+    const hashFile = vi.fn<VisionFileHasher>();
+    render(<VisionBoardView hashFile={hashFile} />);
+    await user.click(screen.getByRole("radio", { name: /file metadata/i }));
+    const file = new File(["x"], name, { type });
+    Object.defineProperty(file, "size", { value: size });
+
+    fireEvent.change(screen.getByLabelText(/choose local file/i), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(hashFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects a picked file beyond the remaining 2GB quota before hashing", async () => {
+    const user = userEvent.setup();
+    const hashFile = vi.fn<VisionFileHasher>();
+    useMuseboardStore.setState({
+      visionReferences: [
+        {
+          id: "reference-quota",
+          kind: "file",
+          title: "Existing metadata",
+          fileName: "existing.mp4",
+          mimeType: "video/mp4",
+          sizeBytes: VISION_WORKSPACE_QUOTA_BYTES - 5,
+          sha256: "b".repeat(64),
+          rightsStatus: "owned",
+          addedAt: "2026-07-13T09:00:00.000Z",
+          provenance: { provider: "museboard-local", mode: "sample" },
+        },
+      ],
+    });
+    render(<VisionBoardView hashFile={hashFile} />);
+    await user.click(screen.getByRole("radio", { name: /file metadata/i }));
+    const file = new File(["ten-bytes"], "small.png", { type: "image/png" });
+
+    fireEvent.change(screen.getByLabelText(/choose local file/i), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/remaining.*2gb|quota/i);
+    expect(hashFile).not.toHaveBeenCalled();
+  });
+
+  it("keeps only the latest selected file hash when digests finish out of order", async () => {
+    const user = userEvent.setup();
+    const pending = new Map<string, (value: string) => void>();
+    const hashFile: VisionFileHasher = vi.fn(
+      (file) =>
+        new Promise<string>((resolve) => {
+          pending.set(file.name, resolve);
+        }),
+    );
+    render(<VisionBoardView hashFile={hashFile} />);
+    await user.click(screen.getByRole("radio", { name: /file metadata/i }));
+    const picker = screen.getByLabelText(/choose local file/i);
+    const hashField = screen.getByRole("textbox", { name: /content hash/i });
+    const add = screen.getByRole("button", { name: /add reference metadata/i });
+    const fileA = new File(["a"], "a.png", { type: "image/png" });
+    const fileB = new File(["b"], "b.png", { type: "image/png" });
+
+    fireEvent.change(picker, { target: { files: [fileA] } });
+    expect(hashField).toHaveValue("");
+    expect(add).toBeDisabled();
+    fireEvent.change(picker, { target: { files: [fileB] } });
+    expect(hashField).toHaveValue("");
+    expect(add).toBeDisabled();
+    expect(hashFile).toHaveBeenCalledTimes(2);
+
+    const resolveB = pending.get("b.png");
+    expect(resolveB).toBeTypeOf("function");
+    await act(async () => resolveB?.("B".repeat(64)));
+    await waitFor(() => expect(hashField).toHaveValue("b".repeat(64)));
+    expect(add).toBeEnabled();
+
+    const resolveA = pending.get("a.png");
+    expect(resolveA).toBeTypeOf("function");
+    await act(async () => resolveA?.("A".repeat(64)));
+    expect(hashField).toHaveValue("b".repeat(64));
+    expect(screen.getByRole("status")).toHaveTextContent(/b\.png.*prepared locally/i);
+  });
+
+  it("clears a prior digest and error as soon as a replacement file is picked", async () => {
+    const user = userEvent.setup();
+    let resolveReplacement: ((value: string) => void) | undefined;
+    const hashFile: VisionFileHasher = vi
+      .fn()
+      .mockResolvedValueOnce("a".repeat(64))
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveReplacement = resolve;
+          }),
+      );
+    render(<VisionBoardView hashFile={hashFile} />);
+    await user.click(screen.getByRole("radio", { name: /file metadata/i }));
+    const picker = screen.getByLabelText(/choose local file/i);
+    const hashField = screen.getByRole("textbox", { name: /content hash/i });
+    const add = screen.getByRole("button", { name: /add reference metadata/i });
+
+    fireEvent.change(picker, {
+      target: { files: [new File(["a"], "a.png", { type: "image/png" })] },
+    });
+    await waitFor(() => expect(hashField).toHaveValue("a".repeat(64)));
+
+    fireEvent.change(picker, {
+      target: {
+        files: [
+          new File(["bad"], "bad.exe", {
+            type: "application/x-msdownload",
+          }),
+        ],
+      },
+    });
+    expect(hashField).toHaveValue("");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/supported/i);
+
+    fireEvent.change(picker, {
+      target: { files: [new File(["b"], "b.png", { type: "image/png" })] },
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(hashField).toHaveValue("");
+    expect(add).toBeDisabled();
+
+    await act(async () => resolveReplacement?.("b".repeat(64)));
+    await waitFor(() => expect(hashField).toHaveValue("b".repeat(64)));
+  });
+
+  it("stores a whitespace-padded uppercase SHA-256 in canonical form without throwing", () => {
+    const add = () =>
+      useMuseboardStore.getState().addVisionReference({
+        kind: "url",
+        title: "Canonical hash",
+        url: "https://example.com/canonical",
+        mimeType: "image/jpeg",
+        sizeBytes: 0,
+        sha256: ` ${"A".repeat(64)} `,
+        rightsStatus: "owned",
+      });
+
+    expect(add).not.toThrow();
+    expect(add()).toMatchObject({ ok: true });
+    expect(useMuseboardStore.getState().visionReferences[0].sha256).toBe(
+      validHash,
+    );
   });
 
   it("adds only metadata, reuses duplicates, explicitly selects strategy inputs, and returns to empty", async () => {
@@ -422,6 +691,10 @@ describe("Curated operator contract and craft guidance", () => {
         ({ provenance }) =>
           provenance.source.length > 0 && provenance.reviewedAt.length > 0,
       ),
+    ).toBe(true);
+    expect(CRAFT_GUIDES.every(({ formats }) => formats.length === 1)).toBe(true);
+    expect(
+      CRAFT_GUIDES.every(({ creatorStages }) => creatorStages.length === 1),
     ).toBe(true);
 
     const matches = matchCraftGuides(CRAFT_GUIDES, {

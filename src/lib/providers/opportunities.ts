@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import {
-  OPPORTUNITY_FORMATS,
   VISION_REFERENCE_KINDS,
   VISION_RIGHTS_STATUSES,
   ideaRecordSchema,
@@ -29,6 +28,8 @@ import {
 export { rankOpportunity };
 
 export const VISION_WORKSPACE_QUOTA_BYTES = 2 * 1024 * 1024 * 1024;
+export const VISION_IMAGE_PDF_MAX_BYTES = 25 * 1024 * 1024;
+export const VISION_VIDEO_MAX_BYTES = 250 * 1024 * 1024;
 export const ALLOWED_VISION_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -36,9 +37,52 @@ export const ALLOWED_VISION_MIME_TYPES = [
   "image/gif",
   "video/mp4",
   "video/quicktime",
-  "video/webm",
   "application/pdf",
 ] as const;
+
+export interface VisionFileMetadata {
+  name: string;
+  type: string;
+  size: number;
+}
+
+export type VisionFilePreflightResult =
+  | { ok: true; mimeType: string; maxBytes: number }
+  | { ok: false; error: string };
+
+export function preflightVisionFile(
+  file: VisionFileMetadata,
+  usedBytes: number,
+): VisionFilePreflightResult {
+  if (!isAllowedMimeType(file.type)) {
+    return {
+      ok: false,
+      error: "This file type is not supported. Use an image, PDF, MP4, or MOV.",
+    };
+  }
+  if (!Number.isSafeInteger(file.size) || file.size < 0) {
+    return { ok: false, error: "File size metadata is invalid." };
+  }
+  const video = file.type === "video/mp4" || file.type === "video/quicktime";
+  const maxBytes = video
+    ? VISION_VIDEO_MAX_BYTES
+    : VISION_IMAGE_PDF_MAX_BYTES;
+  if (file.size > maxBytes) {
+    return {
+      ok: false,
+      error: video
+        ? "MP4 and MOV references must be 250 MB or smaller."
+        : "Image and PDF references must be 25 MB or smaller.",
+    };
+  }
+  if (usedBytes + file.size > VISION_WORKSPACE_QUOTA_BYTES) {
+    return {
+      ok: false,
+      error: "This file exceeds the remaining 2GB sample workspace quota.",
+    };
+  }
+  return { ok: true, mimeType: file.type, maxBytes };
+}
 
 export interface OpportunityProviderContext {
   archetypes: CreatorArchetype[];
@@ -110,6 +154,7 @@ export function validateVisionReference(
   usedBytes = 0,
 ): VisionValidationResult {
   const title = payload.title.trim();
+  const normalizedHash = payload.sha256.trim().toLowerCase();
   if (!title) return { ok: false, error: "Add a reference title." };
   if (!(VISION_REFERENCE_KINDS as readonly string[]).includes(payload.kind)) {
     return { ok: false, error: "Choose URL or file metadata." };
@@ -127,6 +172,17 @@ export function validateVisionReference(
   if (payload.kind === "file" && !payload.fileName?.trim()) {
     return { ok: false, error: "Choose a file before adding its metadata." };
   }
+  if (payload.kind === "file") {
+    const preflight = preflightVisionFile(
+      {
+        name: payload.fileName ?? "reference",
+        type: payload.mimeType,
+        size: payload.sizeBytes,
+      },
+      usedBytes,
+    );
+    if (!preflight.ok) return preflight;
+  }
   if (!isAllowedMimeType(payload.mimeType)) {
     return {
       ok: false,
@@ -136,7 +192,7 @@ export function validateVisionReference(
   if (!Number.isSafeInteger(payload.sizeBytes) || payload.sizeBytes < 0) {
     return { ok: false, error: "Reference size must be valid metadata." };
   }
-  if (!/^[a-f\d]{64}$/iu.test(payload.sha256.trim())) {
+  if (!/^[a-f\d]{64}$/u.test(normalizedHash)) {
     return { ok: false, error: "Content hash must be a 64-character SHA-256." };
   }
   if (usedBytes + payload.sizeBytes > VISION_WORKSPACE_QUOTA_BYTES) {
@@ -156,7 +212,7 @@ export function validateVisionReference(
           : undefined,
       fileName:
         payload.kind === "file" ? payload.fileName?.trim() : undefined,
-      sha256: payload.sha256.toLocaleLowerCase(),
+      sha256: normalizedHash,
     },
   };
 }
@@ -329,6 +385,20 @@ const GUIDE_STAGES = [
   "ready",
 ] as const;
 
+const GUIDE_SCOPE_BY_STAGE: Record<
+  (typeof GUIDE_STAGES)[number],
+  { format: OpportunityFormat; creatorStage: CreatorStage }
+> = {
+  signal: { format: "demonstration", creatorStage: "starter" },
+  angle: { format: "behind_scenes", creatorStage: "starter" },
+  hook: { format: "tutorial", creatorStage: "starter" },
+  outline: { format: "story", creatorStage: "growing" },
+  script: { format: "tutorial", creatorStage: "established" },
+  shoot: { format: "demonstration", creatorStage: "growing" },
+  review: { format: "story", creatorStage: "established" },
+  ready: { format: "behind_scenes", creatorStage: "established" },
+};
+
 const platformGuideNames: Record<ContentPlatform, string> = {
   instagram_reels: "Reel",
   tiktok_video: "TikTok",
@@ -373,20 +443,23 @@ const stageGuideCopy: Record<(typeof GUIDE_STAGES)[number], [string, string]> = 
 export const CRAFT_GUIDES: CraftGuide[] = (
   ["instagram_reels", "tiktok_video", "youtube_shorts"] as const
 ).flatMap((platform) =>
-  GUIDE_STAGES.map((stage) => ({
-    id: `craft-${platform}-${stage}`,
-    title: `${platformGuideNames[platform]} · ${stageGuideCopy[stage][0]}`,
-    guidance: stageGuideCopy[stage][1],
-    stage,
-    platform,
-    formats: [...OPPORTUNITY_FORMATS],
-    creatorStages: [...CREATOR_STAGES],
-    provenance: {
-      source: "Museboard Craft Desk",
-      author: "Editorial practice team",
-      reviewedAt: "2026-07-01",
-    },
-  })),
+  GUIDE_STAGES.map((stage) => {
+    const scope = GUIDE_SCOPE_BY_STAGE[stage];
+    return {
+      id: `craft-${platform}-${stage}`,
+      title: `${platformGuideNames[platform]} · ${stageGuideCopy[stage][0]}`,
+      guidance: stageGuideCopy[stage][1],
+      stage,
+      platform,
+      formats: [scope.format],
+      creatorStages: [scope.creatorStage],
+      provenance: {
+        source: "Museboard Craft Desk",
+        author: "Editorial practice team",
+        reviewedAt: "2026-07-01",
+      },
+    };
+  }),
 );
 
 export function matchCraftGuides(

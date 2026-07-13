@@ -8,7 +8,10 @@ import {
   Prohibit,
 } from "@phosphor-icons/react";
 
-import type { Opportunity } from "@/domain/opportunities";
+import {
+  OPPORTUNITY_RANKING_WEIGHTS,
+  type Opportunity,
+} from "@/domain/opportunities";
 import { rankOpportunity } from "@/lib/providers/opportunities";
 
 import styles from "./opportunities.module.css";
@@ -25,6 +28,10 @@ const factorLabels = {
   originality: "Originality",
   creatorFit: "Creator fit",
 } as const;
+
+function sourceClassLabel(value: Opportunity["provenance"]["sourceClass"]) {
+  return value.replaceAll("_", " ");
+}
 
 function formattedDate(value: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -103,7 +110,9 @@ export function OpportunityStory({
       </div>
 
       <p className={styles.sourceLine} id={sourceId}>
-        Source {opportunity.provenance.sourceLabel} · Observed{" "}
+        Source {opportunity.provenance.sourceLabel} ·{" "}
+        {sourceClassLabel(opportunity.provenance.sourceClass)} source class ·{" "}
+        Observed{" "}
         {formattedDate(opportunity.provenance.observedAt)} · Expires{" "}
         {formattedDate(opportunity.provenance.expiresAt)}
         {opportunity.provenance.sourceUrl ? (
@@ -125,15 +134,24 @@ export function OpportunityStory({
         className={styles.factorList}
         role="list"
       >
-        {Object.entries(opportunity.signals).map(([factor, value]) => (
-          <div key={factor} role="listitem">
-            <span>{factorLabels[factor as keyof typeof factorLabels]}</span>
-            <strong>{value}</strong>
-            <span aria-hidden="true" className={styles.factorTrack}>
-              <span style={{ width: `${value}%` }} />
-            </span>
-          </div>
-        ))}
+        {Object.entries(ranking.factorBreakdown).map(
+          ([factor, contribution]) => {
+            const factorKey = factor as keyof typeof factorLabels;
+            const weight = OPPORTUNITY_RANKING_WEIGHTS[factorKey] * 100;
+            const rawValue = opportunity.signals[factorKey];
+            return (
+              <div key={factor} role="listitem">
+                <span>
+                  {factorLabels[factorKey]} · {weight}% weight
+                </span>
+                <strong>{contribution} points</strong>
+                <span aria-hidden="true" className={styles.factorTrack}>
+                  <span style={{ width: `${rawValue}%` }} />
+                </span>
+              </div>
+            );
+          },
+        )}
       </div>
 
       <p className={styles.evidenceLine}>

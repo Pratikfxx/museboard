@@ -499,12 +499,21 @@ export const useMuseboardStore = create<MuseboardState>()(
           usedBytes,
         );
         if (!validation.ok) return validation;
-        const reference: VisionReference = visionReferenceSchema.parse({
+        const parsedReference = visionReferenceSchema.safeParse({
           ...validation.input,
           id: `reference-${validation.input.sha256.slice(0, 16)}`,
           addedAt: at,
           provenance: { provider: "museboard-local", mode: "sample" },
         });
+        if (!parsedReference.success) {
+          return {
+            ok: false,
+            error:
+              parsedReference.error.issues[0]?.message ??
+              "Reference metadata could not be saved.",
+          };
+        }
+        const reference: VisionReference = parsedReference.data;
         set((current) => ({
           visionReferences: [...current.visionReferences, reference],
         }));
