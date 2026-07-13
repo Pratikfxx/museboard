@@ -136,7 +136,7 @@ describe("Today workspace", () => {
     expect(
       screen.getByRole("link", { name: /rewrite in my voice/i }),
     ).toHaveAttribute("href", `/app/create/${contentId}?mode=voice`);
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /rewrite|voice draft/i })).not.toBeInTheDocument();
   });
 
   it("shows an opportunity-only state instead of leaking another opportunity's content", () => {
@@ -213,6 +213,28 @@ describe("Today workspace", () => {
       "utf8",
     );
     expect(stylesheet).toMatch(/\.hookOption:has\(input:focus-visible\)/u);
+  });
+
+  it("buffers distinct quick captures locally while offline", async () => {
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const user = userEvent.setup();
+    renderToday();
+
+    const capture = screen.getByLabelText("Quick capture");
+    await user.type(capture, "A candid studio reset");
+    await user.click(screen.getByRole("button", { name: "Save idea" }));
+
+    expect(screen.getByText(/saved on this device/i)).toBeVisible();
+    expect(JSON.parse(localStorage.getItem("museboard-offline-captures-v1") ?? "[]"))
+      .toEqual([expect.objectContaining({ text: "A candid studio reset", pending: true })]);
+
+    await user.type(capture, "A second idea that must not overwrite the first");
+    await user.click(screen.getByRole("button", { name: "Save idea" }));
+    expect(JSON.parse(localStorage.getItem("museboard-offline-captures-v1") ?? "[]"))
+      .toHaveLength(2);
   });
 });
 

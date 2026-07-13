@@ -4,15 +4,18 @@ import {
   BookOpen,
   CalendarBlank,
   Compass,
+  DotsThree,
   GearSix,
   House,
   PencilSimple,
+  ShieldCheck,
+  X,
   UsersThree,
 } from "@phosphor-icons/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
@@ -27,21 +30,22 @@ const navigation = [
   { href: "/app/team", label: "Team", Icon: UsersThree },
 ] as const;
 
-function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
-  const pathname = usePathname();
-  const links = mobile ? navigation.slice(0, 5) : navigation;
+const mobileNavigation = navigation.slice(0, 4);
 
-  return links.map(({ href, label, Icon }) => {
+function NavigationLinks() {
+  const pathname = usePathname();
+
+  return navigation.map(({ href, label, Icon }) => {
     const active = pathname === href || pathname.startsWith(`${href}/`);
     return (
       <Link
         aria-current={active ? "page" : undefined}
-        className={mobile ? styles.mobileNavLink : styles.navLink}
+        className={styles.navLink}
         data-active={active}
         href={href}
         key={href}
       >
-        <Icon aria-hidden="true" size={mobile ? 21 : 22} weight={active ? "fill" : "regular"} />
+        <Icon aria-hidden="true" size={22} weight={active ? "fill" : "regular"} />
         <span>{label}</span>
       </Link>
     );
@@ -49,12 +53,30 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const creator = useMuseboardStore((state) => state.creator);
+  const [moreOpen, setMoreOpen] = useState(false);
   const creatorName = creator?.name ?? "Sample creator";
   const creatorLane = creator?.contentPillars[0] ?? "Creator workspace";
 
+  useEffect(() => {
+    if (!moreOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMoreOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [moreOpen]);
+
+  const moreActive = ["/app/learn", "/app/team", "/app/settings"].some(
+    (href) => pathname.startsWith(href),
+  );
+
   return (
     <div className={styles.shell}>
+      <a className={styles.skipLink} href="#workspace-main">
+        Skip to workspace
+      </a>
       <aside aria-label="Primary" className={styles.rail}>
         <Link className={styles.wordmark} href="/app/today">
           Museboard
@@ -91,11 +113,62 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
       </header>
 
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main} id="workspace-main" tabIndex={-1}>{children}</main>
 
       <nav aria-label="Mobile primary" className={styles.mobileNav}>
-        <NavigationLinks mobile />
+        {mobileNavigation.map(({ href, label, Icon }) => {
+          const active = pathname === href || pathname.startsWith(`${href}/`);
+          return (
+            <Link
+              aria-current={active ? "page" : undefined}
+              className={styles.mobileNavLink}
+              data-active={active}
+              href={href}
+              key={href}
+            >
+              <Icon aria-hidden="true" size={21} weight={active ? "fill" : "regular"} />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+        <button
+          aria-expanded={moreOpen}
+          aria-haspopup="dialog"
+          aria-label="More"
+          className={styles.mobileNavLink}
+          data-active={moreActive || moreOpen}
+          onClick={() => setMoreOpen(true)}
+          type="button"
+        >
+          <DotsThree aria-hidden="true" size={22} weight="bold" />
+          <span>More</span>
+        </button>
       </nav>
+
+      {moreOpen ? (
+        <div className={styles.sheetBackdrop} onMouseDown={() => setMoreOpen(false)}>
+          <section
+            aria-label="More Museboard destinations"
+            aria-modal="true"
+            className={styles.moreSheet}
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className={styles.sheetHeading}>
+              <div><small>Workspace</small><h2>More</h2></div>
+              <button aria-label="Close More menu" onClick={() => setMoreOpen(false)} type="button">
+                <X aria-hidden="true" size={22} />
+              </button>
+            </div>
+            <nav aria-label="More destinations" className={styles.moreLinks}>
+              <Link href="/app/learn" onClick={() => setMoreOpen(false)}><BookOpen aria-hidden="true" size={22} /><span><strong>Learn</strong><small>Turn measured results into patterns</small></span></Link>
+              <Link href="/app/team" onClick={() => setMoreOpen(false)}><UsersThree aria-hidden="true" size={22} /><span><strong>Team</strong><small>Assignments, reviews, and collaborators</small></span></Link>
+              <Link href="/app/settings/billing" onClick={() => setMoreOpen(false)}><GearSix aria-hidden="true" size={22} /><span><strong>Billing</strong><small>Plan and sample mode controls</small></span></Link>
+              <Link href="/app/settings/data" onClick={() => setMoreOpen(false)}><ShieldCheck aria-hidden="true" size={22} /><span><strong>Data controls</strong><small>Export or clear this workspace</small></span></Link>
+            </nav>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

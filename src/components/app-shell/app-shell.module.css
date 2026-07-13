@@ -3,6 +3,24 @@
   background: var(--background);
 }
 
+.skipLink {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 100;
+  transform: translateY(-150%);
+  border-radius: 7px;
+  background: var(--ink);
+  padding: 10px 14px;
+  color: var(--background);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}
+
 .rail {
   position: fixed;
   inset: 0 auto 0 0;
@@ -105,7 +123,7 @@
 
 .profileCopy small {
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
 }
 
 .settingsLink {
@@ -127,7 +145,8 @@
 }
 
 .mobileHeader,
-.mobileNav {
+.mobileNav,
+.sheetBackdrop {
   display: none;
 }
 
@@ -191,13 +210,98 @@
     gap: 3px;
     border-radius: 12px;
     color: var(--muted);
-    font-size: 0.63rem;
+    font-size: 0.75rem;
     font-weight: 700;
     text-decoration: none;
+  }
+
+  button.mobileNavLink {
+    border: 0;
+    background: transparent;
   }
 
   .mobileNavLink[data-active="true"] {
     background: color-mix(in srgb, var(--coral) 12%, transparent);
     color: var(--coral);
+  }
+
+  .sheetBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: flex-end;
+    background: color-mix(in srgb, #000 48%, transparent);
+  }
+
+  .moreSheet {
+    width: 100%;
+    max-height: min(78dvh, 620px);
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 22px 22px 0 0;
+    background: var(--surface);
+    padding: 18px 16px max(22px, env(safe-area-inset-bottom));
+    box-shadow: 0 -18px 60px color-mix(in srgb, #000 22%, transparent);
+  }
+
+  .sheetHeading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 2px 2px 14px;
+  }
+
+  .sheetHeading div {
+    display: grid;
+  }
+
+  .sheetHeading small,
+  .moreLinks small {
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .sheetHeading h2 {
+    margin: 0;
+    font-family: var(--font-instrument-serif), serif;
+    font-size: 2rem;
+    font-weight: 400;
+  }
+
+  .sheetHeading button {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--background);
+    color: var(--ink);
+  }
+
+  .moreLinks {
+    display: grid;
+    gap: 8px;
+  }
+
+  .moreLinks a {
+    display: grid;
+    min-height: 68px;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--background);
+    padding: 12px 14px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .moreLinks a > span {
+    display: grid;
   }
 }

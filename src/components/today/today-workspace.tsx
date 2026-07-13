@@ -15,7 +15,7 @@ import {
 } from "@phosphor-icons/react";
 import Image from "next/image";
 import Link from "next/link";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import { IdeaSculptureFallback } from "@/components/today/idea-sculpture-fallback";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -38,6 +38,7 @@ const platformLabels: Record<ContentPlatform, string> = {
   youtube_shorts: "YouTube Shorts",
 };
 const todayStages = ["signal", "angle", "hook", "outline"] as const;
+const offlineCaptureKey = "museboard-offline-captures-v1";
 
 function stageState(
   currentStage: WorkflowStage,
@@ -135,6 +136,23 @@ export function TodayWorkspace() {
     "";
   const [selectedHookId, setSelectedHookId] = useState(initialHookId);
   const [status, setStatus] = useState("");
+  const [capture, setCapture] = useState("");
+  const [captureStatus, setCaptureStatus] = useState("");
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+
+  useEffect(() => {
+    function updateConnection() {
+      setIsOnline(navigator.onLine);
+    }
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
+  }, []);
 
   const effectiveSelectedHookId = activeHooks.some(
     ({ id }) => id === selectedHookId,
@@ -209,6 +227,32 @@ export function TodayWorkspace() {
     if (saved) setStatus("Hook chosen · Outline is next");
   }
 
+  function handleCapture(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = capture.trim();
+    if (!text) return;
+    try {
+      const raw = window.localStorage.getItem(offlineCaptureKey);
+      const existing = raw ? JSON.parse(raw) : [];
+      const queue = Array.isArray(existing) ? existing.slice(-99) : [];
+      queue.push({
+        id: `capture-${Date.now()}-${queue.length + 1}`,
+        text,
+        pending: true,
+        createdAt: new Date().toISOString(),
+      });
+      window.localStorage.setItem(offlineCaptureKey, JSON.stringify(queue));
+      setCapture("");
+      setCaptureStatus(
+        isOnline
+          ? "Saved in this sample workspace · connect an account to sync"
+          : "Saved on this device · waiting for a connected account to sync",
+      );
+    } catch {
+      setCaptureStatus("Couldn’t save locally. Copy this idea before leaving.");
+    }
+  }
+
   return (
     <div className={styles.page}>
       <section className={styles.workspace}>
@@ -272,6 +316,26 @@ export function TodayWorkspace() {
               <strong>{currentVersion.angle}</strong>
               <NotePencil aria-hidden="true" size={18} />
             </div>
+
+            <form className={styles.quickCapture} onSubmit={handleCapture}>
+              <label htmlFor="quick-capture">Quick capture</label>
+              <div>
+                <textarea
+                  id="quick-capture"
+                  maxLength={500}
+                  onChange={(event) => {
+                    setCapture(event.target.value);
+                    setCaptureStatus("");
+                  }}
+                  placeholder="Save the spark before it disappears"
+                  rows={2}
+                  value={capture}
+                />
+                <button disabled={!capture.trim()} type="submit">Save idea</button>
+              </div>
+              <small>{isOnline ? "Sample mode · stored on this device" : "Offline · this stays on your device"}</small>
+              <p aria-live="polite">{captureStatus}</p>
+            </form>
 
             <ol aria-label="Content workflow" className={styles.stageSpine}>
               {todayStages.map((stage, index) => {

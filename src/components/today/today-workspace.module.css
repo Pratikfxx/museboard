@@ -35,7 +35,7 @@
 .sampleMode {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -86,7 +86,7 @@
 .eyebrow {
   margin: 24px 0 11px;
   color: var(--ink);
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.17em;
   text-transform: uppercase;
@@ -106,7 +106,7 @@
   gap: 7px 12px;
   margin-top: 20px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .signalRow > span {
@@ -135,7 +135,7 @@
 
 .evidence h3 {
   margin: 0 0 3px;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -152,7 +152,7 @@
 .evidence .audienceLine {
   margin-top: 3px;
   color: color-mix(in srgb, var(--muted) 82%, var(--cobalt));
-  font-size: 0.69rem;
+  font-size: 0.75rem;
 }
 
 .angleField {
@@ -174,7 +174,7 @@
   left: 10px;
   padding: 0 5px;
   background: var(--background);
-  font-size: 0.54rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -192,6 +192,63 @@
   position: absolute;
   right: 14px;
   color: var(--muted);
+}
+
+.quickCapture {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.quickCapture > label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quickCapture > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+
+.quickCapture textarea {
+  min-height: 52px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-right: 0;
+  border-radius: 7px 0 0 7px;
+  background: var(--surface);
+  padding: 10px 12px;
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.quickCapture button {
+  min-width: 96px;
+  border: 1px solid var(--cobalt);
+  border-radius: 0 7px 7px 0;
+  background: var(--cobalt);
+  color: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.quickCapture button:disabled {
+  opacity: 0.45;
+}
+
+.quickCapture > small,
+.quickCapture > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.quickCapture > p {
+  min-height: 18px;
+  color: var(--success);
 }
 
 .stageSpine {
@@ -243,13 +300,13 @@
 
 .stageSpine strong {
   color: var(--ink);
-  font-size: 0.57rem;
+  font-size: 0.75rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .stageSpine small {
-  font-size: 0.58rem;
+  font-size: 0.75rem;
 }
 
 .stageNumber {
@@ -259,7 +316,7 @@
   place-items: center;
   border: 2px solid currentColor;
   border-radius: 999px;
-  font-size: 0.71rem;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 
@@ -339,7 +396,7 @@
 
 .hookCopy small {
   color: var(--coral);
-  font-size: 0.51rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -347,7 +404,7 @@
 
 .hookCopy strong {
   overflow: hidden;
-  font-size: 0.73rem;
+  font-size: 0.75rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -358,7 +415,7 @@
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 0.58rem;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -390,7 +447,7 @@
   justify-content: space-between;
   padding: 0 18px 0 50%;
   border: 1px solid var(--coral);
-  background: #f0442f;
+  background: var(--coral);
   color: #fff;
 }
 
@@ -404,7 +461,7 @@
   min-height: 17px;
   margin: 4px 0 0;
   color: var(--success);
-  font-size: 0.63rem;
+  font-size: 0.75rem;
   text-align: center;
 }
 
@@ -477,7 +534,7 @@
   align-items: flex-start;
   gap: 5px;
   color: var(--muted);
-  font-size: 0.52rem;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -522,7 +579,7 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 650;
 }
 
@@ -543,7 +600,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--background) 82%, transparent);
   color: var(--muted);
-  font-size: 0.55rem;
+  font-size: 0.75rem;
   text-transform: capitalize;
 }
 
@@ -580,12 +637,12 @@
 }
 
 .collaborator strong {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
 }
 
 .collaborator small {
   color: var(--muted);
-  font-size: 0.59rem;
+  font-size: 0.75rem;
 }
 
 .commentPreview {
@@ -597,20 +654,20 @@
 }
 
 .commentPreview strong {
-  font-size: 0.54rem;
+  font-size: 0.75rem;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
 .commentPreview p {
   margin: 8px 0;
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
 .commentPreview small {
   color: var(--muted);
-  font-size: 0.55rem;
+  font-size: 0.75rem;
 }
 
 .weekPlanner {
@@ -640,7 +697,7 @@
 
 .weekHeading span {
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
 }
 
 .weekList {
@@ -664,13 +721,13 @@
 }
 
 .dayLabel strong {
-  font-size: 0.56rem;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
 }
 
 .dayLabel small {
   color: var(--muted);
-  font-size: 0.55rem;
+  font-size: 0.75rem;
 }
 
 .dayTask {
@@ -691,7 +748,7 @@
 
 .dayTask strong {
   overflow: hidden;
-  font-size: 0.6rem;
+  font-size: 0.75rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -699,7 +756,7 @@
 
 .dayTask small {
   color: var(--muted);
-  font-size: 0.54rem;
+  font-size: 0.75rem;
 }
 
 .rhythmNote {
@@ -720,7 +777,7 @@
   gap: 3px;
   margin: 0;
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
@@ -753,13 +810,13 @@
 }
 
 .learningLabel strong {
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .learningLabel small {
-  font-size: 0.58rem;
+  font-size: 0.75rem;
 }
 
 .learningStatement p {
@@ -773,7 +830,7 @@
   display: block;
   margin-top: 8px;
   color: var(--muted);
-  font-size: 0.58rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -978,12 +1035,12 @@
 
   .mobileAgenda small {
     color: var(--muted);
-    font-size: 0.58rem;
+    font-size: 0.75rem;
   }
 
   .mobileAgenda strong {
     overflow: hidden;
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1020,6 +1077,20 @@
 
   .primaryActions {
     grid-template-columns: 1fr;
+  }
+
+  .quickCapture > div {
+    grid-template-columns: 1fr;
+  }
+
+  .quickCapture textarea {
+    border-right: 1px solid var(--border);
+    border-radius: 7px 7px 0 0;
+  }
+
+  .quickCapture button {
+    min-height: 46px;
+    border-radius: 0 0 7px 7px;
   }
 
   .chooseButton {

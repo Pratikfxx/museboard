@@ -258,7 +258,7 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
 
         <div className={styles.explanation}><Info aria-hidden="true" size={20} /><p><strong>Museboard stops at 80% by default.</strong> Tasks are rounded to 15 minutes, dependencies remain visible, and recovery days keep their breathing room.</p></div>
 
-        <div className={styles.week}>
+        <div aria-label="Production week days" className={styles.week} role="region" tabIndex={0}>
           {days.map((date) => {
             const dayTasks = tasks.filter((task) =>
               task.status !== "cancelled"

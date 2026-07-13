@@ -75,7 +75,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--cobalt) 12%, transparent);
   color: var(--cobalt);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .viewNav {
@@ -176,7 +176,7 @@
   margin-top: 6px;
   color: var(--muted);
   font-family: var(--font-manrope), sans-serif;
-  font-size: 0.58rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -478,7 +478,7 @@
 
 .ideaGroup article > div > p:first-child {
   color: var(--coral);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -502,7 +502,7 @@
   display: block;
   margin-top: 10px;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .ideaActions {
@@ -617,7 +617,7 @@
   display: grid;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -641,7 +641,7 @@
 
 .composerFooter span {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .formError {
@@ -683,7 +683,7 @@
 
 .referenceList article > div:nth-child(2) > p:first-child {
   color: var(--coral);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -699,7 +699,7 @@
 .referenceList h2 + p,
 .referenceList small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .referenceList small {
@@ -752,7 +752,7 @@
 
 .selectionDock span {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
 }
 
 .visionBoard > progress {
@@ -830,7 +830,7 @@
 
 .guideDrawer article small {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
 }
 
 .operatorPage {
@@ -939,7 +939,7 @@
 
 .operatorPreview > header span {
   color: var(--warning);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
