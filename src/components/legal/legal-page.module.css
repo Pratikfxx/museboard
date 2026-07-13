@@ -1,0 +1,358 @@
+.shell {
+  min-height: 100vh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--butter) 24%, transparent) 0, transparent 28rem),
+    radial-gradient(circle at 92% 28%, color-mix(in srgb, var(--sage) 20%, transparent) 0, transparent 24rem),
+    var(--background);
+  color: var(--ink);
+}
+
+.header {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+}
+
+.headerInner {
+  width: min(100% - 2rem, 76rem);
+  min-height: 4.5rem;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand,
+.backLink,
+.documentLink,
+.productLink {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.brand {
+  gap: 0.55rem;
+  color: var(--ink);
+  font-family: var(--font-instrument-serif), serif;
+  font-size: 1.55rem;
+}
+
+.brandIcon {
+  color: var(--coral);
+}
+
+.backLink {
+  gap: 0.45rem;
+  padding-inline: 0.9rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.backLink:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.main {
+  width: min(100% - 2rem, 76rem);
+  margin-inline: auto;
+  padding-block: clamp(2rem, 5vw, 4.5rem) 5rem;
+}
+
+.hero {
+  display: grid;
+  gap: 1.5rem;
+  padding-bottom: clamp(2rem, 5vw, 3.5rem);
+  border-bottom: 1px solid var(--border);
+}
+
+.draftNotice {
+  width: fit-content;
+  max-width: 100%;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--border));
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--butter) 24%, var(--surface));
+}
+
+.draftLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.draftCopy {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.eyebrow {
+  color: var(--coral);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.title {
+  max-width: 14ch;
+  margin: 0;
+  font-family: var(--font-instrument-serif), serif;
+  font-size: clamp(3.25rem, 8vw, 6.75rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.91;
+}
+
+.lede {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 2vw, 1.18rem);
+  line-height: 1.8;
+}
+
+.trustStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.trustItem {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1.1rem;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+
+.trustItem strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.trustItem span {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.bodyGrid {
+  display: grid;
+  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
+  gap: clamp(2rem, 6vw, 5rem);
+  padding-top: clamp(2rem, 5vw, 4rem);
+}
+
+.sideNav {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+}
+
+.sideLabel {
+  margin: 0 0 0.7rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.documentNav {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.documentLink {
+  justify-content: space-between;
+  padding-inline: 0.9rem;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.documentLink:hover {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.documentLink[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--coral) 36%, var(--border));
+  background: color-mix(in srgb, var(--coral) 11%, var(--surface));
+  color: var(--ink);
+}
+
+.document {
+  min-width: 0;
+}
+
+.section {
+  scroll-margin-top: 2rem;
+  padding-block: 0 2.25rem;
+}
+
+.section + .section {
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.section h2 {
+  max-width: 25ch;
+  margin: 0 0 1rem;
+  font-family: var(--font-instrument-serif), serif;
+  font-size: clamp(1.85rem, 4vw, 2.65rem);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.section p,
+.section li {
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.8;
+}
+
+.section p {
+  margin: 0;
+}
+
+.section p + p {
+  margin-top: 0.9rem;
+}
+
+.section ul {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.section li + li {
+  margin-top: 0.65rem;
+}
+
+.section strong {
+  color: var(--ink);
+}
+
+.footerCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border: 1px solid color-mix(in srgb, var(--sage) 70%, var(--border));
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--sage) 16%, var(--surface));
+}
+
+.footerCard h2 {
+  margin: 0;
+  font-family: var(--font-instrument-serif), serif;
+  font-size: 1.65rem;
+  font-weight: 400;
+}
+
+.footerCard p {
+  max-width: 38rem;
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.87rem;
+  line-height: 1.65;
+}
+
+.productLink {
+  flex-shrink: 0;
+  gap: 0.4rem;
+  padding-inline: 1.1rem;
+  background: var(--ink);
+  color: var(--background);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.productLink:hover {
+  background: var(--coral);
+  color: white;
+}
+
+@media (max-width: 44rem) {
+  .headerInner {
+    width: min(100% - 1.25rem, 76rem);
+  }
+
+  .brand {
+    font-size: 1.35rem;
+  }
+
+  .backLink {
+    padding-inline: 0.7rem;
+  }
+
+  .main {
+    width: min(100% - 1.25rem, 76rem);
+    padding-bottom: 3rem;
+  }
+
+  .trustStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .bodyGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+  }
+
+  .sideNav {
+    position: static;
+  }
+
+  .documentNav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .documentLink {
+    justify-content: center;
+    padding-inline: 0.4rem;
+    text-align: center;
+  }
+
+  .footerCard {
+    grid-template-columns: 1fr;
+  }
+
+  .productLink {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand,
+  .backLink,
+  .documentLink,
+  .productLink {
+    transition: none;
+  }
+}
