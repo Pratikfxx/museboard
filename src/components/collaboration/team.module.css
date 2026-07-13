@@ -28,6 +28,8 @@
 .peopleRail form > p, .decisionRail > p, .assignmentDesk > p { color: var(--muted); font-size: .88rem; }
 .peopleRail label, .assignmentDesk label, .commentForm label { display: grid; gap: .35rem; margin-top: 1rem; color: var(--muted); font-size: .78rem; font-weight: 750; }
 .peopleRail input, .peopleRail select, .assignmentDesk select, .commentForm textarea { width: 100%; min-height: 44px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); padding: .7rem .8rem; }
+.assignmentDesk select:disabled { cursor: not-allowed; opacity: .55; }
+.upgradeNote { padding-left: .7rem; border-left: 3px solid var(--cobalt); color: var(--cobalt) !important; font-weight: 700; }
 .primaryButton, .approveButton, .decisionButtons button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .45rem; padding: .7rem 1rem; border: 0; background: var(--coral); color: #fffdf8; font-weight: 800; }
 .primaryButton { margin-top: 1rem; }
 .primaryButton:disabled { opacity: .45; cursor: not-allowed; }
@@ -49,8 +51,11 @@
 .comments > article small, .emptyNote { color: var(--muted); font-size: .78rem; }
 .comments > article p { margin: 0; }
 .comments > article button { min-height: 44px; border: 0; background: transparent; color: var(--cobalt); font-weight: 750; }
+.comments > article button:disabled { cursor: not-allowed; opacity: .45; }
 .commentForm textarea { resize: vertical; }
 .decisionRail { align-self: start; position: sticky; top: 2rem; }
+.actorSwitch { display: grid; gap: .35rem; color: var(--muted); font-size: .78rem; font-weight: 750; }
+.actorSwitch select { min-height: 44px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); padding: .6rem .75rem; }
 .decisionButtons { display: grid; gap: .65rem; }
 .decisionButtons button:last-child { border: 1px solid var(--border); background: transparent; color: var(--ink); }
 .approvalHistory { display: grid; gap: .8rem; margin: .5rem 0 0; padding: 1.25rem 0 0; border-top: 1px solid var(--border); list-style: none; }

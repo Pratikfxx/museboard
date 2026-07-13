@@ -14,7 +14,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { occupiedSeatCount, seatLimitMessage } from "@/domain/collaboration";
 import { PLAN_CATALOG } from "@/domain/entitlements";
@@ -33,9 +33,11 @@ const tabMeta = {
 export function TeamWorkspace({
   initialTab = "people",
   focusId,
+  notificationId,
 }: {
   initialTab?: TeamTab;
   focusId?: string;
+  notificationId?: string;
 }) {
   const [tab, setTab] = useState<TeamTab>(initialTab);
 
@@ -68,18 +70,21 @@ export function TeamWorkspace({
         })}
       </nav>
 
-      {tab === "people" ? <PeopleDesk focusId={focusId} /> : null}
+      {tab === "people" ? <PeopleDesk focusId={focusId} notificationId={notificationId} /> : null}
       {tab === "review" ? <ReviewDesk /> : null}
       {tab === "inbox" ? <InboxDesk /> : null}
     </div>
   );
 }
 
-function PeopleDesk({ focusId }: { focusId?: string }) {
+function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificationId?: string }) {
   const memberships = useMuseboardStore((state) => state.memberships);
   const assignments = useMuseboardStore((state) => state.assignments);
   const content = useMuseboardStore((state) => state.content);
   const plan = useMuseboardStore((state) => state.entitlementUsage.plan);
+  const onboardingComplete = useMuseboardStore((state) => state.onboardingComplete);
+  const notifications = useMuseboardStore((state) => state.notifications);
+  const openNotification = useMuseboardStore((state) => state.openNotification);
   const inviteMember = useMuseboardStore((state) => state.inviteMember);
   const updateInvitationStatus = useMuseboardStore((state) => state.updateInvitationStatus);
   const resendInvitation = useMuseboardStore((state) => state.resendInvitation);
@@ -93,7 +98,22 @@ function PeopleDesk({ focusId }: { focusId?: string }) {
   const occupied = occupiedSeatCount(memberships);
   const activeMembers = memberships.filter(({ status }) => status === "active");
   const activeContent = content[0];
-  const assignment = assignments.find(({ contentId }) => contentId === activeContent?.id);
+  const assignment = [...assignments].reverse().find(({ contentId }) => contentId === activeContent?.id);
+  const activeAssigneeId = activeMembers.some(({ id }) => id === assignment?.assigneeMembershipId)
+    ? assignment?.assigneeMembershipId
+    : undefined;
+  const activeReviewerId = activeMembers.some(({ id }) => id === assignment?.reviewerMembershipId)
+    ? assignment?.reviewerMembershipId
+    : undefined;
+  const collaborationAllowed = PLAN_CATALOG[plan].commentsAndApprovals;
+  const preview = !onboardingComplete;
+
+  useEffect(() => {
+    if (!focusId || !notificationId || !memberships.some(({ id }) => id === focusId)) return;
+    const notification = notifications.find(({ id }) => id === notificationId);
+    if (!notification || !notification.href.includes(`notification=${encodeURIComponent(notificationId)}`)) return;
+    openNotification(notificationId, `${window.location.pathname}${window.location.search}`);
+  }, [focusId, memberships, notificationId, notifications, openNotification]);
 
   function submitInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,9 +132,9 @@ function PeopleDesk({ focusId }: { focusId?: string }) {
         <div className={styles.sectionHeading}>
           <div>
             <p className={styles.kicker}>Roster</p>
-            <h2>{occupied} of {limit} seats in use</h2>
+            <h2>{preview ? `${occupied} sample seats shown` : `${occupied} of ${limit} seats in use`}</h2>
           </div>
-          <span>{PLAN_CATALOG[plan].name} plan · owner included</span>
+          <span>{preview ? `Sample ${PLAN_CATALOG[plan].name} preview` : `${PLAN_CATALOG[plan].name} plan · owner included`}</span>
         </div>
         <div className={styles.roster}>
           {memberships.map((member) => (
@@ -168,8 +188,9 @@ function PeopleDesk({ focusId }: { focusId?: string }) {
           <section className={styles.assignmentDesk}>
             <p className={styles.kicker}>Current handoff</p>
             <h2>{activeContent.title}</h2>
-            <label>Assignee<select aria-label="Stage assignee" onChange={(event) => assignStage({ contentId: activeContent.id, stage: "review", assigneeMembershipId: event.target.value || undefined, reviewerMembershipId: assignment?.reviewerMembershipId })} value={assignment?.assigneeMembershipId ?? ""}><option value="">Unassigned</option>{activeMembers.map((member) => <option key={member.id} value={member.id}>{member.displayNameSnapshot}</option>)}</select></label>
-            <label>Reviewer<select aria-label="Stage reviewer" onChange={(event) => assignStage({ contentId: activeContent.id, stage: "review", assigneeMembershipId: assignment?.assigneeMembershipId, reviewerMembershipId: event.target.value || undefined })} value={assignment?.reviewerMembershipId ?? ""}><option value="">No reviewer</option>{activeMembers.map((member) => <option key={member.id} value={member.id}>{member.displayNameSnapshot}</option>)}</select></label>
+            <label>Assignee<select aria-label="Stage assignee" disabled={!collaborationAllowed} onChange={(event) => assignStage({ contentId: activeContent.id, stage: "review", assigneeMembershipId: event.target.value || undefined, reviewerMembershipId: activeReviewerId })} value={activeAssigneeId ?? ""}><option value="">Unassigned</option>{activeMembers.map((member) => <option key={member.id} value={member.id}>{member.displayNameSnapshot}</option>)}</select></label>
+            <label>Reviewer<select aria-label="Stage reviewer" disabled={!collaborationAllowed} onChange={(event) => assignStage({ contentId: activeContent.id, stage: "review", assigneeMembershipId: activeAssigneeId, reviewerMembershipId: event.target.value || undefined })} value={activeReviewerId ?? ""}><option value="">No reviewer</option>{activeMembers.map((member) => <option key={member.id} value={member.id}>{member.displayNameSnapshot}</option>)}</select></label>
+            {!collaborationAllowed ? <p className={styles.upgradeNote}>Upgrade to Pro or Studio to assign collaborators and reviewers.</p> : null}
           </section>
         ) : null}
       </aside>
@@ -182,7 +203,10 @@ function ReviewDesk() {
   const memberships = useMuseboardStore((state) => state.memberships);
   const comments = useMuseboardStore((state) => state.reviewComments);
   const approvals = useMuseboardStore((state) => state.approvals);
+  const assignments = useMuseboardStore((state) => state.assignments);
   const plan = useMuseboardStore((state) => state.entitlementUsage.plan);
+  const currentActorMembershipId = useMuseboardStore((state) => state.currentActorMembershipId);
+  const switchDemoActor = useMuseboardStore((state) => state.switchDemoActor);
   const addReviewComment = useMuseboardStore((state) => state.addReviewComment);
   const toggleReviewComment = useMuseboardStore((state) => state.toggleReviewComment);
   const requestApproval = useMuseboardStore((state) => state.requestApproval);
@@ -193,7 +217,13 @@ function ReviewDesk() {
   const currentVersion = item?.versions.find(({ id }) => id === item.currentVersionId);
   const versionComments = comments.filter(({ contentId, versionId }) => contentId === item?.id && versionId === item?.currentVersionId);
   const latestApproval = useMemo(() => [...approvals].reverse().find(({ contentId }) => contentId === item?.id), [approvals, item?.id]);
-  const reviewer = memberships.find(({ role, status }) => role !== "owner" && status === "active") ?? memberships.find(({ role, status }) => role === "owner" && status === "active");
+  const currentActor = memberships.find(({ id }) => id === currentActorMembershipId);
+  const assignment = [...assignments].reverse().find(
+    ({ contentId, stage }) => contentId === item?.id && stage === "review",
+  );
+  const reviewer = memberships.find(
+    ({ id, status }) => id === assignment?.reviewerMembershipId && status === "active",
+  );
   const enabled = PLAN_CATALOG[plan].commentsAndApprovals;
 
   if (!item || !currentVersion) {
@@ -234,7 +264,7 @@ function ReviewDesk() {
             <article data-resolved={Boolean(comment.resolvedAt)} key={comment.id}>
               <div><strong>{comment.authorDisplayNameSnapshot}</strong><small>{comment.resolvedAt ? "Resolved" : `On version ${currentVersion.number}`}</small></div>
               <p>{comment.body}</p>
-              <button onClick={() => toggleReviewComment(comment.id)} type="button">{comment.resolvedAt ? "Reopen" : "Resolve"}</button>
+              <button disabled={!enabled} onClick={() => toggleReviewComment(comment.id)} type="button">{comment.resolvedAt ? "Reopen" : "Resolve"}</button>
             </article>
           )) : <p className={styles.emptyNote}>No notes on this version yet. Add only feedback that helps the next decision.</p>}
           <form className={styles.commentForm} onSubmit={postComment}>
@@ -242,20 +272,23 @@ function ReviewDesk() {
             <button className={styles.primaryButton} disabled={!body.trim()} type="submit"><PaperPlaneTilt aria-hidden="true" size={18} /> Post comment</button>
           </form>
           <p aria-live="polite" className={styles.formMessage}>{message}</p>
+          {!enabled ? <p className={styles.upgradeNote}>Upgrade to Pro or Studio to resolve or reopen team comments.</p> : null}
         </section>
       </main>
 
       <aside className={styles.decisionRail}>
         <p className={styles.kicker}>Decision</p>
+        <label className={styles.actorSwitch}>Preview as<select aria-label="Preview collaboration as" onChange={(event) => switchDemoActor(event.target.value)} value={currentActorMembershipId}>{memberships.filter(({ status }) => status === "active").map((member) => <option key={member.id} value={member.id}>{member.displayNameSnapshot}</option>)}</select></label>
         <h2>{approvalState === "approved" ? "Approved for this version" : approvalState === "changes_requested" ? "Changes requested" : approvalState === "requested" ? "Review requested" : "Fresh review needed"}</h2>
         <p>{enabled ? "A decision applies only to this immutable version." : "Upgrade to Pro or Studio to request and record version-bound approvals."}</p>
-        {approvalState !== "requested" ? <button className={styles.primaryButton} disabled={!enabled || !reviewer} onClick={() => reviewer && requestApproval(item.id, reviewer.id)} type="button">Request fresh review</button> : null}
-        {approvalState === "requested" ? (
+        {approvalState !== "requested" ? <button className={styles.primaryButton} disabled={!enabled || !reviewer || currentActor?.role !== "owner"} onClick={() => reviewer && requestApproval(item.id, reviewer.id)} type="button">Request fresh review</button> : null}
+        {approvalState !== "requested" && currentActor?.role !== "owner" ? <p className={styles.upgradeNote}>Only the workspace owner can send a fresh review request.</p> : null}
+        {approvalState === "requested" && latestApproval?.reviewerMembershipId === currentActor?.id ? (
           <div className={styles.decisionButtons}>
             <button className={styles.approveButton} onClick={() => decideApproval(item.id, "approved", "Approved in the team desk.")} type="button"><Check aria-hidden="true" size={18} /> Approve version</button>
             <button onClick={() => decideApproval(item.id, "changes_requested", "Please address the open margin notes.")} type="button"><X aria-hidden="true" size={18} /> Request changes</button>
           </div>
-        ) : null}
+        ) : approvalState === "requested" ? <p className={styles.upgradeNote}>Awaiting {memberships.find(({ id }) => id === latestApproval?.reviewerMembershipId)?.displayNameSnapshot ?? "the assigned reviewer"}. Switch the demo preview to that reviewer to record their decision.</p> : null}
         <ol className={styles.approvalHistory}>
           {approvals.filter(({ contentId }) => contentId === item.id).map((event) => <li key={event.id}><span data-status={event.status}>{event.status.replace("_", " ")}</span><small>{event.actorDisplayNameSnapshot} · Version {item.versions.find(({ id }) => id === event.versionId)?.number ?? "archived"}</small></li>)}
         </ol>
@@ -266,15 +299,14 @@ function ReviewDesk() {
 
 function InboxDesk() {
   const notifications = useMuseboardStore((state) => state.notifications);
-  const ownerId = useMuseboardStore((state) => state.memberships.find(({ role }) => role === "owner")?.id);
-  const openNotification = useMuseboardStore((state) => state.openNotification);
-  const inbox = notifications.filter(({ recipientMembershipId }) => !recipientMembershipId || recipientMembershipId === ownerId);
+  const currentActorMembershipId = useMuseboardStore((state) => state.currentActorMembershipId);
+  const inbox = notifications.filter(({ recipientMembershipId }) => !recipientMembershipId || recipientMembershipId === currentActorMembershipId);
 
   return (
     <div className={styles.inbox}>
       <div className={styles.sectionHeading}><div><p className={styles.kicker}>Exact destinations</p><h2>Review inbox</h2></div><span>{inbox.filter(({ readAt }) => !readAt).length} unread</span></div>
       {inbox.length ? inbox.map((notification) => (
-        <Link data-read={Boolean(notification.readAt)} href={notification.href} key={notification.id} onClick={() => openNotification(notification.id, notification.href)}>
+        <Link data-read={Boolean(notification.readAt)} href={notification.href} key={notification.id}>
           <span className={styles.notificationIcon}>{notification.kind === "review" ? <CheckCircle aria-hidden="true" size={21} /> : notification.kind === "mention" ? <PaperPlaneTilt aria-hidden="true" size={21} /> : notification.kind === "assignment" ? <UsersThree aria-hidden="true" size={21} /> : <Bell aria-hidden="true" size={21} />}</span>
           <span><strong>{notification.title}</strong><small>{notification.detail}</small><em>{notification.readAt ? "Read" : "Unread"}</em></span>
           <ArrowRight aria-hidden="true" size={19} />

@@ -3,7 +3,7 @@ import { TeamWorkspace } from "@/components/collaboration/team-workspace";
 export default async function TeamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; invite?: string; member?: string }>;
+  searchParams: Promise<{ tab?: string; invite?: string; member?: string; notification?: string }>;
 }) {
   const query = await searchParams;
   const initialTab = ["people", "review", "inbox"].includes(query.tab ?? "")
@@ -13,6 +13,7 @@ export default async function TeamPage({
     <TeamWorkspace
       focusId={query.invite ?? query.member}
       initialTab={initialTab}
+      notificationId={query.notification}
     />
   );
 }

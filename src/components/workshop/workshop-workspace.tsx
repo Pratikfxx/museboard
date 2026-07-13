@@ -54,6 +54,7 @@ interface WorkshopWorkspaceProps {
   focusTarget?: string;
   focusKind?: "comment" | "approval" | "assignment";
   requestedVersionId?: string;
+  notificationId?: string;
 }
 
 export function WorkshopWorkspace(props: WorkshopWorkspaceProps) {
@@ -71,6 +72,7 @@ function WorkshopEditor({
   focusTarget,
   focusKind,
   requestedVersionId,
+  notificationId,
 }: WorkshopWorkspaceProps) {
   const content = useMuseboardStore((state) => state.content);
   const hooks = useMuseboardStore((state) => state.hooks);
@@ -82,6 +84,8 @@ function WorkshopEditor({
   const approvals = useMuseboardStore((state) => state.approvals);
   const assignments = useMuseboardStore((state) => state.assignments);
   const memberships = useMuseboardStore((state) => state.memberships);
+  const notifications = useMuseboardStore((state) => state.notifications);
+  const openNotification = useMuseboardStore((state) => state.openNotification);
   const item = content.find(({ id }) => id === contentId);
   const currentVersion = item?.versions.find(({ id }) => id === item.currentVersionId) ?? item?.versions.at(-1);
   const itemHooks = hooks.filter((hook) => hook.contentId === item?.id);
@@ -106,24 +110,32 @@ function WorkshopEditor({
     ? item?.versions.find(({ id }) => id === requestedVersionId)
     : undefined;
   const displayedReviewVersion = stage === "review" && requestedVersion ? requestedVersion : currentVersion;
+  const commentTarget = focusKind === "comment" ? reviewComments.find(({ id }) => id === focusTarget) : undefined;
+  const approvalTarget = focusKind === "approval" ? approvals.find(({ id }) => id === focusTarget) : undefined;
+  const assignmentTarget = focusKind === "assignment" ? assignments.find(({ id }) => id === focusTarget) : undefined;
+  const targetResolved = Boolean(commentTarget || approvalTarget || assignmentTarget);
   const targetCopy = (() => {
     if (!focusTarget) return undefined;
     if (focusKind === "comment") {
-      const comment = reviewComments.find(({ id }) => id === focusTarget);
-      return comment ? `${comment.authorDisplayNameSnapshot}: “${comment.body}”` : "The linked comment is no longer available.";
+      return commentTarget ? `${commentTarget.authorDisplayNameSnapshot}: “${commentTarget.body}”` : "The linked comment is no longer available.";
     }
     if (focusKind === "approval") {
-      const approval = approvals.find(({ id }) => id === focusTarget);
-      return approval ? `Approval ${approval.status.replace("_", " ")} by ${approval.actorDisplayNameSnapshot}.` : "The linked approval is no longer available.";
+      return approvalTarget ? `Approval ${approvalTarget.status.replace("_", " ")} by ${approvalTarget.actorDisplayNameSnapshot}.` : "The linked approval is no longer available.";
     }
     if (focusKind === "assignment") {
-      const assignment = assignments.find(({ id }) => id === focusTarget);
-      const assignee = memberships.find(({ id }) => id === assignment?.assigneeMembershipId)?.displayNameSnapshot;
-      const reviewer = memberships.find(({ id }) => id === assignment?.reviewerMembershipId)?.displayNameSnapshot;
-      return assignment ? `${assignee ?? "Unassigned"} is shaping ${assignment.stage}; ${reviewer ?? "no reviewer"} is reviewing.` : "The linked assignment is no longer available.";
+      const assignee = memberships.find(({ id }) => id === assignmentTarget?.assigneeMembershipId)?.displayNameSnapshot;
+      const reviewer = memberships.find(({ id }) => id === assignmentTarget?.reviewerMembershipId)?.displayNameSnapshot;
+      return assignmentTarget ? `${assignee ?? "Unassigned"} is shaping ${assignmentTarget.stage}; ${reviewer ?? "no reviewer"} is reviewing.` : "The linked assignment is no longer available.";
     }
     return "Opened from the team workspace.";
   })();
+
+  useEffect(() => {
+    if (!notificationId || !targetResolved) return;
+    const notification = notifications.find(({ id }) => id === notificationId);
+    if (!notification || !notification.href.includes(`notification=${encodeURIComponent(notificationId)}`)) return;
+    openNotification(notificationId, `${window.location.pathname}${window.location.search}`);
+  }, [notificationId, notifications, openNotification, targetResolved]);
 
   const flushPendingDraft = useCallback((updateStatus = true) => {
     const revision = editRevisionRef.current;

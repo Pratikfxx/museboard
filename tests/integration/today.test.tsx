@@ -84,6 +84,13 @@ describe("Today workspace", () => {
 
   it("chooses once, derives the outline spine, and replaces Choose with the workshop action", async () => {
     const user = userEvent.setup();
+    const beforeReview = useMuseboardStore.getState();
+    useMuseboardStore.setState({
+      entitlementUsage: { ...beforeReview.entitlementUsage, plan: "studio" },
+    });
+    const reviewedContentId = useMuseboardStore.getState().content[0].id;
+    expect(useMuseboardStore.getState().requestApproval(reviewedContentId, "member-owner")).toBe(true);
+    expect(useMuseboardStore.getState().decideApproval(reviewedContentId, "approved")).toBe(true);
     renderToday();
     const versionsBefore = useMuseboardStore.getState().content[0].versions.length;
 
@@ -95,6 +102,11 @@ describe("Today workspace", () => {
     expect(activeContent.stage).toBe("outline");
     expect(activeContent.versions.at(-1)?.selectedHookId).toBe(store.hooks[0].id);
     expect(activeContent.versions).toHaveLength(versionsBefore + 1);
+    expect(store.approvals.map(({ status }) => status)).toEqual([
+      "requested",
+      "approved",
+      "stale",
+    ]);
     expect(screen.getByText(/hook chosen · outline is next/i)).toBeVisible();
     const spine = screen.getByRole("list", { name: /content workflow/i });
     expect(within(spine).getByText("Hook").closest("li")).toHaveAttribute(

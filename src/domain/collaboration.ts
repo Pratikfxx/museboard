@@ -180,3 +180,8 @@ export function approvalHref(event: ApprovalEvent): string {
 export function teamHref(id: string, kind: "invite" | "member"): string {
   return `/app/team?tab=people&${kind}=${id}`;
 }
+
+export function notificationHref(href: string, notificationId: string): string {
+  const separator = href.includes("?") ? "&" : "?";
+  return `${href}${separator}notification=${encodeURIComponent(notificationId)}`;
+}

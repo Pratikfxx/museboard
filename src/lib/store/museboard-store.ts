@@ -20,6 +20,7 @@ import {
   collaborationNotificationSchema,
   membershipSchema,
   mentionHref,
+  notificationHref,
   reviewCommentSchema,
   stageAssignmentSchema,
   teamHref,
@@ -55,13 +56,8 @@ import {
   publishReceiptSchema,
   workflowStageSchema,
 } from "@/domain/schema";
-import type {
-  Comment,
-  PublishReceipt,
-  WorkflowStage,
-} from "@/domain/schema";
+import type { PublishReceipt, WorkflowStage } from "@/domain/schema";
 import {
-  approveCurrentVersion,
   saveVersionAndAdvance,
   transitionStage,
   type WorkshopVersionPatch,
@@ -259,11 +255,16 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   learnings: z.array(learningSchema),
   entitlementUsage: entitlementUsageSchema,
   memberships: z.array(membershipSchema).default([]),
+  currentActorMembershipId: z.string().min(1).default("member-owner"),
   assignments: z.array(stageAssignmentSchema).default([]),
   reviewComments: z.array(reviewCommentSchema).default([]),
   approvals: z.array(approvalEventSchema).default([]),
   notifications: z.array(collaborationNotificationSchema).default([]),
 });
+
+export function validatePersistedMuseboardData(payload: unknown) {
+  return persistedMuseboardSchema.safeParse(upgradePersistedMuseboardData(payload));
+}
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -287,17 +288,28 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
   const contentPillars = Array.isArray(creator?.contentPillars)
     ? creator.contentPillars
     : [];
+  const memberships = Array.isArray(state.memberships)
+    ? state.memberships
+    : [
+        ownerMembership(
+          typeof creator?.name === "string" ? creator.name : "Workspace owner",
+          "2026-07-13T09:00:00.000Z",
+        ),
+      ];
+  const legacyOwner = memberships.find(
+    (member) => recordValue(member)?.role === "owner",
+  );
+  const legacyOwnerId = recordValue(legacyOwner)?.id;
 
   return {
     ...state,
-    memberships: Array.isArray(state.memberships)
-      ? state.memberships
-      : [
-          ownerMembership(
-            typeof creator?.name === "string" ? creator.name : "Workspace owner",
-            "2026-07-13T09:00:00.000Z",
-          ),
-        ],
+    memberships,
+    currentActorMembershipId:
+      typeof state.currentActorMembershipId === "string"
+        ? state.currentActorMembershipId
+        : typeof legacyOwnerId === "string"
+          ? legacyOwnerId
+          : "member-owner",
     assignments: Array.isArray(state.assignments) ? state.assignments : [],
     reviewComments: Array.isArray(state.reviewComments) ? state.reviewComments : [],
     approvals: Array.isArray(state.approvals) ? state.approvals : [],
@@ -364,7 +376,6 @@ interface MuseboardActions {
     | { ok: false; error: string };
   removeVisionReference: (referenceId: string) => void;
   toggleReferenceSelection: (referenceId: string) => boolean;
-  chooseHook: (contentId: string, hookId: string, at?: string) => void;
   saveWorkshopVersion: (input: {
     contentId: string;
     patch: WorkshopVersionPatch;
@@ -385,13 +396,6 @@ interface MuseboardActions {
   reserveStrategistPack: () => EntitlementDecision;
   commitStrategistPack: () => void;
   releaseStrategistPack: () => void;
-  addComment: (
-    contentId: string,
-    body: string,
-    author?: string,
-    at?: string,
-  ) => void;
-  approveVersion: (contentId: string, approvedBy?: string, at?: string) => void;
   inviteMember: (
     email: string,
     role: Exclude<MemberRole, "owner">,
@@ -401,6 +405,7 @@ interface MuseboardActions {
     | { ok: false; reason: "seat_limit" | "invalid"; message: string };
   updateInvitationStatus: (memberId: string, status: Extract<MemberStatus, "active" | "declined" | "revoked" | "expired">, at?: string) => boolean;
   resendInvitation: (memberId: string, at?: string) => { ok: boolean; delivery: "not_sent" };
+  switchDemoActor: (memberId: string) => boolean;
   removeMember: (memberId: string, at?: string) => boolean;
   transferOwnership: (memberId: string, at?: string) => boolean;
   assignStage: (input: { contentId: string; stage: WorkflowStage; assigneeMembershipId?: string; reviewerMembershipId?: string; at?: string }) => boolean;
@@ -466,6 +471,7 @@ function persistedState(state: MuseboardState): DemoMuseboardData {
     learnings: state.learnings,
     entitlementUsage: state.entitlementUsage,
     memberships: state.memberships,
+    currentActorMembershipId: state.currentActorMembershipId,
     assignments: state.assignments,
     reviewComments: state.reviewComments,
     approvals: state.approvals,
@@ -498,6 +504,7 @@ export const useMuseboardStore = create<MuseboardState>()(
           plannerUndo: undefined,
           comments: [],
           memberships: [ownerMembership(parsed.creator.name, onboardingAt)],
+          currentActorMembershipId: "member-owner",
           assignments: [],
           reviewComments: [],
           approvals: [],
@@ -678,26 +685,6 @@ export const useMuseboardStore = create<MuseboardState>()(
         return true;
       },
 
-      chooseHook: (contentId, hookId, at = now()) => {
-        const hookExists = get().hooks.some(
-          (hook) => hook.id === hookId && hook.contentId === contentId,
-        );
-        if (!hookExists) return;
-
-        set((state) => ({
-          content: state.content.map((item) =>
-            item.id === contentId
-              ? transitionStage(item, {
-                  type: "EDIT",
-                  field: "hook",
-                  value: hookId,
-                  at,
-                })
-              : item,
-          ),
-        }));
-      },
-
       saveWorkshopVersion: ({ contentId, patch, nextStage, at = now() }) => {
         const stateBefore = get();
         const item = stateBefore.content.find(({ id }) => id === contentId);
@@ -711,16 +698,17 @@ export const useMuseboardStore = create<MuseboardState>()(
           );
         const shouldAppendStale =
           latestApproval !== undefined && latestApproval.status !== "stale";
+        const activeOwner = stateBefore.memberships.find(
+          ({ role, status }) => role === "owner" && status === "active",
+        );
         const staleEvent: ApprovalEvent | undefined = shouldAppendStale
           ? approvalEventSchema.parse({
               id: `${contentId}-approval-${stateBefore.approvals.length + 1}`,
               contentId,
               versionId: item.currentVersionId,
               status: "stale",
-              actorMembershipId: "member-owner",
-              actorDisplayNameSnapshot:
-                stateBefore.memberships.find(({ role }) => role === "owner")
-                  ?.displayNameSnapshot ?? "Workspace owner",
+              actorMembershipId: activeOwner?.id ?? "member-owner",
+              actorDisplayNameSnapshot: activeOwner?.displayNameSnapshot ?? "Workspace owner",
               requesterMembershipId: latestApproval?.requesterMembershipId,
               reviewerMembershipId: latestApproval?.reviewerMembershipId,
               createdAt: at,
@@ -837,28 +825,6 @@ export const useMuseboardStore = create<MuseboardState>()(
         });
       },
 
-      addComment: (contentId, body, author = "You", at = now()) => {
-        if (!get().content.some(({ id }) => id === contentId)) return;
-        const comment: Comment = commentSchema.parse({
-          id: `${contentId}-comment-${get().comments.length + 1}`,
-          contentId,
-          author,
-          body,
-          createdAt: at,
-        });
-        set((state) => ({ comments: [...state.comments, comment] }));
-      },
-
-      approveVersion: (contentId, approvedBy = "You", at = now()) => {
-        set((state) => ({
-          content: state.content.map((item) =>
-            item.id === contentId
-              ? approveCurrentVersion(item, approvedBy, at)
-              : item,
-          ),
-        }));
-      },
-
       inviteMember: (email, role, at = now()) => {
         const normalizedEmail = email.trim().toLowerCase();
         const parsed = z.email().safeParse(normalizedEmail);
@@ -894,12 +860,13 @@ export const useMuseboardStore = create<MuseboardState>()(
           status: "pending",
           invitedAt: at,
         });
+        const notificationId = `notification-${state.notifications.length + 1}`;
         const notification = collaborationNotificationSchema.parse({
-          id: `notification-${state.notifications.length + 1}`,
+          id: notificationId,
           kind: "invite",
           title: `Invite drafted for ${member.displayNameSnapshot}`,
           detail: "Saved locally. No email was sent in demo mode.",
-          href: teamHref(id, "invite"),
+          href: notificationHref(teamHref(id, "invite"), notificationId),
           recipientMembershipId:
             state.memberships.find(({ role: memberRole }) => memberRole === "owner")?.id,
           createdAt: at,
@@ -948,6 +915,12 @@ export const useMuseboardStore = create<MuseboardState>()(
         return { ok: true, delivery: "not_sent" };
       },
 
+      switchDemoActor: (memberId) => {
+        if (!get().memberships.some(({ id, status }) => id === memberId && status === "active")) return false;
+        set({ currentActorMembershipId: memberId });
+        return true;
+      },
+
       removeMember: (memberId, at = now()) => {
         const member = get().memberships.find(({ id }) => id === memberId);
         if (!member || member.role === "owner" || member.status === "removed") return false;
@@ -957,17 +930,6 @@ export const useMuseboardStore = create<MuseboardState>()(
               ? { ...candidate, status: "removed", removedAt: at }
               : candidate,
           ),
-          assignments: state.assignments.map((assignment) => ({
-            ...assignment,
-            assigneeMembershipId:
-              assignment.assigneeMembershipId === memberId
-                ? undefined
-                : assignment.assigneeMembershipId,
-            reviewerMembershipId:
-              assignment.reviewerMembershipId === memberId
-                ? undefined
-                : assignment.reviewerMembershipId,
-          })),
         }));
         return true;
       },
@@ -996,7 +958,11 @@ export const useMuseboardStore = create<MuseboardState>()(
         const isAvailable = (memberId?: string) =>
           !memberId || state.memberships.some(({ id, status }) => id === memberId && status === "active");
         if (!content || !isAvailable(assigneeMembershipId) || !isAvailable(reviewerMembershipId)) return false;
-        const id = `assignment-${contentId}-${stage}`;
+        const revision = state.assignments.filter(
+          ({ contentId: candidateContentId, stage: candidateStage }) =>
+            candidateContentId === contentId && candidateStage === stage,
+        ).length + 1;
+        const id = `assignment-${contentId}-${stage}-r${revision}`;
         const assignment = stageAssignmentSchema.parse({
           id,
           contentId,
@@ -1008,20 +974,21 @@ export const useMuseboardStore = create<MuseboardState>()(
         const recipients = [assigneeMembershipId, reviewerMembershipId]
           .filter((memberId): memberId is string => Boolean(memberId))
           .filter((memberId, index, all) => all.indexOf(memberId) === index);
-        const notifications = recipients.map((recipientMembershipId, index) =>
-          collaborationNotificationSchema.parse({
-            id: `notification-${state.notifications.length + index + 1}`,
+        const notifications = recipients.map((recipientMembershipId, index) => {
+          const notificationId = `notification-${state.notifications.length + index + 1}`;
+          return collaborationNotificationSchema.parse({
+            id: notificationId,
             kind: "assignment",
             title: `${content.title} assigned for ${stage}`,
             detail: "Open the exact stage assignment.",
-            href: `/app/create/${contentId}?stage=${stage}&assignment=${id}`,
+            href: notificationHref(`/app/create/${contentId}?stage=${stage}&assignment=${id}`, notificationId),
             recipientMembershipId,
             createdAt: at,
-          }),
-        );
+          });
+        });
         set((current) => ({
           assignments: [
-            ...current.assignments.filter((candidate) => candidate.id !== id),
+            ...current.assignments,
             assignment,
           ],
           notifications: [...current.notifications, ...notifications],
@@ -1033,7 +1000,9 @@ export const useMuseboardStore = create<MuseboardState>()(
         const state = get();
         if (!collaborationEnabled(state)) return false;
         const content = state.content.find(({ id }) => id === contentId);
-        const author = state.memberships.find(({ role }) => role === "owner");
+        const author = state.memberships.find(
+          ({ id, status }) => id === state.currentActorMembershipId && status === "active",
+        );
         if (!content || !author || !body.trim()) return false;
         const mentioned = state.memberships.filter(({ id: memberId, displayNameSnapshot, status }) => {
           if (status !== "active") return false;
@@ -1053,17 +1022,18 @@ export const useMuseboardStore = create<MuseboardState>()(
           mentionedMembershipIds: mentioned.map(({ id: memberId }) => memberId),
           createdAt: at,
         });
-        const notifications = mentioned.map((member, index) =>
-          collaborationNotificationSchema.parse({
-            id: `notification-${state.notifications.length + index + 1}`,
+        const notifications = mentioned.map((member, index) => {
+          const notificationId = `notification-${state.notifications.length + index + 1}`;
+          return collaborationNotificationSchema.parse({
+            id: notificationId,
             kind: "mention",
             title: `${author.displayNameSnapshot} mentioned ${member.displayNameSnapshot}`,
             detail: `Open the comment on version ${content.versions.find(({ id: versionId }) => versionId === content.currentVersionId)?.number ?? "current"}.`,
-            href: mentionHref(comment),
+            href: notificationHref(mentionHref(comment), notificationId),
             recipientMembershipId: member.id,
             createdAt: at,
-          }),
-        );
+          });
+        });
         set((current) => ({
           reviewComments: [...current.reviewComments, comment],
           notifications: [...current.notifications, ...notifications],
@@ -1072,6 +1042,7 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       toggleReviewComment: (commentId, at = now()) => {
+        if (!collaborationEnabled(get())) return false;
         const comment = get().reviewComments.find(({ id }) => id === commentId);
         if (!comment) return false;
         set((state) => ({
@@ -1090,11 +1061,13 @@ export const useMuseboardStore = create<MuseboardState>()(
         const state = get();
         if (!collaborationEnabled(state)) return false;
         const content = state.content.find(({ id }) => id === contentId);
-        const actor = state.memberships.find(({ role }) => role === "owner");
+        const actor = state.memberships.find(
+          ({ id, status }) => id === state.currentActorMembershipId && status === "active",
+        );
         const reviewer = state.memberships.find(
           ({ id, status }) => id === reviewerMembershipId && status === "active",
         );
-        if (!content || !actor || !reviewer) return false;
+        if (!content || !actor || actor.role !== "owner" || !reviewer) return false;
         const event = approvalEventSchema.parse({
           id: `${contentId}-approval-${state.approvals.length + 1}`,
           contentId,
@@ -1107,12 +1080,13 @@ export const useMuseboardStore = create<MuseboardState>()(
           createdAt: at,
           note: `Review requested from ${reviewer.displayNameSnapshot}.`,
         });
+        const notificationId = `notification-${state.notifications.length + 1}`;
         const notification = collaborationNotificationSchema.parse({
-          id: `notification-${state.notifications.length + 1}`,
+          id: notificationId,
           kind: "review",
           title: `Review requested: ${content.title}`,
           detail: `${reviewer.displayNameSnapshot} can review this exact version.`,
-          href: approvalHref(event),
+          href: notificationHref(approvalHref(event), notificationId),
           recipientMembershipId: reviewer.id,
           createdAt: at,
         });
@@ -1138,9 +1112,9 @@ export const useMuseboardStore = create<MuseboardState>()(
         const content = state.content.find(({ id }) => id === contentId);
         const latest = [...state.approvals].reverse().find(({ contentId: eventContentId }) => eventContentId === contentId);
         const actor = state.memberships.find(
-          ({ id, status }) => id === latest?.reviewerMembershipId && status === "active",
+          ({ id, status }) => id === state.currentActorMembershipId && status === "active",
         );
-        if (!content || !actor || latest?.status !== "requested" || latest.versionId !== content.currentVersionId) return false;
+        if (!content || !actor || latest?.status !== "requested" || latest.versionId !== content.currentVersionId || latest.reviewerMembershipId !== actor.id) return false;
         const event = approvalEventSchema.parse({
           id: `${contentId}-approval-${state.approvals.length + 1}`,
           contentId,
@@ -1153,12 +1127,13 @@ export const useMuseboardStore = create<MuseboardState>()(
           createdAt: at,
           note: note?.trim() || undefined,
         });
+        const notificationId = `notification-${state.notifications.length + 1}`;
         const notification = collaborationNotificationSchema.parse({
-          id: `notification-${state.notifications.length + 1}`,
+          id: notificationId,
           kind: "review",
           title: decision === "approved" ? `${content.title} approved` : `Changes requested: ${content.title}`,
           detail: `${actor.displayNameSnapshot} decided this exact version.`,
-          href: approvalHref(event),
+          href: notificationHref(approvalHref(event), notificationId),
           recipientMembershipId: latest.requesterMembershipId,
           createdAt: at,
         });
@@ -1186,6 +1161,7 @@ export const useMuseboardStore = create<MuseboardState>()(
       openNotification: (notificationId, href, at = now()) => {
         const notification = get().notifications.find(({ id }) => id === notificationId);
         if (!notification || notification.href !== href) return false;
+        if (notification.readAt) return true;
         set((state) => ({
           notifications: state.notifications.map((candidate) =>
             candidate.id === notificationId ? { ...candidate, readAt: candidate.readAt ?? at } : candidate,
@@ -1287,9 +1263,7 @@ export const useMuseboardStore = create<MuseboardState>()(
       storage: createJSONStorage(() => safeStateStorage),
       partialize: persistedState,
       merge: (persisted, current) => {
-        const parsed = persistedMuseboardSchema.safeParse(
-          upgradePersistedMuseboardData(persisted),
-        );
+        const parsed = validatePersistedMuseboardData(persisted);
         return parsed.success ? { ...current, ...parsed.data } : current;
       },
     },

@@ -32,4 +32,15 @@
 ## Intentional boundaries
 
 - Collaboration remains a persistent local sample adapter until production auth/data work lands. Invite records do not send email.
-- Notification decisions infer the assigned active reviewer in local demo mode; production replaces this with the authenticated session actor.
+- Local demo decisions use an explicit actor preview and still require that actor to match the assigned active reviewer; production replaces the preview with the authenticated session actor.
+
+## Review hardening follow-up
+
+- Today hook selection now performs one atomic `saveWorkshopVersion` mutation; an approved version edit appends exactly one stale event.
+- Removed the unused legacy hook, comment, and approval actions that could bypass append-only review history.
+- Notification links carry their notification ID and become read only after the exact mounted destination resolves; missing targets and unrelated IDs remain unread.
+- Demo collaboration has an explicit current-actor preview. Approval controls and inbox items are scoped to that actor and the assigned reviewer.
+- Stage assignments are immutable revision events with unique IDs, so historical notifications never retarget. Soft member removal preserves those events and display snapshots.
+- Actual active owner identity is recorded on stale events after ownership transfer.
+- Free/Creator assignment and comment-resolution controls are disabled with visible upgrade guidance; the rich sample is explicitly labeled as a Studio preview.
+- Follow-up verification: focused Today + collaboration 10/10, full Vitest 90/90, TypeScript, lint, production build, and Chromium + Pixel 7 workflow 2/2 passed with missing-target and read-on-mounted-destination assertions.

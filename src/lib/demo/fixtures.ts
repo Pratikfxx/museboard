@@ -84,6 +84,7 @@ export interface DemoMuseboardData {
   plannerUndo?: PlannerUndo;
   comments: Comment[];
   memberships: Membership[];
+  currentActorMembershipId: string;
   assignments: StageAssignment[];
   reviewComments: ReviewComment[];
   approvals: ApprovalEvent[];
@@ -301,13 +302,14 @@ export function createDemoState(): DemoMuseboardData {
         invitedAt: "2026-06-10T09:00:00.000Z",
       },
     ],
+    currentActorMembershipId: "member-owner",
     assignments: [
       {
         id: "assignment-desk-review",
         contentId: "content-desk",
         stage: "review",
         assigneeMembershipId: "member-sam",
-        reviewerMembershipId: "member-owner",
+        reviewerMembershipId: "member-sam",
         updatedAt: "2026-07-13T09:30:00.000Z",
       },
     ],
@@ -332,8 +334,8 @@ export function createDemoState(): DemoMuseboardData {
         status: "stale",
         actorMembershipId: "member-owner",
         actorDisplayNameSnapshot: "Maya Chen",
-        requesterMembershipId: "member-sam",
-        reviewerMembershipId: "member-owner",
+        requesterMembershipId: "member-owner",
+        reviewerMembershipId: "member-sam",
         createdAt: "2026-07-13T10:15:00.000Z",
         note: "The draft changed after review.",
       },
@@ -344,8 +346,8 @@ export function createDemoState(): DemoMuseboardData {
         kind: "assignment",
         title: "Desk reset assigned for review",
         detail: "Sam is shaping the review pass.",
-        href: "/app/create/content-desk?stage=review&assignment=assignment-desk-review",
-        recipientMembershipId: "member-owner",
+        href: "/app/create/content-desk?stage=review&assignment=assignment-desk-review&notification=notification-assignment-desk",
+        recipientMembershipId: "member-sam",
         createdAt: "2026-07-13T09:31:00.000Z",
       },
       {
@@ -353,7 +355,7 @@ export function createDemoState(): DemoMuseboardData {
         kind: "mention",
         title: "Sam mentioned you",
         detail: "Open the exact comment on version 1.",
-        href: "/app/create/content-desk?stage=review&version=content-desk-v1&comment=comment-desk-1",
+        href: "/app/create/content-desk?stage=review&version=content-desk-v1&comment=comment-desk-1&notification=notification-mention-desk",
         recipientMembershipId: "member-owner",
         createdAt: "2026-07-13T10:01:00.000Z",
       },
@@ -362,7 +364,7 @@ export function createDemoState(): DemoMuseboardData {
         kind: "review",
         title: "Approval needs review again",
         detail: "The desk reset changed after its last decision.",
-        href: "/app/create/content-desk?stage=review&version=content-desk-v1&approval=approval-desk-stale",
+        href: "/app/create/content-desk?stage=review&version=content-desk-v1&approval=approval-desk-stale&notification=notification-review-desk",
         recipientMembershipId: "member-owner",
         createdAt: "2026-07-13T10:16:00.000Z",
       },

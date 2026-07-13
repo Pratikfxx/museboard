@@ -93,8 +93,7 @@ export function TodayWorkspace() {
   const hooks = useMuseboardStore((state) => state.hooks);
   const plannerTasks = useMuseboardStore((state) => state.plannerTasks);
   const learnings = useMuseboardStore((state) => state.learnings);
-  const chooseHook = useMuseboardStore((state) => state.chooseHook);
-  const moveTask = useMuseboardStore((state) => state.moveTask);
+  const saveWorkshopVersion = useMuseboardStore((state) => state.saveWorkshopVersion);
 
   const selectedOpportunity = useMemo(
     () =>
@@ -199,9 +198,15 @@ export function TodayWorkspace() {
 
   function handleChooseHook() {
     if (!activeContent || !selectedHook || activeContent.stage !== "hook") return;
-    chooseHook(activeContent.id, selectedHook.id);
-    moveTask(activeContent.id, "outline");
-    setStatus("Hook chosen · Outline is next");
+    const saved = saveWorkshopVersion({
+      contentId: activeContent.id,
+      patch: {
+        selectedHookId: selectedHook.id,
+        selectedHookText: selectedHook.text,
+      },
+      nextStage: "outline",
+    });
+    if (saved) setStatus("Hook chosen · Outline is next");
   }
 
   return (
