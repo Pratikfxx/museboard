@@ -1,0 +1,93 @@
+.page { min-height: 100%; padding: 3rem 3.5rem 5rem; color: var(--ink); }
+.header { display: flex; justify-content: space-between; gap: 2rem; align-items: flex-end; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+.header p, .kicker { margin: 0 0 .45rem; color: var(--coral); font-size: .76rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.header h1 { margin: 0; font-family: var(--font-instrument-serif), serif; font-size: clamp(2.75rem, 5vw, 4.7rem); font-weight: 400; line-height: .95; }
+.header span { color: var(--muted); }
+.localBadge { max-width: 17rem; padding: .7rem 1rem; border: 1px solid var(--border); border-radius: 999px; font-size: .78rem; text-align: center; }
+.tabs { display: flex; gap: .35rem; margin: 1.25rem 0 2.25rem; }
+.tabs button { display: inline-flex; min-height: 44px; align-items: center; gap: .5rem; padding: .55rem 1rem; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 750; }
+.tabs button[data-active="true"] { background: var(--ink); color: var(--background); }
+.peopleLayout, .reviewLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 23rem); gap: clamp(2rem, 5vw, 5rem); }
+.sectionHeading { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin-bottom: 1rem; }
+.sectionHeading h2, .peopleRail h2, .assignmentDesk h2, .reviewHeader h2, .comments h2, .decisionRail h2, .inbox h2, .empty h2 { margin: 0; font-family: var(--font-instrument-serif), serif; font-size: 2rem; font-weight: 400; line-height: 1.05; }
+.sectionHeading > span { color: var(--muted); font-size: .82rem; }
+.roster { border-top: 1px solid var(--border); }
+.roster article { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; gap: 1rem; align-items: center; min-height: 5.5rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+.roster article[data-focus="true"] { background: color-mix(in srgb, var(--butter) 22%, transparent); box-shadow: -.75rem 0 0 color-mix(in srgb, var(--butter) 22%, transparent), .75rem 0 0 color-mix(in srgb, var(--butter) 22%, transparent); }
+.initials { display: grid; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--cobalt) 16%, var(--surface)); color: var(--cobalt); font-weight: 800; }
+.personCopy, .personState { display: flex; flex-direction: column; }
+.personCopy span, .personCopy small, .personState small { color: var(--muted); font-size: .78rem; }
+.personState { align-items: flex-end; gap: .1rem; text-transform: capitalize; }
+.personState span { font-size: .76rem; font-weight: 800; }
+.personState span[data-status="active"] { color: var(--success); }
+.personState span[data-status="pending"] { color: var(--warning); }
+.personActions { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: .5rem; }
+.personActions button { display: inline-flex; min-height: 44px; align-items: center; gap: .35rem; padding: .55rem .8rem; border: 1px solid var(--border); background: transparent; color: var(--ink); }
+.peopleRail, .decisionRail { display: flex; flex-direction: column; gap: 1.5rem; }
+.peopleRail form, .assignmentDesk, .decisionRail { padding: 1.35rem 0; border-top: 3px solid var(--ink); border-bottom: 1px solid var(--border); }
+.peopleRail form > p, .decisionRail > p, .assignmentDesk > p { color: var(--muted); font-size: .88rem; }
+.peopleRail label, .assignmentDesk label, .commentForm label { display: grid; gap: .35rem; margin-top: 1rem; color: var(--muted); font-size: .78rem; font-weight: 750; }
+.peopleRail input, .peopleRail select, .assignmentDesk select, .commentForm textarea { width: 100%; min-height: 44px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); padding: .7rem .8rem; }
+.primaryButton, .approveButton, .decisionButtons button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .45rem; padding: .7rem 1rem; border: 0; background: var(--coral); color: #fffdf8; font-weight: 800; }
+.primaryButton { margin-top: 1rem; }
+.primaryButton:disabled { opacity: .45; cursor: not-allowed; }
+.formMessage { min-height: 2.5rem; color: var(--muted); font-size: .8rem; }
+.reviewMain { min-width: 0; }
+.staleBanner { display: flex; gap: .8rem; align-items: flex-start; margin-bottom: 1.5rem; padding: 1rem; border-left: 4px solid var(--warning); background: color-mix(in srgb, var(--butter) 18%, var(--surface)); }
+.staleBanner div { display: flex; flex-direction: column; }
+.staleBanner span { color: var(--muted); font-size: .85rem; }
+.reviewHeader { display: flex; justify-content: space-between; gap: 1rem; align-items: end; }
+.reviewHeader a { display: inline-flex; min-height: 44px; align-items: center; gap: .4rem; color: var(--cobalt); font-weight: 750; text-decoration: none; }
+.manuscript { margin: 1.25rem 0 2.5rem; padding: clamp(1.4rem, 4vw, 3rem); border: 1px solid var(--border); background: var(--surface); }
+.manuscript blockquote { margin: 0 0 1.5rem; font-family: var(--font-instrument-serif), serif; font-size: clamp(1.8rem, 4vw, 3.25rem); line-height: 1.03; }
+.manuscript p { max-width: 62ch; white-space: pre-wrap; }
+.manuscript small { color: var(--muted); }
+.comments { border-top: 1px solid var(--border); padding-top: 1.5rem; }
+.comments > article { display: grid; grid-template-columns: minmax(9rem, .3fr) minmax(0, 1fr) auto; gap: 1rem; align-items: start; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+.comments > article[data-resolved="true"] { opacity: .62; }
+.comments > article div { display: flex; flex-direction: column; }
+.comments > article small, .emptyNote { color: var(--muted); font-size: .78rem; }
+.comments > article p { margin: 0; }
+.comments > article button { min-height: 44px; border: 0; background: transparent; color: var(--cobalt); font-weight: 750; }
+.commentForm textarea { resize: vertical; }
+.decisionRail { align-self: start; position: sticky; top: 2rem; }
+.decisionButtons { display: grid; gap: .65rem; }
+.decisionButtons button:last-child { border: 1px solid var(--border); background: transparent; color: var(--ink); }
+.approvalHistory { display: grid; gap: .8rem; margin: .5rem 0 0; padding: 1.25rem 0 0; border-top: 1px solid var(--border); list-style: none; }
+.approvalHistory li { display: flex; flex-direction: column; }
+.approvalHistory span { color: var(--cobalt); font-size: .76rem; font-weight: 800; text-transform: capitalize; }
+.approvalHistory span[data-status="stale"] { color: var(--warning); }
+.approvalHistory small { color: var(--muted); }
+.inbox { max-width: 58rem; }
+.inbox > a { display: grid; grid-template-columns: 3rem 1fr auto; gap: 1rem; align-items: center; min-height: 5.5rem; padding: 1rem 0; border-bottom: 1px solid var(--border); color: var(--ink); text-decoration: none; }
+.inbox > a[data-read="true"] { opacity: .62; }
+.inbox > a > span:nth-child(2) { display: flex; flex-direction: column; }
+.inbox > a small { color: var(--muted); }
+.inbox > a em { color: var(--cobalt); font-size: .72rem; font-style: normal; font-weight: 800; text-transform: uppercase; }
+.notificationIcon { display: grid; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--coral) 14%, transparent); color: var(--coral); }
+.inboxNote { display: flex; gap: .55rem; margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
+.empty { display: grid; justify-items: start; gap: .65rem; padding: 3rem 0; color: var(--muted); }
+.empty a { min-height: 44px; color: var(--cobalt); }
+
+@media (max-width: 62rem) {
+  .page { padding: 2rem 1.25rem 7rem; }
+  .header { align-items: flex-start; flex-direction: column; }
+  .peopleLayout, .reviewLayout { grid-template-columns: 1fr; }
+  .peopleRail, .decisionRail { position: static; }
+  .reviewLayout { display: flex; flex-direction: column; }
+  .decisionRail { order: -1; }
+}
+
+@media (max-width: 40rem) {
+  .page { padding-inline: 1rem; }
+  .header h1 { font-size: 3.2rem; }
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); position: sticky; top: 0; z-index: 3; padding: .45rem; background: var(--background); }
+  .tabs button { justify-content: center; padding-inline: .4rem; }
+  .roster article { grid-template-columns: 3rem minmax(0, 1fr); }
+  .personState { grid-column: 2; align-items: flex-start; }
+  .personActions { grid-column: 1 / -1; }
+  .reviewHeader { align-items: flex-start; flex-direction: column; }
+  .comments > article { grid-template-columns: 1fr; gap: .4rem; }
+  .comments > article button { justify-self: start; }
+  .inbox > a { grid-template-columns: 2.75rem 1fr auto; gap: .65rem; }
+}

@@ -1,5 +1,12 @@
 import type { MetricSample } from "@/domain/analytics";
 import type { EntitlementUsage } from "@/domain/entitlements";
+import type {
+  ApprovalEvent,
+  CollaborationNotification,
+  Membership,
+  ReviewComment,
+  StageAssignment,
+} from "@/domain/collaboration";
 import type { ExportManifest } from "@/domain/export";
 import type {
   IdeaRecord,
@@ -76,6 +83,11 @@ export interface DemoMuseboardData {
   plannerTasks: PlannerTask[];
   plannerUndo?: PlannerUndo;
   comments: Comment[];
+  memberships: Membership[];
+  assignments: StageAssignment[];
+  reviewComments: ReviewComment[];
+  approvals: ApprovalEvent[];
+  notifications: CollaborationNotification[];
   exports: ExportManifest[];
   publishReceipts: PublishReceipt[];
   metrics: MetricSample[];
@@ -237,12 +249,130 @@ export function createDemoState(): DemoMuseboardData {
     ],
     plannerUndo: undefined,
     comments: [],
+    memberships: [
+      {
+        id: "member-owner",
+        email: "maya@museboard.local",
+        displayNameSnapshot: "Maya Chen",
+        role: "owner",
+        status: "active",
+        invitedAt: DEMO_NOW,
+        joinedAt: DEMO_NOW,
+      },
+      {
+        id: "member-sam",
+        email: "sam@museboard.local",
+        displayNameSnapshot: "Sam Rivera",
+        role: "editor",
+        status: "active",
+        invitedAt: "2026-07-10T09:00:00.000Z",
+        joinedAt: "2026-07-10T10:00:00.000Z",
+      },
+      {
+        id: "invite-priya",
+        email: "priya@museboard.local",
+        displayNameSnapshot: "Priya Shah",
+        role: "viewer",
+        status: "pending",
+        invitedAt: "2026-07-12T09:00:00.000Z",
+      },
+      {
+        id: "invite-lina",
+        email: "lina@museboard.local",
+        displayNameSnapshot: "Lina Torres",
+        role: "editor",
+        status: "declined",
+        invitedAt: "2026-07-08T09:00:00.000Z",
+      },
+      {
+        id: "invite-omar",
+        email: "omar@museboard.local",
+        displayNameSnapshot: "Omar Bell",
+        role: "viewer",
+        status: "revoked",
+        invitedAt: "2026-07-07T09:00:00.000Z",
+      },
+      {
+        id: "invite-bea",
+        email: "bea@museboard.local",
+        displayNameSnapshot: "Bea Kim",
+        role: "viewer",
+        status: "expired",
+        invitedAt: "2026-06-10T09:00:00.000Z",
+      },
+    ],
+    assignments: [
+      {
+        id: "assignment-desk-review",
+        contentId: "content-desk",
+        stage: "review",
+        assigneeMembershipId: "member-sam",
+        reviewerMembershipId: "member-owner",
+        updatedAt: "2026-07-13T09:30:00.000Z",
+      },
+    ],
+    reviewComments: [
+      {
+        id: "comment-desk-1",
+        contentId: "content-desk",
+        versionId: "content-desk-v1",
+        stage: "review",
+        authorMembershipId: "member-sam",
+        authorDisplayNameSnapshot: "Sam Rivera",
+        body: "The practical opening lands. I would hold the proof shot one beat longer.",
+        mentionedMembershipIds: ["member-owner"],
+        createdAt: "2026-07-13T10:00:00.000Z",
+      },
+    ],
+    approvals: [
+      {
+        id: "approval-desk-stale",
+        contentId: "content-desk",
+        versionId: "content-desk-v1",
+        status: "stale",
+        actorMembershipId: "member-owner",
+        actorDisplayNameSnapshot: "Maya Chen",
+        requesterMembershipId: "member-sam",
+        reviewerMembershipId: "member-owner",
+        createdAt: "2026-07-13T10:15:00.000Z",
+        note: "The draft changed after review.",
+      },
+    ],
+    notifications: [
+      {
+        id: "notification-assignment-desk",
+        kind: "assignment",
+        title: "Desk reset assigned for review",
+        detail: "Sam is shaping the review pass.",
+        href: "/app/create/content-desk?stage=review&assignment=assignment-desk-review",
+        recipientMembershipId: "member-owner",
+        createdAt: "2026-07-13T09:31:00.000Z",
+      },
+      {
+        id: "notification-mention-desk",
+        kind: "mention",
+        title: "Sam mentioned you",
+        detail: "Open the exact comment on version 1.",
+        href: "/app/create/content-desk?stage=review&version=content-desk-v1&comment=comment-desk-1",
+        recipientMembershipId: "member-owner",
+        createdAt: "2026-07-13T10:01:00.000Z",
+      },
+      {
+        id: "notification-review-desk",
+        kind: "review",
+        title: "Approval needs review again",
+        detail: "The desk reset changed after its last decision.",
+        href: "/app/create/content-desk?stage=review&version=content-desk-v1&approval=approval-desk-stale",
+        recipientMembershipId: "member-owner",
+        createdAt: "2026-07-13T10:16:00.000Z",
+      },
+    ],
     exports: [],
     publishReceipts: [],
     metrics: [],
     learnings: [],
     entitlementUsage: {
-      plan: "free",
+      plan: "studio",
       used: {},
       reserved: {},
       resetAt: DEMO_RESET_AT,

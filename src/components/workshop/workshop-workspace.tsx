@@ -49,8 +49,11 @@ function lines(value: string): string[] {
 
 interface WorkshopWorkspaceProps {
   contentId: string;
-  initialStage?: "hook" | "outline" | "script";
+  initialStage?: "hook" | "outline" | "script" | "review";
   voiceMode?: boolean;
+  focusTarget?: string;
+  focusKind?: "comment" | "approval" | "assignment";
+  requestedVersionId?: string;
 }
 
 export function WorkshopWorkspace(props: WorkshopWorkspaceProps) {
@@ -65,6 +68,9 @@ function WorkshopEditor({
   contentId,
   initialStage,
   voiceMode = false,
+  focusTarget,
+  focusKind,
+  requestedVersionId,
 }: WorkshopWorkspaceProps) {
   const content = useMuseboardStore((state) => state.content);
   const hooks = useMuseboardStore((state) => state.hooks);
@@ -72,6 +78,10 @@ function WorkshopEditor({
   const opportunities = useMuseboardStore((state) => state.opportunities);
   const saveWorkshopVersion = useMuseboardStore((state) => state.saveWorkshopVersion);
   const moveTask = useMuseboardStore((state) => state.moveTask);
+  const reviewComments = useMuseboardStore((state) => state.reviewComments);
+  const approvals = useMuseboardStore((state) => state.approvals);
+  const assignments = useMuseboardStore((state) => state.assignments);
+  const memberships = useMuseboardStore((state) => state.memberships);
   const item = content.find(({ id }) => id === contentId);
   const currentVersion = item?.versions.find(({ id }) => id === item.currentVersionId) ?? item?.versions.at(-1);
   const itemHooks = hooks.filter((hook) => hook.contentId === item?.id);
@@ -92,6 +102,28 @@ function WorkshopEditor({
   const lastSavedRevision = useRef(0);
   const pendingPatch = useRef<WorkshopVersionPatch | undefined>(undefined);
   const latestId = item?.currentVersionId;
+  const requestedVersion = requestedVersionId
+    ? item?.versions.find(({ id }) => id === requestedVersionId)
+    : undefined;
+  const displayedReviewVersion = stage === "review" && requestedVersion ? requestedVersion : currentVersion;
+  const targetCopy = (() => {
+    if (!focusTarget) return undefined;
+    if (focusKind === "comment") {
+      const comment = reviewComments.find(({ id }) => id === focusTarget);
+      return comment ? `${comment.authorDisplayNameSnapshot}: “${comment.body}”` : "The linked comment is no longer available.";
+    }
+    if (focusKind === "approval") {
+      const approval = approvals.find(({ id }) => id === focusTarget);
+      return approval ? `Approval ${approval.status.replace("_", " ")} by ${approval.actorDisplayNameSnapshot}.` : "The linked approval is no longer available.";
+    }
+    if (focusKind === "assignment") {
+      const assignment = assignments.find(({ id }) => id === focusTarget);
+      const assignee = memberships.find(({ id }) => id === assignment?.assigneeMembershipId)?.displayNameSnapshot;
+      const reviewer = memberships.find(({ id }) => id === assignment?.reviewerMembershipId)?.displayNameSnapshot;
+      return assignment ? `${assignee ?? "Unassigned"} is shaping ${assignment.stage}; ${reviewer ?? "no reviewer"} is reviewing.` : "The linked assignment is no longer available.";
+    }
+    return "Opened from the team workspace.";
+  })();
 
   const flushPendingDraft = useCallback((updateStatus = true) => {
     const revision = editRevisionRef.current;
@@ -204,6 +236,13 @@ function WorkshopEditor({
         <div className={styles.saveState}><CheckCircle aria-hidden="true" size={18} /><span>{saveStatus}</span></div>
       </header>
 
+      {targetCopy ? (
+        <div className={styles.contextBanner} role="status">
+          <Info aria-hidden="true" size={19} />
+          <span><strong>Team context</strong> · {targetCopy}</span>
+        </div>
+      ) : null}
+
       <nav aria-label="Workshop stages" className={styles.stageNav}>
         {stages.map((candidate) => (
           <button aria-current={candidate === stage ? "step" : undefined} aria-label={stageLabels[candidate]} data-active={candidate === stage} key={candidate} onClick={() => goToStage(candidate)} type="button">
@@ -247,7 +286,7 @@ function WorkshopEditor({
             <section><p className={styles.kicker}>Production checklist</p><h2>Turn words into a shootable plan.</h2><div className={styles.twoFields}><label className={styles.field}>Shot list<textarea aria-label="Shot list" onChange={(event) => changeEditor(event.target.value, setShotList, { shotList: lines(event.target.value), assets: lines(assets) })} rows={10} value={shotList} /></label><label className={styles.field}>Assets<textarea aria-label="Assets" onChange={(event) => changeEditor(event.target.value, setAssets, { shotList: lines(shotList), assets: lines(event.target.value) })} rows={10} value={assets} /></label></div></section>
           ) : null}
 
-          {stage === "review" ? <section><p className={styles.kicker}>Final read-through</p><h2>Does the promise survive the cut?</h2><div className={styles.review}><strong>{currentVersion.selectedHookText ?? itemHooks.find(({ id }) => id === selectedHookId)?.text}</strong><ol>{lines(outline).map((beat) => <li key={beat}>{beat}</li>)}</ol><p>{script}</p></div><button className={styles.primaryButton} onClick={() => goToStage("ready")} type="button">Ready for handoff <ArrowRight aria-hidden="true" size={18} /></button></section> : null}
+          {stage === "review" && displayedReviewVersion ? <section><p className={styles.kicker}>{requestedVersion ? `Historical version ${requestedVersion.number} · read only` : "Final read-through"}</p><h2>Does the promise survive the cut?</h2>{requestedVersion ? <p className={styles.historicalNote}>You opened the version attached to this team activity. <Link href={`/app/create/${item.id}?stage=review`}>Return to current version {currentVersion.number}</Link></p> : null}<div className={styles.review}><strong>{displayedReviewVersion.selectedHookText ?? itemHooks.find(({ id }) => id === displayedReviewVersion.selectedHookId)?.text}</strong><ol>{(displayedReviewVersion.outline ?? []).map((beat) => <li key={beat}>{beat}</li>)}</ol><p>{displayedReviewVersion.script}</p></div>{!requestedVersion ? <button className={styles.primaryButton} onClick={() => goToStage("ready")} type="button">Ready for handoff <ArrowRight aria-hidden="true" size={18} /></button> : null}</section> : null}
           {stage === "ready" ? <section className={styles.ready}><CheckCircle aria-hidden="true" size={44} weight="fill" /><p className={styles.kicker}>Draft locked</p><h2>Ready to schedule and share.</h2><p>Your sources, creator edits, and latest version stay attached.</p><Link href="/app/plan">Open the weekly planner <ArrowRight aria-hidden="true" size={18} /></Link></section> : null}
         </main>
 

@@ -14,6 +14,22 @@ import {
   metricSamplesSchema,
 } from "@/domain/analytics";
 import {
+  approvalEventSchema,
+  approvalHref,
+  canInviteMember,
+  collaborationNotificationSchema,
+  membershipSchema,
+  mentionHref,
+  reviewCommentSchema,
+  stageAssignmentSchema,
+  teamHref,
+  type ApprovalEvent,
+  type MemberRole,
+  type MemberStatus,
+  type Membership,
+  type ReviewComment,
+} from "@/domain/collaboration";
+import {
   commitEntitlement,
   entitlementUsageSchema,
   releaseEntitlement,
@@ -242,6 +258,11 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   metrics: metricSamplesSchema,
   learnings: z.array(learningSchema),
   entitlementUsage: entitlementUsageSchema,
+  memberships: z.array(membershipSchema).default([]),
+  assignments: z.array(stageAssignmentSchema).default([]),
+  reviewComments: z.array(reviewCommentSchema).default([]),
+  approvals: z.array(approvalEventSchema).default([]),
+  notifications: z.array(collaborationNotificationSchema).default([]),
 });
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {
@@ -269,6 +290,18 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
 
   return {
     ...state,
+    memberships: Array.isArray(state.memberships)
+      ? state.memberships
+      : [
+          ownerMembership(
+            typeof creator?.name === "string" ? creator.name : "Workspace owner",
+            "2026-07-13T09:00:00.000Z",
+          ),
+        ],
+    assignments: Array.isArray(state.assignments) ? state.assignments : [],
+    reviewComments: Array.isArray(state.reviewComments) ? state.reviewComments : [],
+    approvals: Array.isArray(state.approvals) ? state.approvals : [],
+    notifications: Array.isArray(state.notifications) ? state.notifications : [],
     opportunities: state.opportunities.map((value) => {
       const opportunity = recordValue(value);
       if (!opportunity) return value;
@@ -359,6 +392,23 @@ interface MuseboardActions {
     at?: string,
   ) => void;
   approveVersion: (contentId: string, approvedBy?: string, at?: string) => void;
+  inviteMember: (
+    email: string,
+    role: Exclude<MemberRole, "owner">,
+    at?: string,
+  ) =>
+    | { ok: true; id: string; delivery: "not_sent" }
+    | { ok: false; reason: "seat_limit" | "invalid"; message: string };
+  updateInvitationStatus: (memberId: string, status: Extract<MemberStatus, "active" | "declined" | "revoked" | "expired">, at?: string) => boolean;
+  resendInvitation: (memberId: string, at?: string) => { ok: boolean; delivery: "not_sent" };
+  removeMember: (memberId: string, at?: string) => boolean;
+  transferOwnership: (memberId: string, at?: string) => boolean;
+  assignStage: (input: { contentId: string; stage: WorkflowStage; assigneeMembershipId?: string; reviewerMembershipId?: string; at?: string }) => boolean;
+  addReviewComment: (contentId: string, body: string, at?: string) => boolean;
+  toggleReviewComment: (commentId: string, at?: string) => boolean;
+  requestApproval: (contentId: string, reviewerMembershipId: string, at?: string) => boolean;
+  decideApproval: (contentId: string, decision: "approved" | "changes_requested", note?: string, at?: string) => boolean;
+  openNotification: (notificationId: string, href: string, at?: string) => boolean;
   createExport: (contentId: string, requestedBy?: string, at?: string) => string | undefined;
   recordPublishReceipt: (receipt: unknown) => boolean;
   importMetrics: (metrics: unknown) => boolean;
@@ -369,6 +419,28 @@ export type MuseboardState = DemoMuseboardData & MuseboardActions;
 
 function now(): string {
   return new Date().toISOString();
+}
+
+function ownerMembership(displayName: string, at = now()): Membership {
+  return {
+    id: "member-owner",
+    email: "owner@museboard.local",
+    displayNameSnapshot: displayName,
+    role: "owner",
+    status: "active",
+    invitedAt: at,
+    joinedAt: at,
+  };
+}
+
+function memberNameFromEmail(email: string): string {
+  const local = email.split("@")[0]?.replace(/[._-]+/gu, " ").trim();
+  if (!local) return "Invited collaborator";
+  return local.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+}
+
+function collaborationEnabled(state: Pick<MuseboardState, "entitlementUsage">): boolean {
+  return state.entitlementUsage.plan === "pro" || state.entitlementUsage.plan === "studio";
 }
 
 function persistedState(state: MuseboardState): DemoMuseboardData {
@@ -393,6 +465,11 @@ function persistedState(state: MuseboardState): DemoMuseboardData {
     metrics: state.metrics,
     learnings: state.learnings,
     entitlementUsage: state.entitlementUsage,
+    memberships: state.memberships,
+    assignments: state.assignments,
+    reviewComments: state.reviewComments,
+    approvals: state.approvals,
+    notifications: state.notifications,
   };
 }
 
@@ -405,6 +482,7 @@ export const useMuseboardStore = create<MuseboardState>()(
 
       completeOnboarding: (workspace) => {
         const parsed = starterWorkspaceSchema.parse(workspace);
+        const onboardingAt = parsed.content[0]?.createdAt ?? now();
         set({
           onboardingComplete: true,
           creator: parsed.creator,
@@ -418,6 +496,18 @@ export const useMuseboardStore = create<MuseboardState>()(
           content: parsed.content,
           plannerTasks: parsed.plannerTasks,
           plannerUndo: undefined,
+          comments: [],
+          memberships: [ownerMembership(parsed.creator.name, onboardingAt)],
+          assignments: [],
+          reviewComments: [],
+          approvals: [],
+          notifications: [],
+          entitlementUsage: {
+            plan: "free",
+            used: {},
+            reserved: {},
+            resetAt: get().entitlementUsage.resetAt,
+          },
         });
       },
 
@@ -609,14 +699,39 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       saveWorkshopVersion: ({ contentId, patch, nextStage, at = now() }) => {
-        const item = get().content.find(({ id }) => id === contentId);
+        const stateBefore = get();
+        const item = stateBefore.content.find(({ id }) => id === contentId);
         if (!item) return false;
         const updated = saveVersionAndAdvance(item, patch, at, nextStage);
         if (updated === item) return false;
+        const latestApproval = [...stateBefore.approvals]
+          .reverse()
+          .find(({ contentId: eventContentId, versionId }) =>
+            eventContentId === contentId && versionId === item.currentVersionId,
+          );
+        const shouldAppendStale =
+          latestApproval !== undefined && latestApproval.status !== "stale";
+        const staleEvent: ApprovalEvent | undefined = shouldAppendStale
+          ? approvalEventSchema.parse({
+              id: `${contentId}-approval-${stateBefore.approvals.length + 1}`,
+              contentId,
+              versionId: item.currentVersionId,
+              status: "stale",
+              actorMembershipId: "member-owner",
+              actorDisplayNameSnapshot:
+                stateBefore.memberships.find(({ role }) => role === "owner")
+                  ?.displayNameSnapshot ?? "Workspace owner",
+              requesterMembershipId: latestApproval?.requesterMembershipId,
+              reviewerMembershipId: latestApproval?.reviewerMembershipId,
+              createdAt: at,
+              note: "The draft changed after review.",
+            })
+          : undefined;
         set((state) => ({
           content: state.content.map((candidate) =>
             candidate.id === contentId ? updated : candidate,
           ),
+          approvals: staleEvent ? [...state.approvals, staleEvent] : state.approvals,
         }));
         return true;
       },
@@ -742,6 +857,341 @@ export const useMuseboardStore = create<MuseboardState>()(
               : item,
           ),
         }));
+      },
+
+      inviteMember: (email, role, at = now()) => {
+        const normalizedEmail = email.trim().toLowerCase();
+        const parsed = z.email().safeParse(normalizedEmail);
+        if (!parsed.success) {
+          return {
+            ok: false,
+            reason: "invalid",
+            message: "Enter a valid email and choose Editor or Viewer.",
+          };
+        }
+        const state = get();
+        const policy = canInviteMember(state.entitlementUsage.plan, state.memberships);
+        if (!policy.allowed) {
+          return { ok: false, reason: "seat_limit", message: policy.message };
+        }
+        const prior = state.memberships.find(
+          ({ email: candidate, status }) =>
+            candidate === normalizedEmail && (status === "active" || status === "pending"),
+        );
+        if (prior) {
+          return {
+            ok: false,
+            reason: "invalid",
+            message: "This person already has an active or pending seat.",
+          };
+        }
+        const id = `invite-${state.memberships.length + 1}`;
+        const member = membershipSchema.parse({
+          id,
+          email: normalizedEmail,
+          displayNameSnapshot: memberNameFromEmail(normalizedEmail),
+          role,
+          status: "pending",
+          invitedAt: at,
+        });
+        const notification = collaborationNotificationSchema.parse({
+          id: `notification-${state.notifications.length + 1}`,
+          kind: "invite",
+          title: `Invite drafted for ${member.displayNameSnapshot}`,
+          detail: "Saved locally. No email was sent in demo mode.",
+          href: teamHref(id, "invite"),
+          recipientMembershipId:
+            state.memberships.find(({ role: memberRole }) => memberRole === "owner")?.id,
+          createdAt: at,
+        });
+        set((current) => ({
+          memberships: [...current.memberships, member],
+          notifications: [...current.notifications, notification],
+        }));
+        return { ok: true, id, delivery: "not_sent" };
+      },
+
+      updateInvitationStatus: (memberId, status, at = now()) => {
+        const member = get().memberships.find(({ id }) => id === memberId);
+        if (!member || member.role === "owner" || member.status !== "pending") return false;
+        set((state) => ({
+          memberships: state.memberships.map((candidate) =>
+            candidate.id === memberId
+              ? {
+                  ...candidate,
+                  status,
+                  ...(status === "active" ? { joinedAt: at } : {}),
+                }
+              : candidate,
+          ),
+        }));
+        return true;
+      },
+
+      resendInvitation: (memberId, at = now()) => {
+        const state = get();
+        const member = state.memberships.find(({ id }) => id === memberId);
+        if (!member || member.role === "owner" || !["declined", "revoked", "expired"].includes(member.status)) {
+          return { ok: false, delivery: "not_sent" };
+        }
+        const withoutCandidate = state.memberships.filter(({ id }) => id !== memberId);
+        if (!canInviteMember(state.entitlementUsage.plan, withoutCandidate).allowed) {
+          return { ok: false, delivery: "not_sent" };
+        }
+        set((current) => ({
+          memberships: current.memberships.map((candidate) =>
+            candidate.id === memberId
+              ? { ...candidate, status: "pending", invitedAt: at, joinedAt: undefined, removedAt: undefined }
+              : candidate,
+          ),
+        }));
+        return { ok: true, delivery: "not_sent" };
+      },
+
+      removeMember: (memberId, at = now()) => {
+        const member = get().memberships.find(({ id }) => id === memberId);
+        if (!member || member.role === "owner" || member.status === "removed") return false;
+        set((state) => ({
+          memberships: state.memberships.map((candidate) =>
+            candidate.id === memberId
+              ? { ...candidate, status: "removed", removedAt: at }
+              : candidate,
+          ),
+          assignments: state.assignments.map((assignment) => ({
+            ...assignment,
+            assigneeMembershipId:
+              assignment.assigneeMembershipId === memberId
+                ? undefined
+                : assignment.assigneeMembershipId,
+            reviewerMembershipId:
+              assignment.reviewerMembershipId === memberId
+                ? undefined
+                : assignment.reviewerMembershipId,
+          })),
+        }));
+        return true;
+      },
+
+      transferOwnership: (memberId) => {
+        const state = get();
+        const nextOwner = state.memberships.find(
+          ({ id, status }) => id === memberId && status === "active",
+        );
+        const currentOwner = state.memberships.find(({ role }) => role === "owner");
+        if (!nextOwner || !currentOwner || nextOwner.id === currentOwner.id) return false;
+        set({
+          memberships: state.memberships.map((member) => {
+            if (member.id === nextOwner.id) return { ...member, role: "owner" as const };
+            if (member.id === currentOwner.id) return { ...member, role: "editor" as const };
+            return member;
+          }),
+        });
+        return true;
+      },
+
+      assignStage: ({ contentId, stage, assigneeMembershipId, reviewerMembershipId, at = now() }) => {
+        const state = get();
+        if (!collaborationEnabled(state)) return false;
+        const content = state.content.find(({ id }) => id === contentId);
+        const isAvailable = (memberId?: string) =>
+          !memberId || state.memberships.some(({ id, status }) => id === memberId && status === "active");
+        if (!content || !isAvailable(assigneeMembershipId) || !isAvailable(reviewerMembershipId)) return false;
+        const id = `assignment-${contentId}-${stage}`;
+        const assignment = stageAssignmentSchema.parse({
+          id,
+          contentId,
+          stage,
+          assigneeMembershipId,
+          reviewerMembershipId,
+          updatedAt: at,
+        });
+        const recipients = [assigneeMembershipId, reviewerMembershipId]
+          .filter((memberId): memberId is string => Boolean(memberId))
+          .filter((memberId, index, all) => all.indexOf(memberId) === index);
+        const notifications = recipients.map((recipientMembershipId, index) =>
+          collaborationNotificationSchema.parse({
+            id: `notification-${state.notifications.length + index + 1}`,
+            kind: "assignment",
+            title: `${content.title} assigned for ${stage}`,
+            detail: "Open the exact stage assignment.",
+            href: `/app/create/${contentId}?stage=${stage}&assignment=${id}`,
+            recipientMembershipId,
+            createdAt: at,
+          }),
+        );
+        set((current) => ({
+          assignments: [
+            ...current.assignments.filter((candidate) => candidate.id !== id),
+            assignment,
+          ],
+          notifications: [...current.notifications, ...notifications],
+        }));
+        return true;
+      },
+
+      addReviewComment: (contentId, body, at = now()) => {
+        const state = get();
+        if (!collaborationEnabled(state)) return false;
+        const content = state.content.find(({ id }) => id === contentId);
+        const author = state.memberships.find(({ role }) => role === "owner");
+        if (!content || !author || !body.trim()) return false;
+        const mentioned = state.memberships.filter(({ id: memberId, displayNameSnapshot, status }) => {
+          if (status !== "active") return false;
+          if (memberId === author.id) return false;
+          const firstName = displayNameSnapshot.split(" ")[0] ?? displayNameSnapshot;
+          return body.toLocaleLowerCase().includes(`@${firstName.toLocaleLowerCase()}`);
+        });
+        const id = `${contentId}-review-comment-${state.reviewComments.length + 1}`;
+        const comment: ReviewComment = reviewCommentSchema.parse({
+          id,
+          contentId,
+          versionId: content.currentVersionId,
+          stage: content.stage,
+          authorMembershipId: author.id,
+          authorDisplayNameSnapshot: author.displayNameSnapshot,
+          body: body.trim(),
+          mentionedMembershipIds: mentioned.map(({ id: memberId }) => memberId),
+          createdAt: at,
+        });
+        const notifications = mentioned.map((member, index) =>
+          collaborationNotificationSchema.parse({
+            id: `notification-${state.notifications.length + index + 1}`,
+            kind: "mention",
+            title: `${author.displayNameSnapshot} mentioned ${member.displayNameSnapshot}`,
+            detail: `Open the comment on version ${content.versions.find(({ id: versionId }) => versionId === content.currentVersionId)?.number ?? "current"}.`,
+            href: mentionHref(comment),
+            recipientMembershipId: member.id,
+            createdAt: at,
+          }),
+        );
+        set((current) => ({
+          reviewComments: [...current.reviewComments, comment],
+          notifications: [...current.notifications, ...notifications],
+        }));
+        return true;
+      },
+
+      toggleReviewComment: (commentId, at = now()) => {
+        const comment = get().reviewComments.find(({ id }) => id === commentId);
+        if (!comment) return false;
+        set((state) => ({
+          reviewComments: state.reviewComments.map((candidate) =>
+            candidate.id === commentId
+              ? candidate.resolvedAt
+                ? { ...candidate, resolvedAt: undefined, reopenedAt: at }
+                : { ...candidate, resolvedAt: at }
+              : candidate,
+          ),
+        }));
+        return true;
+      },
+
+      requestApproval: (contentId, reviewerMembershipId, at = now()) => {
+        const state = get();
+        if (!collaborationEnabled(state)) return false;
+        const content = state.content.find(({ id }) => id === contentId);
+        const actor = state.memberships.find(({ role }) => role === "owner");
+        const reviewer = state.memberships.find(
+          ({ id, status }) => id === reviewerMembershipId && status === "active",
+        );
+        if (!content || !actor || !reviewer) return false;
+        const event = approvalEventSchema.parse({
+          id: `${contentId}-approval-${state.approvals.length + 1}`,
+          contentId,
+          versionId: content.currentVersionId,
+          status: "requested",
+          actorMembershipId: actor.id,
+          actorDisplayNameSnapshot: actor.displayNameSnapshot,
+          requesterMembershipId: actor.id,
+          reviewerMembershipId: reviewer.id,
+          createdAt: at,
+          note: `Review requested from ${reviewer.displayNameSnapshot}.`,
+        });
+        const notification = collaborationNotificationSchema.parse({
+          id: `notification-${state.notifications.length + 1}`,
+          kind: "review",
+          title: `Review requested: ${content.title}`,
+          detail: `${reviewer.displayNameSnapshot} can review this exact version.`,
+          href: approvalHref(event),
+          recipientMembershipId: reviewer.id,
+          createdAt: at,
+        });
+        set((current) => ({
+          approvals: [...current.approvals, event],
+          notifications: [...current.notifications, notification],
+          content: current.content.map((candidate) =>
+            candidate.id === contentId
+              ? {
+                  ...candidate,
+                  approval: { status: "pending", versionId: candidate.currentVersionId },
+                  updatedAt: at,
+                }
+              : candidate,
+          ),
+        }));
+        return true;
+      },
+
+      decideApproval: (contentId, decision, note, at = now()) => {
+        const state = get();
+        if (!collaborationEnabled(state)) return false;
+        const content = state.content.find(({ id }) => id === contentId);
+        const latest = [...state.approvals].reverse().find(({ contentId: eventContentId }) => eventContentId === contentId);
+        const actor = state.memberships.find(
+          ({ id, status }) => id === latest?.reviewerMembershipId && status === "active",
+        );
+        if (!content || !actor || latest?.status !== "requested" || latest.versionId !== content.currentVersionId) return false;
+        const event = approvalEventSchema.parse({
+          id: `${contentId}-approval-${state.approvals.length + 1}`,
+          contentId,
+          versionId: content.currentVersionId,
+          status: decision,
+          actorMembershipId: actor.id,
+          actorDisplayNameSnapshot: actor.displayNameSnapshot,
+          requesterMembershipId: latest.requesterMembershipId,
+          reviewerMembershipId: latest.reviewerMembershipId,
+          createdAt: at,
+          note: note?.trim() || undefined,
+        });
+        const notification = collaborationNotificationSchema.parse({
+          id: `notification-${state.notifications.length + 1}`,
+          kind: "review",
+          title: decision === "approved" ? `${content.title} approved` : `Changes requested: ${content.title}`,
+          detail: `${actor.displayNameSnapshot} decided this exact version.`,
+          href: approvalHref(event),
+          recipientMembershipId: latest.requesterMembershipId,
+          createdAt: at,
+        });
+        set((current) => ({
+          approvals: [...current.approvals, event],
+          notifications: [...current.notifications, notification],
+          content: current.content.map((candidate) =>
+            candidate.id === contentId
+              ? {
+                  ...candidate,
+                  approval: {
+                    status: decision,
+                    versionId: candidate.currentVersionId,
+                    approvedBy: actor.displayNameSnapshot,
+                    approvedAt: at,
+                  },
+                  updatedAt: at,
+                }
+              : candidate,
+          ),
+        }));
+        return true;
+      },
+
+      openNotification: (notificationId, href, at = now()) => {
+        const notification = get().notifications.find(({ id }) => id === notificationId);
+        if (!notification || notification.href !== href) return false;
+        set((state) => ({
+          notifications: state.notifications.map((candidate) =>
+            candidate.id === notificationId ? { ...candidate, readAt: candidate.readAt ?? at } : candidate,
+          ),
+        }));
+        return true;
       },
 
       createExport: (contentId, requestedBy = "You", at = now()) => {

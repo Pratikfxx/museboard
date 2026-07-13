@@ -53,3 +53,23 @@
 .srOnly { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
 @media(max-width:900px){.layout{grid-template-columns:1fr}.guidance{order:2}.stageNav{grid-template-columns:repeat(8,105px)}}
 @media(max-width:640px){.page{padding:22px 16px 34px}.header{display:grid}.saveState{text-align:left}.layout{padding-top:24px}.twoFields{grid-template-columns:1fr}.editor section>h2{font-size:2.4rem}.alert{align-items:flex-start;flex-wrap:wrap}.alert button{margin-left:0}.ready{padding:24px 16px}}
+.contextBanner {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: .55rem;
+  margin: 1rem 0;
+  padding: .65rem .8rem;
+  border-left: 4px solid var(--cobalt);
+  background: color-mix(in srgb, var(--cobalt) 10%, var(--surface));
+  color: var(--cobalt);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.historicalNote {
+  margin: .75rem 0 1rem;
+  padding: .75rem 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.historicalNote a { color: var(--cobalt); font-weight: 750; }

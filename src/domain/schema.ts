@@ -108,6 +108,9 @@ export interface Comment {
   author: string;
   body: string;
   createdAt: string;
+  versionId?: string;
+  stage?: WorkflowStage;
+  resolvedAt?: string;
 }
 
 export interface PublishReceipt {
@@ -218,6 +221,9 @@ export const commentSchema: z.ZodType<Comment> = z.object({
   author: z.string().min(1),
   body: z.string().min(1),
   createdAt: z.iso.datetime(),
+  versionId: z.string().min(1).optional(),
+  stage: workflowStageSchema.optional(),
+  resolvedAt: z.iso.datetime().optional(),
 });
 
 export const publishReceiptSchema: z.ZodType<PublishReceipt> = z.object({
