@@ -654,6 +654,28 @@ export const useMuseboardStore = create<MuseboardState>()(
           ({ id }) => id === idea.opportunityId,
         );
         const versionId = `${contentId}-v1`;
+        const cleanTitle = idea.title.replace(/[.!?]+$/u, "").toLocaleLowerCase();
+        const cleanSummary = idea.summary.replace(/[.!?]+$/u, "");
+        const promotedHooks = [
+          {
+            id: `${contentId}-hook-1`,
+            contentId,
+            text: `What ${cleanTitle} looks like in practice.`,
+            rationale: "Opens with the specific promise already preserved in the shaped idea.",
+          },
+          {
+            id: `${contentId}-hook-2`,
+            contentId,
+            text: `${cleanSummary}—here is the part worth testing.`,
+            rationale: "Turns the source-backed summary into a concrete, testable opening.",
+          },
+          {
+            id: `${contentId}-hook-3`,
+            contentId,
+            text: `If ${idea.pillar.toLocaleLowerCase()} matters to your work, start here.`,
+            rationale: "Invites the intended audience in without manufacturing urgency.",
+          },
+        ].map((hook) => hookOptionSchema.parse(hook));
         const item = contentItemSchema.parse({
           id: contentId,
           title: idea.title,
@@ -671,6 +693,8 @@ export const useMuseboardStore = create<MuseboardState>()(
               contentId,
               number: 1,
               angle: idea.summary,
+              selectedHookId: promotedHooks[0].id,
+              selectedHookText: promotedHooks[0].text,
               script: "",
               createdAt: at,
             },
@@ -680,6 +704,7 @@ export const useMuseboardStore = create<MuseboardState>()(
         });
         set((current) => ({
           content: [...current.content, item],
+          hooks: [...current.hooks, ...promotedHooks],
           ideas: current.ideas.map((candidate) =>
             candidate.id === ideaId
               ? { ...candidate, promotedContentId: contentId }
