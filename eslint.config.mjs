@@ -35,5 +35,5 @@ const [{ default: nextVitals }, { default: nextTypescript }] = await Promise.all
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "coverage/**", "playwright-report/**", "test-results/**"]),
+  globalIgnores([".next/**", ".worktrees/**", "coverage/**", "playwright-report/**", "test-results/**"]),
 ]);
