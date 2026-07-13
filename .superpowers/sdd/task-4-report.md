@@ -45,3 +45,36 @@ Complete and verified on `codex/museboard-app`.
 
 - React Three Fiber currently logs Three.js's upstream `Clock` deprecation as a development warning under Three r185; it is not a console error and did not affect build or interaction tests.
 - Screenshot baselines are Darwin-specific by Playwright naming. Other CI operating systems will need their own approved platform baselines.
+
+## Fix wave 1
+
+### Status
+
+All four Important and two Minor review findings are fixed and freshly verified.
+
+### RED
+
+- Focused Today integration initially reported 6 failures across 7 tests: the persisted Outline stage still rendered Hook active; rewrite was a button/local textarea instead of a workshop link; an unmatched selected opportunity leaked the prior angle/hooks/tasks; the dismissed learning led the strip; the hidden radio had no row focus-ring contract; and both light/dark fallback images mounted.
+- The single-image performance regression then failed with `loading="lazy"` when the browser identified the fallback as the above-the-fold LCP.
+
+### GREEN
+
+- Focused Today integration: 7/7 passed.
+- Full Vitest: 9 files, 48/48 tests passed.
+- Typecheck: `tsc --noEmit` exited 0.
+- Lint: `eslint .` exited 0.
+- Production build: Next.js compiled and prerendered `/app/today`, exit 0.
+- Today browser suite: 6/6 Chromium cases passed with existing light/dark desktop/mobile baselines, isolated WebGL pause/resume, Outline persistence/action assertions, theme persistence, image readiness, no horizontal overflow, and no console/page errors.
+
+### Changes
+
+- The production spine now derives every visible state from the persisted workflow stage. Choosing is guarded to Hook, then replaced by `Open outline workshop`, preventing a repeated version append.
+- Selected opportunities only join content by `opportunityId`; unmatched opportunities render their own truthful shape-empty state and CTA without angle, hook, planner, or learning leakage.
+- The learning strip selects the first non-dismissed learning.
+- Hook rows expose a visible `:has(input:focus-visible)`/`:focus-within` focus ring.
+- `Rewrite in my voice` now links to `/app/create/{contentId}?mode=voice`; the non-persisted textarea state and styles were removed.
+- The fallback mounts one resolved-theme raster and loads that single above-the-fold image eagerly without preloading the opposite theme.
+
+### Concerns
+
+- The only remaining runtime note is React Three Fiber's upstream Three.js `Clock` deprecation warning during the isolated development WebGL test; no console errors were emitted.

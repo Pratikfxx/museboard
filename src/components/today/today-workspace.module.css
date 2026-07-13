@@ -300,6 +300,12 @@
   background: color-mix(in srgb, var(--cobalt) 4%, var(--surface));
 }
 
+.hookOption:has(input:focus-visible),
+.hookOption:focus-within {
+  outline: 0.1875rem solid var(--focus);
+  outline-offset: 0.1875rem;
+}
+
 .hookOption input {
   position: absolute;
   width: 1px;
@@ -360,40 +366,6 @@
   color: var(--success);
 }
 
-.rewritePanel {
-  display: grid;
-  gap: 5px;
-  margin-top: 8px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.rewritePanel label {
-  font-size: 0.67rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.rewritePanel textarea {
-  width: 100%;
-  resize: vertical;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--background);
-  color: var(--ink);
-  font-size: 0.75rem;
-}
-
-.rewritePanel p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.64rem;
-  text-transform: capitalize;
-}
-
 .primaryActions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -411,6 +383,7 @@
   border-radius: 7px;
   font-size: 0.77rem;
   font-weight: 700;
+  text-decoration: none;
 }
 
 .chooseButton {
@@ -577,18 +550,6 @@
 .sculptureFallbackImage {
   object-fit: cover;
   object-position: 56% center;
-}
-
-.darkSculpture {
-  display: none;
-}
-
-:global(:root[data-theme="dark"]) .lightSculpture {
-  display: none;
-}
-
-:global(:root[data-theme="dark"]) .darkSculpture {
-  display: block;
 }
 
 .collaborators {
@@ -849,6 +810,49 @@
   padding: 0 24px;
   color: white;
   font-weight: 700;
+  text-decoration: none;
+}
+
+.opportunityOnlyState {
+  display: grid;
+  max-width: 720px;
+  gap: 14px;
+  margin: 12vh auto 0;
+  padding: 0 24px;
+}
+
+.opportunityOnlyState .eyebrow,
+.opportunityOnlyState h1,
+.opportunityOnlyState p {
+  margin: 0;
+}
+
+.opportunityOnlyState h1 {
+  font-family: var(--font-instrument-serif), serif;
+  font-size: clamp(3rem, 6vw, 5.5rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.opportunityOnlyState p,
+.opportunityOnlyState small {
+  color: var(--muted);
+}
+
+.opportunityOnlyState a {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  justify-self: start;
+  margin-top: 10px;
+  border-radius: 7px;
+  background: var(--coral);
+  padding: 0 20px;
+  color: white;
+  font-weight: 750;
   text-decoration: none;
 }
 

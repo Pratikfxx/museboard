@@ -1,10 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import IdeaSculpture from "@/components/today/idea-sculpture";
 import { TodayWorkspace } from "@/components/today/today-workspace";
 import { ThemeProvider } from "@/components/ui/theme-provider";
+import type { Learning } from "@/domain/schema";
 import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
@@ -78,9 +82,10 @@ describe("Today workspace", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(3);
   });
 
-  it("chooses the selected hook and advances the active content to outline", async () => {
+  it("chooses once, derives the outline spine, and replaces Choose with the workshop action", async () => {
     const user = userEvent.setup();
     renderToday();
+    const versionsBefore = useMuseboardStore.getState().content[0].versions.length;
 
     await user.click(screen.getByLabelText(/contrarian/i));
     await user.click(screen.getByRole("button", { name: /choose a hook/i }));
@@ -89,27 +94,120 @@ describe("Today workspace", () => {
     const [activeContent] = store.content;
     expect(activeContent.stage).toBe("outline");
     expect(activeContent.versions.at(-1)?.selectedHookId).toBe(store.hooks[0].id);
+    expect(activeContent.versions).toHaveLength(versionsBefore + 1);
     expect(screen.getByText(/hook chosen · outline is next/i)).toBeVisible();
+    const spine = screen.getByRole("list", { name: /content workflow/i });
+    expect(within(spine).getByText("Hook").closest("li")).toHaveAttribute(
+      "data-state",
+      "complete",
+    );
+    expect(within(spine).getByText("Outline").closest("li")).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+    expect(
+      screen.queryByRole("button", { name: /choose a hook/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /open outline workshop/i }),
+    ).toHaveAttribute(
+      "href",
+      `/app/create/${activeContent.id}?stage=outline`,
+    );
   });
 
-  it("opens an editable rewrite without discarding the selected hook", async () => {
-    const user = userEvent.setup();
+  it("routes voice rewriting to the real workshop without mounting a local draft", () => {
+    renderToday();
+    const contentId = useMuseboardStore.getState().content[0].id;
+
+    expect(
+      screen.getByRole("link", { name: /rewrite in my voice/i }),
+    ).toHaveAttribute("href", `/app/create/${contentId}?mode=voice`);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("shows an opportunity-only state instead of leaking another opportunity's content", () => {
+    const store = useMuseboardStore.getState();
+    const unmatchedOpportunity = store.opportunities[1];
+    store.selectOpportunity(unmatchedOpportunity.id);
+
     renderToday();
 
-    await user.click(
-      screen.getByRole("button", { name: /rewrite in my voice/i }),
-    );
-
     expect(
-      screen.getByRole("textbox", { name: /rewrite selected hook/i }),
-    ).toHaveValue("Perfection is costing us the story.");
-    expect(
-      screen.getByText(/warm, candid, and precise/i),
+      screen.getByRole("heading", { name: unmatchedOpportunity.title }),
     ).toBeVisible();
+    expect(screen.getByText(unmatchedOpportunity.summary)).toBeVisible();
+    expect(screen.queryByText("What I stopped polishing")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByText(/shape the hook: perfection/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /shape this opportunity/i }),
+    ).toHaveAttribute(
+      "href",
+      `/app/opportunities/ideas?opportunityId=${unmatchedOpportunity.id}`,
+    );
+  });
+
+  it("skips dismissed learnings when choosing the active learning strip", () => {
+    const learnings = [
+      {
+        id: "dismissed-learning",
+        metricKey: "hold-rate",
+        metricDefinition: "Dismissed learning",
+        platform: "youtube_shorts",
+        statement: "Dismissed learning should stay hidden.",
+        sampleSize: 40,
+        confidence: "medium",
+        includedContentIds: ["content-1"],
+        dismissedAt: "2026-07-13T09:00:00.000Z",
+      },
+      {
+        id: "active-learning",
+        metricKey: "completion-rate",
+        metricDefinition: "Active learning",
+        platform: "youtube_shorts",
+        statement: "Active learning should lead the strip.",
+        sampleSize: 80,
+        confidence: "high",
+        includedContentIds: ["content-2"],
+      },
+    ] satisfies Learning[];
+    useMuseboardStore.setState({ learnings });
+
+    renderToday();
+
+    expect(screen.getByText("Active learning should lead the strip.")).toBeVisible();
+    expect(
+      screen.queryByText("Dismissed learning should stay hidden."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("moves keyboard focus treatment from the hidden radio to the whole hook row", () => {
+    renderToday();
+    const radio = screen.getByRole("radio", { name: /contrarian/i });
+    radio.focus();
+
+    expect(radio).toHaveFocus();
+    expect(radio.closest("label")).toHaveAttribute(
+      "data-focus-ring",
+      "hook-row",
+    );
+    const stylesheet = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/components/today/today-workspace.module.css",
+      ),
+      "utf8",
+    );
+    expect(stylesheet).toMatch(/\.hookOption:has\(input:focus-visible\)/u);
   });
 });
 
 describe("Idea sculpture fallback", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("uses the real themed raster and semantic label for reduced motion", () => {
     vi.stubGlobal(
       "matchMedia",
@@ -137,11 +235,15 @@ describe("Idea sculpture fallback", () => {
     expect(
       container.querySelector('[data-renderer="static"]'),
     ).toHaveAttribute("data-fallback-reason", "reduced-motion");
-    expect(container.querySelectorAll('img[src*="idea-sculpture-"]')).toHaveLength(2);
+    const images = container.querySelectorAll('img[src*="idea-sculpture-"]');
+    expect(images).toHaveLength(1);
+    expect(images[0]).toHaveAttribute(
+      "src",
+      expect.stringContaining("idea-sculpture-light.png"),
+    );
+    expect(images[0]).toHaveAttribute("loading", "eager");
     expect(screen.getByText("Process stories")).toBeVisible();
     expect(screen.getByText("Imperfection as trust")).toBeVisible();
     expect(screen.getByText("Creative courage")).toBeVisible();
-
-    vi.unstubAllGlobals();
   });
 });

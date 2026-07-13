@@ -19,7 +19,11 @@ import { lazy, Suspense, useMemo, useState } from "react";
 
 import { IdeaSculptureFallback } from "@/components/today/idea-sculpture-fallback";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import type { ContentPlatform } from "@/domain/schema";
+import {
+  WORKFLOW_STAGES,
+  type ContentPlatform,
+  type WorkflowStage,
+} from "@/domain/schema";
 import { DEMO_NOW } from "@/lib/demo/fixtures";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
@@ -33,6 +37,18 @@ const platformLabels: Record<ContentPlatform, string> = {
   tiktok_video: "TikTok",
   youtube_shorts: "YouTube Shorts",
 };
+const todayStages = ["signal", "angle", "hook", "outline"] as const;
+
+function stageState(
+  currentStage: WorkflowStage,
+  stage: (typeof todayStages)[number],
+): "complete" | "active" | "next" {
+  const currentIndex = WORKFLOW_STAGES.indexOf(currentStage);
+  const stageIndex = WORKFLOW_STAGES.indexOf(stage);
+  if (stageIndex < currentIndex) return "complete";
+  if (stageIndex === currentIndex) return "active";
+  return "next";
+}
 
 function formatDay(date: Date) {
   return {
@@ -91,7 +107,7 @@ export function TodayWorkspace() {
     () =>
       content.find(
         ({ opportunityId }) => opportunityId === selectedOpportunity?.id,
-      ) ?? content[0],
+      ),
     [content, selectedOpportunity?.id],
   );
   const currentVersion = useMemo(
@@ -119,10 +135,6 @@ export function TodayWorkspace() {
     activeHooks[0]?.id ??
     "";
   const [selectedHookId, setSelectedHookId] = useState(initialHookId);
-  const [rewriteOpen, setRewriteOpen] = useState(false);
-  const [rewriteDraft, setRewriteDraft] = useState(
-    activeHooks.find(({ id }) => id === initialHookId)?.text ?? "",
-  );
   const [status, setStatus] = useState("");
 
   const effectiveSelectedHookId = activeHooks.some(
@@ -135,8 +147,9 @@ export function TodayWorkspace() {
   const firstName = creator?.name.trim().split(/\s+/u)[0] ?? "Creator";
   const fit = selectedOpportunity?.signals.creatorFit ?? 0;
   const calendarDays = useMemo(() => weekDays(), []);
+  const activeLearning = learnings.find(({ dismissedAt }) => !dismissedAt);
 
-  if (!creator || !selectedOpportunity || !activeContent || !currentVersion) {
+  if (!creator || !selectedOpportunity) {
     return (
       <section className={styles.emptyState}>
         <p>Sample workspace · not live</p>
@@ -147,16 +160,48 @@ export function TodayWorkspace() {
     );
   }
 
+  if (!activeContent || !currentVersion) {
+    return (
+      <div className={styles.page}>
+        <section className={styles.workspace}>
+          <header className={styles.topbar}>
+            <div>
+              <p className={styles.dateLine}>Mon, July 13, 2026</p>
+              <p className={styles.sampleMode}>Sample workspace · not live</p>
+            </div>
+            <div className={styles.topbarActions}>
+              <ThemeToggle />
+              <button
+                aria-label="Notifications, no new alerts"
+                className={styles.iconButton}
+                type="button"
+              >
+                <Bell aria-hidden="true" size={22} />
+              </button>
+            </div>
+          </header>
+          <section className={styles.opportunityOnlyState}>
+            <p className={styles.eyebrow}>Selected opportunity</p>
+            <h1>{selectedOpportunity.title}</h1>
+            <p>{selectedOpportunity.summary}</p>
+            <small>For {creator.audience}</small>
+            <Link
+              href={`/app/opportunities/ideas?opportunityId=${selectedOpportunity.id}`}
+            >
+              Shape this opportunity
+              <span aria-hidden="true">→</span>
+            </Link>
+          </section>
+        </section>
+      </div>
+    );
+  }
+
   function handleChooseHook() {
-    if (!selectedHook) return;
+    if (!activeContent || !selectedHook || activeContent.stage !== "hook") return;
     chooseHook(activeContent.id, selectedHook.id);
     moveTask(activeContent.id, "outline");
     setStatus("Hook chosen · Outline is next");
-  }
-
-  function handleRewrite() {
-    setRewriteDraft(selectedHook?.text ?? "");
-    setRewriteOpen((open) => !open);
   }
 
   return (
@@ -224,22 +269,23 @@ export function TodayWorkspace() {
             </div>
 
             <ol aria-label="Content workflow" className={styles.stageSpine}>
-              <li data-state="complete">
-                <CheckCircle aria-hidden="true" size={30} weight="fill" />
-                <span><strong>Signal</strong><small>Complete</small></span>
-              </li>
-              <li data-state="complete">
-                <CheckCircle aria-hidden="true" size={30} weight="fill" />
-                <span><strong>Angle</strong><small>Complete</small></span>
-              </li>
-              <li data-state="active">
-                <span className={styles.stageNumber}>3</span>
-                <span><strong>Hook</strong><small>Active</small></span>
-              </li>
-              <li data-state="next">
-                <span className={styles.stageNumber}>4</span>
-                <span><strong>Outline</strong><small>Next</small></span>
-              </li>
+              {todayStages.map((stage, index) => {
+                const state = stageState(activeContent.stage, stage);
+                const label = stage[0].toUpperCase() + stage.slice(1);
+                return (
+                  <li data-state={state} key={stage}>
+                    {state === "complete" ? (
+                      <CheckCircle aria-hidden="true" size={30} weight="fill" />
+                    ) : (
+                      <span className={styles.stageNumber}>{index + 1}</span>
+                    )}
+                    <span>
+                      <strong>{label}</strong>
+                      <small>{state[0].toUpperCase() + state.slice(1)}</small>
+                    </span>
+                  </li>
+                );
+              })}
             </ol>
 
             <fieldset className={styles.hookPicker}>
@@ -248,10 +294,16 @@ export function TodayWorkspace() {
                 {activeHooks.map((hook, index) => {
                   const selected = hook.id === effectiveSelectedHookId;
                   return (
-                    <label className={styles.hookOption} data-selected={selected} key={hook.id}>
+                    <label
+                      className={styles.hookOption}
+                      data-focus-ring="hook-row"
+                      data-selected={selected}
+                      key={hook.id}
+                    >
                       <input
                         aria-label={`${hookKinds[index] ?? "Hook"}: ${hook.text}`}
                         checked={selected}
+                        disabled={activeContent.stage !== "hook"}
                         name="daily-hook"
                         onChange={() => {
                           setSelectedHookId(hook.id);
@@ -277,34 +329,28 @@ export function TodayWorkspace() {
               </div>
             </fieldset>
 
-            {rewriteOpen ? (
-              <section className={styles.rewritePanel} aria-label="Rewrite selected hook">
-                <label htmlFor="hook-rewrite">Rewrite selected hook</label>
-                <textarea
-                  id="hook-rewrite"
-                  onChange={(event) => setRewriteDraft(event.target.value)}
-                  rows={2}
-                  value={rewriteDraft}
-                />
-                <p>
-                  Voice cues:{" "}
-                  {new Intl.ListFormat("en", {
-                    style: "long",
-                    type: "conjunction",
-                  }).format(creator.voiceTraits)}
-                </p>
-              </section>
-            ) : null}
-
             <div className={styles.primaryActions}>
-              <button className={styles.chooseButton} onClick={handleChooseHook} type="button">
-                Choose a hook
-                <span aria-hidden="true">→</span>
-              </button>
-              <button className={styles.rewriteButton} onClick={handleRewrite} type="button">
+              {activeContent.stage === "hook" ? (
+                <button className={styles.chooseButton} onClick={handleChooseHook} type="button">
+                  Choose a hook
+                  <span aria-hidden="true">→</span>
+                </button>
+              ) : (
+                <Link
+                  className={styles.chooseButton}
+                  href={`/app/create/${activeContent.id}?stage=outline`}
+                >
+                  Open outline workshop
+                  <span aria-hidden="true">→</span>
+                </Link>
+              )}
+              <Link
+                className={styles.rewriteButton}
+                href={`/app/create/${activeContent.id}?mode=voice`}
+              >
                 <NotePencil aria-hidden="true" size={19} />
-                {rewriteOpen ? "Close rewrite" : "Rewrite in my voice"}
-              </button>
+                Rewrite in my voice
+              </Link>
             </div>
             <p aria-live="polite" className={styles.status}>{status}</p>
           </div>
@@ -377,14 +423,14 @@ export function TodayWorkspace() {
           <LightbulbFilament aria-hidden="true" size={28} />
           <span>
             <strong id="learning-heading">What your audience taught us</strong>
-            <small>{learnings.length ? "Measured results" : "Learning starts after results"}</small>
+            <small>{activeLearning ? "Measured results" : "Learning starts after results"}</small>
           </span>
         </div>
         <div className={styles.learningStatement}>
-          <p>{learnings[0]?.statement ?? "Your first measured learning is waiting."}</p>
+          <p>{activeLearning?.statement ?? "Your first measured learning is waiting."}</p>
           <small>
-            {learnings[0]
-              ? `${learnings[0].metricDefinition} · ${learnings[0].sampleSize} samples · ${learnings[0].confidence} confidence`
+            {activeLearning
+              ? `${activeLearning.metricDefinition} · ${activeLearning.sampleSize} samples · ${activeLearning.confidence} confidence`
               : "0 measured posts · confidence unavailable · no result has been inferred"}
           </small>
         </div>

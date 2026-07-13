@@ -195,6 +195,20 @@ test("hook choice persists, advances to Outline, and theme changes", async ({ pa
       }, storageKey),
     )
     .toBe(true);
+  const workflow = page.getByRole("list", { name: "Content workflow" });
+  await expect(workflow.locator("li").filter({ hasText: "Hook" })).toHaveAttribute(
+    "data-state",
+    "complete",
+  );
+  await expect(
+    workflow.locator("li").filter({ hasText: "Outline" }),
+  ).toHaveAttribute("data-state", "active");
+  await expect(
+    page.getByRole("button", { name: "Choose a hook" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Open outline workshop" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: /theme: light/i }).click();
   await page.getByRole("menuitemradio", { name: "Dark" }).click();
