@@ -19,6 +19,7 @@ test("owner reviews a version and opens the exact notification destination", asy
     createdAt: "2026-07-13T11:00:00.000Z",
   });
   state.content[0].currentVersionId = "content-desk-v2";
+  state.assignments[0].versionId = "content-desk-v2";
   state.notifications.push({
     id: "notification-missing-target",
     kind: "review",
@@ -48,6 +49,7 @@ test("owner reviews a version and opens the exact notification destination", asy
   await expect(page).toHaveURL(/\/app\/create\/content-desk\?.*approval=/);
   await expect(page.getByText(/historical version 1 · read only/i)).toBeVisible();
   await expect(page.getByText(/approval stale by maya chen/i)).toBeVisible();
+  await expect(page.getByText(/approval stale by maya chen/i).locator(".." )).toBeFocused();
   await expect(page.getByRole("link", { name: /return to current version 2/i })).toBeVisible();
   await expect.poll(() => page.evaluate(() => {
     const raw = localStorage.getItem("museboard-demo-v1");

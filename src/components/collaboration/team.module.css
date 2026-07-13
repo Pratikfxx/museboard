@@ -14,6 +14,7 @@
 .roster { border-top: 1px solid var(--border); }
 .roster article { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; gap: 1rem; align-items: center; min-height: 5.5rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
 .roster article[data-focus="true"] { background: color-mix(in srgb, var(--butter) 22%, transparent); box-shadow: -.75rem 0 0 color-mix(in srgb, var(--butter) 22%, transparent), .75rem 0 0 color-mix(in srgb, var(--butter) 22%, transparent); }
+.roster article:focus { outline: 3px solid var(--cobalt); outline-offset: 4px; }
 .initials { display: grid; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--cobalt) 16%, var(--surface)); color: var(--cobalt); font-weight: 800; }
 .personCopy, .personState { display: flex; flex-direction: column; }
 .personCopy span, .personCopy small, .personState small { color: var(--muted); font-size: .78rem; }
@@ -73,6 +74,7 @@
 .inboxNote { display: flex; gap: .55rem; margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
 .empty { display: grid; justify-items: start; gap: .65rem; padding: 3rem 0; color: var(--muted); }
 .empty a { min-height: 44px; color: var(--cobalt); }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
 @media (max-width: 62rem) {
   .page { padding: 2rem 1.25rem 7rem; }

@@ -3,6 +3,7 @@ import type { EntitlementUsage } from "@/domain/entitlements";
 import type {
   ApprovalEvent,
   CollaborationNotification,
+  CommentStatusEvent,
   Membership,
   ReviewComment,
   StageAssignment,
@@ -87,6 +88,7 @@ export interface DemoMuseboardData {
   currentActorMembershipId: string;
   assignments: StageAssignment[];
   reviewComments: ReviewComment[];
+  commentEvents: CommentStatusEvent[];
   approvals: ApprovalEvent[];
   notifications: CollaborationNotification[];
   exports: ExportRecord[];
@@ -276,6 +278,7 @@ export function createDemoState(): DemoMuseboardData {
         role: "viewer",
         status: "pending",
         invitedAt: "2026-07-12T09:00:00.000Z",
+        expiresAt: "2026-07-19T09:00:00.000Z",
       },
       {
         id: "invite-lina",
@@ -308,6 +311,7 @@ export function createDemoState(): DemoMuseboardData {
         id: "assignment-desk-review",
         contentId: "content-desk",
         stage: "review",
+        versionId: "content-desk-v1",
         assigneeMembershipId: "member-sam",
         reviewerMembershipId: "member-sam",
         updatedAt: "2026-07-13T09:30:00.000Z",
@@ -326,6 +330,7 @@ export function createDemoState(): DemoMuseboardData {
         createdAt: "2026-07-13T10:00:00.000Z",
       },
     ],
+    commentEvents: [],
     approvals: [
       {
         id: "approval-desk-stale",
@@ -346,7 +351,7 @@ export function createDemoState(): DemoMuseboardData {
         kind: "assignment",
         title: "Desk reset assigned for review",
         detail: "Sam is shaping the review pass.",
-        href: "/app/create/content-desk?stage=review&assignment=assignment-desk-review&notification=notification-assignment-desk",
+        href: "/app/create/content-desk?stage=review&version=content-desk-v1&assignment=assignment-desk-review&notification=notification-assignment-desk",
         recipientMembershipId: "member-sam",
         createdAt: "2026-07-13T09:31:00.000Z",
       },

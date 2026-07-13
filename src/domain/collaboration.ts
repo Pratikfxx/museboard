@@ -23,6 +23,7 @@ export interface Membership {
   role: MemberRole;
   status: MemberStatus;
   invitedAt: string;
+  expiresAt?: string;
   joinedAt?: string;
   removedAt?: string;
 }
@@ -31,6 +32,7 @@ export interface StageAssignment {
   id: string;
   contentId: string;
   stage: WorkflowStage;
+  versionId: string;
   assigneeMembershipId?: string;
   reviewerMembershipId?: string;
   updatedAt: string;
@@ -48,6 +50,15 @@ export interface ReviewComment {
   createdAt: string;
   resolvedAt?: string;
   reopenedAt?: string;
+}
+
+export interface CommentStatusEvent {
+  id: string;
+  commentId: string;
+  action: "resolved" | "reopened";
+  actorMembershipId: string;
+  actorDisplayNameSnapshot: string;
+  createdAt: string;
 }
 
 export const APPROVAL_EVENT_STATUSES = [
@@ -91,6 +102,7 @@ export const membershipSchema: z.ZodType<Membership> = z.object({
   role: z.enum(MEMBER_ROLES),
   status: z.enum(MEMBER_STATUSES),
   invitedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime().optional(),
   joinedAt: z.iso.datetime().optional(),
   removedAt: z.iso.datetime().optional(),
 });
@@ -99,9 +111,19 @@ export const stageAssignmentSchema: z.ZodType<StageAssignment> = z.object({
   id: z.string().min(1),
   contentId: z.string().min(1),
   stage: workflowStageSchema,
+  versionId: z.string().min(1),
   assigneeMembershipId: z.string().min(1).optional(),
   reviewerMembershipId: z.string().min(1).optional(),
   updatedAt: z.iso.datetime(),
+});
+
+export const commentStatusEventSchema: z.ZodType<CommentStatusEvent> = z.object({
+  id: z.string().min(1),
+  commentId: z.string().min(1),
+  action: z.enum(["resolved", "reopened"]),
+  actorMembershipId: z.string().min(1),
+  actorDisplayNameSnapshot: z.string().min(1),
+  createdAt: z.iso.datetime(),
 });
 
 export const reviewCommentSchema: z.ZodType<ReviewComment> = z.object({
@@ -142,8 +164,34 @@ export const collaborationNotificationSchema: z.ZodType<CollaborationNotificatio
   readAt: z.iso.datetime().optional(),
 });
 
-export function occupiedSeatCount(memberships: Membership[]): number {
-  return memberships.filter(({ status }) => status === "active" || status === "pending").length;
+export function invitationExpiresAt(invitedAt: string): string {
+  const expiresAt = new Date(invitedAt);
+  expiresAt.setUTCDate(expiresAt.getUTCDate() + 7);
+  return expiresAt.toISOString();
+}
+
+export function effectiveMemberStatus(member: Membership, at = new Date().toISOString()): MemberStatus {
+  if (member.status === "pending" && member.expiresAt && member.expiresAt <= at) return "expired";
+  return member.status;
+}
+
+export function activeActor(memberships: Membership[], currentActorMembershipId: string, at = new Date().toISOString()): Membership | undefined {
+  return memberships.find(
+    (member) => member.id === currentActorMembershipId && effectiveMemberStatus(member, at) === "active",
+  );
+}
+
+export function isCommentResolved(comment: ReviewComment, events: CommentStatusEvent[]): boolean {
+  const latest = [...events].reverse().find(({ commentId }) => commentId === comment.id);
+  if (latest) return latest.action === "resolved";
+  return Boolean(comment.resolvedAt && (!comment.reopenedAt || comment.resolvedAt > comment.reopenedAt));
+}
+
+export function occupiedSeatCount(memberships: Membership[], at = new Date().toISOString()): number {
+  return memberships.filter((member) => {
+    const status = effectiveMemberStatus(member, at);
+    return status === "active" || status === "pending";
+  }).length;
 }
 
 export function seatLimitMessage(plan: Plan): string {
@@ -154,8 +202,8 @@ export function seatLimitMessage(plan: Plan): string {
   return `${prefix} Upgrade to Pro for 2 seats or Studio for 6.`;
 }
 
-export function canInviteMember(plan: Plan, memberships: Membership[]) {
-  const occupied = occupiedSeatCount(memberships);
+export function canInviteMember(plan: Plan, memberships: Membership[], at?: string) {
+  const occupied = occupiedSeatCount(memberships, at);
   const limit = PLAN_CATALOG[plan].members;
   return {
     allowed: occupied < limit,
@@ -166,7 +214,7 @@ export function canInviteMember(plan: Plan, memberships: Membership[]) {
 }
 
 export function assignmentHref(assignment: StageAssignment): string {
-  return `/app/create/${assignment.contentId}?stage=${assignment.stage}&assignment=${assignment.id}`;
+  return `/app/create/${assignment.contentId}?stage=${assignment.stage}&version=${assignment.versionId}&assignment=${assignment.id}`;
 }
 
 export function mentionHref(comment: ReviewComment): string {

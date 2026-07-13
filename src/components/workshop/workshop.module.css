@@ -66,6 +66,7 @@
   font-size: .82rem;
   font-weight: 700;
 }
+.contextBanner:focus { outline: 3px solid var(--cobalt); outline-offset: 3px; }
 .historicalNote {
   margin: .75rem 0 1rem;
   padding: .75rem 0;

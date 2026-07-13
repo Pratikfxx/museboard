@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { TeamWorkspace } from "@/components/collaboration/team-workspace";
-import { seatLimitMessage } from "@/domain/collaboration";
+import { effectiveMemberStatus, seatLimitMessage } from "@/domain/collaboration";
 import { createDemoState } from "@/lib/demo/fixtures";
 import {
   useMuseboardStore,
@@ -48,12 +48,30 @@ describe("creator team review", () => {
     const assignmentEvents = useMuseboardStore.getState().assignments.filter(({ contentId, stage }) => contentId === "content-desk" && stage === "review");
     expect(new Set(assignmentEvents.map(({ id }) => id)).size).toBe(assignmentEvents.length);
     expect(useMuseboardStore.getState().notifications.at(-1)?.href).toMatch(/assignment=.*-r\d+&notification=/);
+    expect(assignmentEvents.at(-1)?.versionId).toBe("content-desk-v1");
+    expect(useMuseboardStore.getState().assignStage({ contentId: "content-desk", stage: "published", reviewerMembershipId: "member-owner" })).toBe(false);
 
     useMuseboardStore.setState({
       entitlementUsage: { ...useMuseboardStore.getState().entitlementUsage, plan: "free" },
     });
     expect(useMuseboardStore.getState().assignStage({ contentId: "content-desk", stage: "review", reviewerMembershipId: "member-owner" })).toBe(false);
     expect(useMuseboardStore.getState().toggleReviewComment("comment-desk-1")).toBe(false);
+
+    const demo = createDemoState();
+    useMuseboardStore.setState({
+      ...demo,
+      entitlementUsage: { ...demo.entitlementUsage, plan: "studio" },
+      currentActorMembershipId: "member-sam",
+    });
+    expect(useMuseboardStore.getState().inviteMember("blocked@example.com", "editor")).toMatchObject({ ok: false });
+    expect(useMuseboardStore.getState().updateInvitationStatus("invite-priya", "active")).toBe(false);
+    expect(useMuseboardStore.getState().removeMember("member-owner")).toBe(false);
+    expect(useMuseboardStore.getState().transferOwnership("member-owner")).toBe(false);
+    expect(useMuseboardStore.getState().assignStage({ contentId: "content-desk", stage: "review", reviewerMembershipId: "member-sam" })).toBe(true);
+    expect(effectiveMemberStatus({ ...demo.memberships[2], expiresAt: "2026-07-12T09:00:00.000Z" }, "2026-07-13T09:00:00.000Z")).toBe("expired");
+    expect(useMuseboardStore.getState().switchDemoActor("member-owner")).toBe(true);
+    expect(useMuseboardStore.getState().resendInvitation("invite-priya", "2026-07-20T09:00:00.000Z")).toMatchObject({ ok: true });
+    expect(useMuseboardStore.getState().memberships.find(({ id }) => id === "invite-priya")?.expiresAt).toBe("2026-07-27T09:00:00.000Z");
   });
 
   it("keeps append-only version approval history and invalidates review after an edit", () => {
@@ -76,6 +94,7 @@ describe("creator team review", () => {
     });
 
     expect(useMuseboardStore.getState().requestApproval(contentId, "member-sam")).toBe(true);
+    expect(useMuseboardStore.getState().requestApproval(contentId, "member-sam")).toBe(false);
     useMuseboardStore.setState({
       memberships: useMuseboardStore.getState().memberships.map((member) =>
         member.id === "member-sam" ? { ...member, status: "removed" as const } : member,
@@ -94,6 +113,7 @@ describe("creator team review", () => {
       "approved",
     ]);
 
+    expect(useMuseboardStore.getState().switchDemoActor("member-owner")).toBe(true);
     expect(useMuseboardStore.getState().transferOwnership("member-sam")).toBe(true);
     expect(
       useMuseboardStore.getState().saveWorkshopVersion({
@@ -139,7 +159,17 @@ describe("creator team review", () => {
     await user.click(screen.getByRole("button", { name: /^approve version/i }));
     expect(screen.getByText(/approved for this version/i)).toBeVisible();
     const notification = useMuseboardStore.getState().notifications.find(({ id }) => id === "notification-review-desk")!;
+    expect(useMuseboardStore.getState().openNotification(notification.id, notification.href)).toBe(false);
+    expect(useMuseboardStore.getState().switchDemoActor("member-owner")).toBe(true);
     expect(useMuseboardStore.getState().openNotification(notification.id, notification.href)).toBe(true);
+    const originalComment = structuredClone(useMuseboardStore.getState().reviewComments[0]);
+    expect(useMuseboardStore.getState().toggleReviewComment(originalComment.id, "2026-07-13T13:00:00.000Z")).toBe(true);
+    expect(useMuseboardStore.getState().toggleReviewComment(originalComment.id, "2026-07-13T13:01:00.000Z")).toBe(true);
+    expect(useMuseboardStore.getState().reviewComments[0]).toEqual(originalComment);
+    expect(useMuseboardStore.getState().commentEvents.slice(-2).map(({ action, actorDisplayNameSnapshot }) => [action, actorDisplayNameSnapshot])).toEqual([
+      ["resolved", "Maya Chen"],
+      ["reopened", "Maya Chen"],
+    ]);
     const persisted = JSON.parse(localStorage.getItem("museboard-demo-v1") ?? "{}").state;
     expect(validatePersistedMuseboardData(persisted)).toMatchObject({ success: true });
   });

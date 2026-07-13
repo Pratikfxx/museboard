@@ -14,9 +14,9 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { occupiedSeatCount, seatLimitMessage } from "@/domain/collaboration";
+import { activeActor, effectiveMemberStatus, isCommentResolved, occupiedSeatCount, seatLimitMessage } from "@/domain/collaboration";
 import { PLAN_CATALOG } from "@/domain/entitlements";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
@@ -84,6 +84,7 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
   const plan = useMuseboardStore((state) => state.entitlementUsage.plan);
   const onboardingComplete = useMuseboardStore((state) => state.onboardingComplete);
   const notifications = useMuseboardStore((state) => state.notifications);
+  const currentActorMembershipId = useMuseboardStore((state) => state.currentActorMembershipId);
   const openNotification = useMuseboardStore((state) => state.openNotification);
   const inviteMember = useMuseboardStore((state) => state.inviteMember);
   const updateInvitationStatus = useMuseboardStore((state) => state.updateInvitationStatus);
@@ -94,19 +95,38 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [message, setMessage] = useState("");
+  const focusedRowRef = useRef<HTMLElement>(null);
+  const renderedMemberships = memberships.map((member) => ({ ...member, status: effectiveMemberStatus(member) }));
+  const actor = activeActor(memberships, currentActorMembershipId);
+  const linkedNotification = notificationId ? notifications.find(({ id }) => id === notificationId) : undefined;
+  const focusAuthorized = !notificationId || Boolean(
+    linkedNotification && linkedNotification.recipientMembershipId === actor?.id &&
+    Boolean(focusId && (linkedNotification.href.includes(`invite=${encodeURIComponent(focusId)}`) || linkedNotification.href.includes(`member=${encodeURIComponent(focusId)}`)))
+  );
+  const isOwner = actor?.role === "owner";
+  const canAssign = actor?.role === "owner" || actor?.role === "editor";
   const limit = PLAN_CATALOG[plan].members;
   const occupied = occupiedSeatCount(memberships);
-  const activeMembers = memberships.filter(({ status }) => status === "active");
+  const activeMembers = renderedMemberships.filter(({ status }) => status === "active");
   const activeContent = content[0];
-  const assignment = [...assignments].reverse().find(({ contentId }) => contentId === activeContent?.id);
+  const assignment = [...assignments].reverse().find(
+    ({ contentId, stage, versionId }) => contentId === activeContent?.id && stage === "review" && versionId === activeContent.currentVersionId,
+  );
   const activeAssigneeId = activeMembers.some(({ id }) => id === assignment?.assigneeMembershipId)
     ? assignment?.assigneeMembershipId
     : undefined;
   const activeReviewerId = activeMembers.some(({ id }) => id === assignment?.reviewerMembershipId)
     ? assignment?.reviewerMembershipId
     : undefined;
-  const collaborationAllowed = PLAN_CATALOG[plan].commentsAndApprovals;
+  const collaborationAllowed = PLAN_CATALOG[plan].commentsAndApprovals && canAssign;
   const preview = !onboardingComplete;
+  const focusedMember = focusAuthorized ? memberships.find(({ id }) => id === focusId) : undefined;
+  const focusAnnouncement = focusedMember ? `Focused team record for ${focusedMember.displayNameSnapshot}.` : "";
+
+  useEffect(() => {
+    if (!focusAuthorized || !focusId || !memberships.some(({ id }) => id === focusId)) return;
+    focusedRowRef.current?.focus();
+  }, [focusAuthorized, focusId, memberships]);
 
   useEffect(() => {
     if (!focusId || !notificationId || !memberships.some(({ id }) => id === focusId)) return;
@@ -137,8 +157,8 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
           <span>{preview ? `Sample ${PLAN_CATALOG[plan].name} preview` : `${PLAN_CATALOG[plan].name} plan · owner included`}</span>
         </div>
         <div className={styles.roster}>
-          {memberships.map((member) => (
-            <article data-focus={focusId === member.id} key={member.id}>
+          {renderedMemberships.map((member) => (
+            <article data-focus={focusAuthorized && focusId === member.id} key={member.id} ref={focusAuthorized && focusId === member.id ? focusedRowRef : undefined} tabIndex={focusAuthorized && focusId === member.id ? -1 : undefined}>
               <div className={styles.initials} aria-hidden="true">
                 {member.displayNameSnapshot.split(" ").map((part) => part[0]).slice(0, 2).join("")}
               </div>
@@ -152,16 +172,16 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
                 <small>{member.role}</small>
               </div>
               <div className={styles.personActions}>
-                {member.status === "pending" ? (
+                {isOwner && member.status === "pending" ? (
                   <>
                     <button onClick={() => updateInvitationStatus(member.id, "active")} type="button">Activate sample</button>
                     <button onClick={() => updateInvitationStatus(member.id, "revoked")} type="button">Revoke</button>
                   </>
                 ) : null}
-                {["declined", "revoked", "expired"].includes(member.status) ? (
+                {isOwner && ["declined", "revoked", "expired"].includes(member.status) ? (
                   <button onClick={() => { const result = resendInvitation(member.id); setMessage(result.ok ? "Invite renewed locally. No email was sent." : seatLimitMessage(plan)); }} type="button">Resend locally</button>
                 ) : null}
-                {member.status === "active" && member.role !== "owner" ? (
+                {isOwner && member.status === "active" && member.role !== "owner" ? (
                   <>
                     <button onClick={() => transferOwnership(member.id)} type="button"><Crown aria-hidden="true" size={16} /> Transfer ownership</button>
                     <button onClick={() => removeMember(member.id)} type="button">Remove</button>
@@ -171,6 +191,7 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
             </article>
           ))}
         </div>
+        <p aria-live="polite" className={styles.srOnly}>{focusAnnouncement}</p>
       </main>
 
       <aside className={styles.peopleRail}>
@@ -178,10 +199,10 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
           <UserPlus aria-hidden="true" size={24} />
           <h2>Invite a collaborator</h2>
           <p>Pending invitations reserve a seat. This local demo records the invite but never claims delivery.</p>
-          <label>Email<input aria-label="Collaborator email" onChange={(event) => setEmail(event.target.value)} placeholder="editor@example.com" type="email" value={email} /></label>
-          <label>Role<select aria-label="Collaborator role" onChange={(event) => setRole(event.target.value as "editor" | "viewer")} value={role}><option value="editor">Editor</option><option value="viewer">Viewer</option></select></label>
-          <button className={styles.primaryButton} type="submit">Save local invite <ArrowRight aria-hidden="true" size={18} /></button>
-          <p aria-live="polite" className={styles.formMessage}>{message || (occupied >= limit ? seatLimitMessage(plan) : `${limit - occupied} seat${limit - occupied === 1 ? "" : "s"} available.`)}</p>
+          <label>Email<input aria-label="Collaborator email" disabled={!isOwner} onChange={(event) => setEmail(event.target.value)} placeholder="editor@example.com" type="email" value={email} /></label>
+          <label>Role<select aria-label="Collaborator role" disabled={!isOwner} onChange={(event) => setRole(event.target.value as "editor" | "viewer")} value={role}><option value="editor">Editor</option><option value="viewer">Viewer</option></select></label>
+          <button className={styles.primaryButton} disabled={!isOwner} type="submit">Save local invite <ArrowRight aria-hidden="true" size={18} /></button>
+          <p aria-live="polite" className={styles.formMessage}>{!isOwner ? "Only the workspace owner can manage invitations." : message || (occupied >= limit ? seatLimitMessage(plan) : `${limit - occupied} seat${limit - occupied === 1 ? "" : "s"} available.`)}</p>
         </form>
 
         {activeContent ? (
@@ -190,7 +211,7 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
             <h2>{activeContent.title}</h2>
             <label>Assignee<select aria-label="Stage assignee" disabled={!collaborationAllowed} onChange={(event) => assignStage({ contentId: activeContent.id, stage: "review", assigneeMembershipId: event.target.value || undefined, reviewerMembershipId: activeReviewerId })} value={activeAssigneeId ?? ""}><option value="">Unassigned</option>{activeMembers.map((member) => <option key={member.id} value={member.id}>{member.displayNameSnapshot}</option>)}</select></label>
             <label>Reviewer<select aria-label="Stage reviewer" disabled={!collaborationAllowed} onChange={(event) => assignStage({ contentId: activeContent.id, stage: "review", assigneeMembershipId: activeAssigneeId, reviewerMembershipId: event.target.value || undefined })} value={activeReviewerId ?? ""}><option value="">No reviewer</option>{activeMembers.map((member) => <option key={member.id} value={member.id}>{member.displayNameSnapshot}</option>)}</select></label>
-            {!collaborationAllowed ? <p className={styles.upgradeNote}>Upgrade to Pro or Studio to assign collaborators and reviewers.</p> : null}
+            {!PLAN_CATALOG[plan].commentsAndApprovals ? <p className={styles.upgradeNote}>Upgrade to Pro or Studio to assign collaborators and reviewers.</p> : !canAssign ? <p className={styles.upgradeNote}>Only owners and editors can change this handoff.</p> : null}
           </section>
         ) : null}
       </aside>
@@ -202,6 +223,7 @@ function ReviewDesk() {
   const content = useMuseboardStore((state) => state.content);
   const memberships = useMuseboardStore((state) => state.memberships);
   const comments = useMuseboardStore((state) => state.reviewComments);
+  const commentEvents = useMuseboardStore((state) => state.commentEvents);
   const approvals = useMuseboardStore((state) => state.approvals);
   const assignments = useMuseboardStore((state) => state.assignments);
   const plan = useMuseboardStore((state) => state.entitlementUsage.plan);
@@ -217,9 +239,9 @@ function ReviewDesk() {
   const currentVersion = item?.versions.find(({ id }) => id === item.currentVersionId);
   const versionComments = comments.filter(({ contentId, versionId }) => contentId === item?.id && versionId === item?.currentVersionId);
   const latestApproval = useMemo(() => [...approvals].reverse().find(({ contentId }) => contentId === item?.id), [approvals, item?.id]);
-  const currentActor = memberships.find(({ id }) => id === currentActorMembershipId);
+  const currentActor = activeActor(memberships, currentActorMembershipId);
   const assignment = [...assignments].reverse().find(
-    ({ contentId, stage }) => contentId === item?.id && stage === "review",
+    ({ contentId, stage, versionId }) => contentId === item?.id && stage === "review" && versionId === item?.currentVersionId,
   );
   const reviewer = memberships.find(
     ({ id, status }) => id === assignment?.reviewerMembershipId && status === "active",
@@ -259,12 +281,12 @@ function ReviewDesk() {
         </article>
 
         <section className={styles.comments}>
-          <div className={styles.sectionHeading}><div><p className={styles.kicker}>Margin notes</p><h2>{versionComments.filter(({ resolvedAt }) => !resolvedAt).length} open comments</h2></div></div>
+          <div className={styles.sectionHeading}><div><p className={styles.kicker}>Margin notes</p><h2>{versionComments.filter((comment) => !isCommentResolved(comment, commentEvents)).length} open comments</h2></div></div>
           {versionComments.length ? versionComments.map((comment) => (
-            <article data-resolved={Boolean(comment.resolvedAt)} key={comment.id}>
-              <div><strong>{comment.authorDisplayNameSnapshot}</strong><small>{comment.resolvedAt ? "Resolved" : `On version ${currentVersion.number}`}</small></div>
+            <article data-resolved={isCommentResolved(comment, commentEvents)} key={comment.id}>
+              <div><strong>{comment.authorDisplayNameSnapshot}</strong><small>{isCommentResolved(comment, commentEvents) ? "Resolved" : `On version ${currentVersion.number}`}</small></div>
               <p>{comment.body}</p>
-              <button disabled={!enabled} onClick={() => toggleReviewComment(comment.id)} type="button">{comment.resolvedAt ? "Reopen" : "Resolve"}</button>
+              <button disabled={!enabled} onClick={() => toggleReviewComment(comment.id)} type="button">{isCommentResolved(comment, commentEvents) ? "Reopen" : "Resolve"}</button>
             </article>
           )) : <p className={styles.emptyNote}>No notes on this version yet. Add only feedback that helps the next decision.</p>}
           <form className={styles.commentForm} onSubmit={postComment}>
@@ -299,8 +321,10 @@ function ReviewDesk() {
 
 function InboxDesk() {
   const notifications = useMuseboardStore((state) => state.notifications);
+  const memberships = useMuseboardStore((state) => state.memberships);
   const currentActorMembershipId = useMuseboardStore((state) => state.currentActorMembershipId);
-  const inbox = notifications.filter(({ recipientMembershipId }) => !recipientMembershipId || recipientMembershipId === currentActorMembershipId);
+  const actor = activeActor(memberships, currentActorMembershipId);
+  const inbox = actor ? notifications.filter(({ recipientMembershipId }) => recipientMembershipId === actor.id) : [];
 
   return (
     <div className={styles.inbox}>

@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { activeActor } from "@/domain/collaboration";
 import { hasRequiredEvidence, type WorkshopVersionPatch } from "@/domain/workflow";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
@@ -86,6 +87,7 @@ function WorkshopEditor({
   const approvals = useMuseboardStore((state) => state.approvals);
   const assignments = useMuseboardStore((state) => state.assignments);
   const memberships = useMuseboardStore((state) => state.memberships);
+  const currentActorMembershipId = useMuseboardStore((state) => state.currentActorMembershipId);
   const notifications = useMuseboardStore((state) => state.notifications);
   const openNotification = useMuseboardStore((state) => state.openNotification);
   const item = content.find(({ id }) => id === contentId);
@@ -107,17 +109,31 @@ function WorkshopEditor({
   const editRevisionRef = useRef(0);
   const lastSavedRevision = useRef(0);
   const pendingPatch = useRef<WorkshopVersionPatch | undefined>(undefined);
+  const contextTargetRef = useRef<HTMLDivElement>(null);
   const latestId = item?.currentVersionId;
-  const requestedVersion = requestedVersionId
+  const linkedNotification = notificationId ? notifications.find(({ id }) => id === notificationId) : undefined;
+  const actor = activeActor(memberships, currentActorMembershipId);
+  const notificationMatchesTarget = Boolean(
+    focusKind && focusTarget && linkedNotification?.href.startsWith(`/app/create/${contentId}?`) &&
+    linkedNotification.href.includes(`${focusKind}=${encodeURIComponent(focusTarget)}`) &&
+    (!requestedVersionId || linkedNotification.href.includes(`version=${encodeURIComponent(requestedVersionId)}`)),
+  );
+  const targetAuthorized = !notificationId || Boolean(
+    linkedNotification && linkedNotification.recipientMembershipId === actor?.id &&
+    linkedNotification.href.includes(`notification=${encodeURIComponent(notificationId)}`) &&
+    notificationMatchesTarget
+  );
+  const requestedVersion = requestedVersionId && targetAuthorized
     ? item?.versions.find(({ id }) => id === requestedVersionId)
     : undefined;
   const displayedReviewVersion = stage === "review" && requestedVersion ? requestedVersion : currentVersion;
-  const commentTarget = focusKind === "comment" ? reviewComments.find(({ id }) => id === focusTarget) : undefined;
-  const approvalTarget = focusKind === "approval" ? approvals.find(({ id }) => id === focusTarget) : undefined;
-  const assignmentTarget = focusKind === "assignment" ? assignments.find(({ id }) => id === focusTarget) : undefined;
+  const commentTarget = targetAuthorized && focusKind === "comment" ? reviewComments.find(({ id, contentId: targetContentId, versionId }) => id === focusTarget && targetContentId === contentId && versionId === requestedVersionId) : undefined;
+  const approvalTarget = targetAuthorized && focusKind === "approval" ? approvals.find(({ id, contentId: targetContentId, versionId }) => id === focusTarget && targetContentId === contentId && versionId === requestedVersionId) : undefined;
+  const assignmentTarget = targetAuthorized && focusKind === "assignment" ? assignments.find(({ id, contentId: targetContentId, versionId }) => id === focusTarget && targetContentId === contentId && versionId === requestedVersionId) : undefined;
   const targetResolved = Boolean(commentTarget || approvalTarget || assignmentTarget);
   const targetCopy = (() => {
     if (!focusTarget) return undefined;
+    if (!targetAuthorized) return "This team link belongs to another active collaborator.";
     if (focusKind === "comment") {
       return commentTarget ? `${commentTarget.authorDisplayNameSnapshot}: “${commentTarget.body}”` : "The linked comment is no longer available.";
     }
@@ -131,6 +147,10 @@ function WorkshopEditor({
     }
     return "Opened from the team workspace.";
   })();
+
+  useEffect(() => {
+    if (targetResolved) contextTargetRef.current?.focus();
+  }, [targetResolved]);
 
   useEffect(() => {
     if (!notificationId || !targetResolved) return;
@@ -269,7 +289,7 @@ function WorkshopEditor({
       </header>
 
       {targetCopy ? (
-        <div className={styles.contextBanner} role="status">
+        <div aria-live="polite" className={styles.contextBanner} ref={contextTargetRef} role="status" tabIndex={-1}>
           <Info aria-hidden="true" size={19} />
           <span><strong>Team context</strong> · {targetCopy}</span>
         </div>

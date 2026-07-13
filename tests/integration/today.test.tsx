@@ -89,6 +89,7 @@ describe("Today workspace", () => {
       entitlementUsage: { ...beforeReview.entitlementUsage, plan: "studio" },
     });
     const reviewedContentId = useMuseboardStore.getState().content[0].id;
+    expect(useMuseboardStore.getState().assignStage({ contentId: reviewedContentId, stage: "review", reviewerMembershipId: "member-owner" })).toBe(true);
     expect(useMuseboardStore.getState().requestApproval(reviewedContentId, "member-owner")).toBe(true);
     expect(useMuseboardStore.getState().decideApproval(reviewedContentId, "approved")).toBe(true);
     renderToday();

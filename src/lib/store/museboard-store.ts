@@ -17,8 +17,13 @@ import {
 import {
   approvalEventSchema,
   approvalHref,
+  activeActor,
+  assignmentHref,
   canInviteMember,
+  commentStatusEventSchema,
   collaborationNotificationSchema,
+  effectiveMemberStatus,
+  invitationExpiresAt,
   membershipSchema,
   mentionHref,
   notificationHref,
@@ -26,6 +31,7 @@ import {
   stageAssignmentSchema,
   teamHref,
   type ApprovalEvent,
+  type CommentStatusEvent,
   type MemberRole,
   type MemberStatus,
   type Membership,
@@ -259,6 +265,7 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   currentActorMembershipId: z.string().min(1).default("member-owner"),
   assignments: z.array(stageAssignmentSchema).default([]),
   reviewComments: z.array(reviewCommentSchema).default([]),
+  commentEvents: z.array(commentStatusEventSchema).default([]),
   approvals: z.array(approvalEventSchema).default([]),
   notifications: z.array(collaborationNotificationSchema).default([]),
 });
@@ -290,7 +297,16 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
     ? creator.contentPillars
     : [];
   const memberships = Array.isArray(state.memberships)
-    ? state.memberships
+    ? state.memberships.map((value) => {
+        const member = recordValue(value);
+        if (!member || member.status !== "pending" || typeof member.expiresAt === "string") return value;
+        return {
+          ...member,
+          expiresAt: invitationExpiresAt(
+            typeof member.invitedAt === "string" ? member.invitedAt : "2026-07-13T09:00:00.000Z",
+          ),
+        };
+      })
     : [
         ownerMembership(
           typeof creator?.name === "string" ? creator.name : "Workspace owner",
@@ -301,6 +317,24 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
     (member) => recordValue(member)?.role === "owner",
   );
   const legacyOwnerId = recordValue(legacyOwner)?.id;
+  const currentVersionByContent = new Map(
+    (Array.isArray(state.content) ? state.content : []).flatMap((value) => {
+      const content = recordValue(value);
+      return typeof content?.id === "string" && typeof content.currentVersionId === "string"
+        ? [[content.id, content.currentVersionId] as const]
+        : [];
+    }),
+  );
+  const assignments = Array.isArray(state.assignments)
+    ? state.assignments.map((value) => {
+        const assignment = recordValue(value);
+        if (!assignment || typeof assignment.versionId === "string") return value;
+        const versionId = typeof assignment.contentId === "string"
+          ? currentVersionByContent.get(assignment.contentId)
+          : undefined;
+        return versionId ? { ...assignment, versionId } : value;
+      })
+    : [];
 
   return {
     ...state,
@@ -311,8 +345,9 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
         : typeof legacyOwnerId === "string"
           ? legacyOwnerId
           : "member-owner",
-    assignments: Array.isArray(state.assignments) ? state.assignments : [],
+    assignments,
     reviewComments: Array.isArray(state.reviewComments) ? state.reviewComments : [],
+    commentEvents: Array.isArray(state.commentEvents) ? state.commentEvents : [],
     approvals: Array.isArray(state.approvals) ? state.approvals : [],
     notifications: Array.isArray(state.notifications) ? state.notifications : [],
     exports: Array.isArray(state.exports)
@@ -480,6 +515,7 @@ function persistedState(state: MuseboardState): DemoMuseboardData {
     currentActorMembershipId: state.currentActorMembershipId,
     assignments: state.assignments,
     reviewComments: state.reviewComments,
+    commentEvents: state.commentEvents,
     approvals: state.approvals,
     notifications: state.notifications,
   };
@@ -513,6 +549,7 @@ export const useMuseboardStore = create<MuseboardState>()(
           currentActorMembershipId: "member-owner",
           assignments: [],
           reviewComments: [],
+          commentEvents: [],
           approvals: [],
           notifications: [],
           entitlementUsage: {
@@ -842,13 +879,19 @@ export const useMuseboardStore = create<MuseboardState>()(
           };
         }
         const state = get();
-        const policy = canInviteMember(state.entitlementUsage.plan, state.memberships);
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
+        if (actor?.role !== "owner") {
+          return { ok: false, reason: "invalid", message: "Only the workspace owner can invite collaborators." };
+        }
+        const policy = canInviteMember(state.entitlementUsage.plan, state.memberships, at);
         if (!policy.allowed) {
           return { ok: false, reason: "seat_limit", message: policy.message };
         }
         const prior = state.memberships.find(
-          ({ email: candidate, status }) =>
-            candidate === normalizedEmail && (status === "active" || status === "pending"),
+          (member) => {
+            const status = effectiveMemberStatus(member, at);
+            return member.email === normalizedEmail && (status === "active" || status === "pending");
+          },
         );
         if (prior) {
           return {
@@ -865,6 +908,7 @@ export const useMuseboardStore = create<MuseboardState>()(
           role,
           status: "pending",
           invitedAt: at,
+          expiresAt: invitationExpiresAt(at),
         });
         const notificationId = `notification-${state.notifications.length + 1}`;
         const notification = collaborationNotificationSchema.parse({
@@ -874,7 +918,7 @@ export const useMuseboardStore = create<MuseboardState>()(
           detail: "Saved locally. No email was sent in demo mode.",
           href: notificationHref(teamHref(id, "invite"), notificationId),
           recipientMembershipId:
-            state.memberships.find(({ role: memberRole }) => memberRole === "owner")?.id,
+            actor.id,
           createdAt: at,
         });
         set((current) => ({
@@ -885,8 +929,10 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       updateInvitationStatus: (memberId, status, at = now()) => {
-        const member = get().memberships.find(({ id }) => id === memberId);
-        if (!member || member.role === "owner" || member.status !== "pending") return false;
+        const state = get();
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
+        const member = state.memberships.find(({ id }) => id === memberId);
+        if (actor?.role !== "owner" || !member || member.role === "owner" || effectiveMemberStatus(member, at) !== "pending") return false;
         set((state) => ({
           memberships: state.memberships.map((candidate) =>
             candidate.id === memberId
@@ -903,18 +949,19 @@ export const useMuseboardStore = create<MuseboardState>()(
 
       resendInvitation: (memberId, at = now()) => {
         const state = get();
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
         const member = state.memberships.find(({ id }) => id === memberId);
-        if (!member || member.role === "owner" || !["declined", "revoked", "expired"].includes(member.status)) {
+        if (actor?.role !== "owner" || !member || member.role === "owner" || !["declined", "revoked", "expired"].includes(effectiveMemberStatus(member, at))) {
           return { ok: false, delivery: "not_sent" };
         }
         const withoutCandidate = state.memberships.filter(({ id }) => id !== memberId);
-        if (!canInviteMember(state.entitlementUsage.plan, withoutCandidate).allowed) {
+        if (!canInviteMember(state.entitlementUsage.plan, withoutCandidate, at).allowed) {
           return { ok: false, delivery: "not_sent" };
         }
         set((current) => ({
           memberships: current.memberships.map((candidate) =>
             candidate.id === memberId
-              ? { ...candidate, status: "pending", invitedAt: at, joinedAt: undefined, removedAt: undefined }
+              ? { ...candidate, status: "pending", invitedAt: at, expiresAt: invitationExpiresAt(at), joinedAt: undefined, removedAt: undefined }
               : candidate,
           ),
         }));
@@ -922,14 +969,17 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       switchDemoActor: (memberId) => {
-        if (!get().memberships.some(({ id, status }) => id === memberId && status === "active")) return false;
+        const state = get();
+        if (!activeActor(state.memberships, memberId)) return false;
         set({ currentActorMembershipId: memberId });
         return true;
       },
 
       removeMember: (memberId, at = now()) => {
-        const member = get().memberships.find(({ id }) => id === memberId);
-        if (!member || member.role === "owner" || member.status === "removed") return false;
+        const state = get();
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
+        const member = state.memberships.find(({ id }) => id === memberId);
+        if (actor?.role !== "owner" || memberId === actor.id || !member || member.role === "owner" || member.status === "removed") return false;
         set((state) => ({
           memberships: state.memberships.map((candidate) =>
             candidate.id === memberId
@@ -940,13 +990,14 @@ export const useMuseboardStore = create<MuseboardState>()(
         return true;
       },
 
-      transferOwnership: (memberId) => {
+      transferOwnership: (memberId, at = now()) => {
         const state = get();
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
         const nextOwner = state.memberships.find(
           ({ id, status }) => id === memberId && status === "active",
         );
         const currentOwner = state.memberships.find(({ role }) => role === "owner");
-        if (!nextOwner || !currentOwner || nextOwner.id === currentOwner.id) return false;
+        if (actor?.role !== "owner" || actor.id !== currentOwner?.id || !nextOwner || !currentOwner || nextOwner.id === currentOwner.id) return false;
         set({
           memberships: state.memberships.map((member) => {
             if (member.id === nextOwner.id) return { ...member, role: "owner" as const };
@@ -960,10 +1011,11 @@ export const useMuseboardStore = create<MuseboardState>()(
       assignStage: ({ contentId, stage, assigneeMembershipId, reviewerMembershipId, at = now() }) => {
         const state = get();
         if (!collaborationEnabled(state)) return false;
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
         const content = state.content.find(({ id }) => id === contentId);
         const isAvailable = (memberId?: string) =>
           !memberId || state.memberships.some(({ id, status }) => id === memberId && status === "active");
-        if (!content || !isAvailable(assigneeMembershipId) || !isAvailable(reviewerMembershipId)) return false;
+        if (!actor || !["owner", "editor"].includes(actor.role) || stage !== "review" || !content || !isAvailable(assigneeMembershipId) || !isAvailable(reviewerMembershipId)) return false;
         const revision = state.assignments.filter(
           ({ contentId: candidateContentId, stage: candidateStage }) =>
             candidateContentId === contentId && candidateStage === stage,
@@ -973,6 +1025,7 @@ export const useMuseboardStore = create<MuseboardState>()(
           id,
           contentId,
           stage,
+          versionId: content.currentVersionId,
           assigneeMembershipId,
           reviewerMembershipId,
           updatedAt: at,
@@ -987,7 +1040,7 @@ export const useMuseboardStore = create<MuseboardState>()(
             kind: "assignment",
             title: `${content.title} assigned for ${stage}`,
             detail: "Open the exact stage assignment.",
-            href: notificationHref(`/app/create/${contentId}?stage=${stage}&assignment=${id}`, notificationId),
+            href: notificationHref(assignmentHref(assignment), notificationId),
             recipientMembershipId,
             createdAt: at,
           });
@@ -1006,9 +1059,7 @@ export const useMuseboardStore = create<MuseboardState>()(
         const state = get();
         if (!collaborationEnabled(state)) return false;
         const content = state.content.find(({ id }) => id === contentId);
-        const author = state.memberships.find(
-          ({ id, status }) => id === state.currentActorMembershipId && status === "active",
-        );
+        const author = activeActor(state.memberships, state.currentActorMembershipId, at);
         if (!content || !author || !body.trim()) return false;
         const mentioned = state.memberships.filter(({ id: memberId, displayNameSnapshot, status }) => {
           if (status !== "active") return false;
@@ -1048,18 +1099,22 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       toggleReviewComment: (commentId, at = now()) => {
-        if (!collaborationEnabled(get())) return false;
-        const comment = get().reviewComments.find(({ id }) => id === commentId);
-        if (!comment) return false;
-        set((state) => ({
-          reviewComments: state.reviewComments.map((candidate) =>
-            candidate.id === commentId
-              ? candidate.resolvedAt
-                ? { ...candidate, resolvedAt: undefined, reopenedAt: at }
-                : { ...candidate, resolvedAt: at }
-              : candidate,
-          ),
-        }));
+        const state = get();
+        if (!collaborationEnabled(state)) return false;
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
+        const comment = state.reviewComments.find(({ id }) => id === commentId);
+        if (!actor || !comment) return false;
+        const latest = [...state.commentEvents].reverse().find(({ commentId: candidateId }) => candidateId === commentId);
+        const resolved = latest ? latest.action === "resolved" : Boolean(comment.resolvedAt && (!comment.reopenedAt || comment.resolvedAt > comment.reopenedAt));
+        const event: CommentStatusEvent = commentStatusEventSchema.parse({
+          id: `${commentId}-status-${state.commentEvents.length + 1}`,
+          commentId,
+          action: resolved ? "reopened" : "resolved",
+          actorMembershipId: actor.id,
+          actorDisplayNameSnapshot: actor.displayNameSnapshot,
+          createdAt: at,
+        });
+        set((current) => ({ commentEvents: [...current.commentEvents, event] }));
         return true;
       },
 
@@ -1067,13 +1122,18 @@ export const useMuseboardStore = create<MuseboardState>()(
         const state = get();
         if (!collaborationEnabled(state)) return false;
         const content = state.content.find(({ id }) => id === contentId);
-        const actor = state.memberships.find(
-          ({ id, status }) => id === state.currentActorMembershipId && status === "active",
-        );
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
         const reviewer = state.memberships.find(
           ({ id, status }) => id === reviewerMembershipId && status === "active",
         );
-        if (!content || !actor || actor.role !== "owner" || !reviewer) return false;
+        const assignment = [...state.assignments].reverse().find(
+          ({ contentId: candidateContentId, stage }) => candidateContentId === contentId && stage === "review",
+        );
+        const duplicatePending = state.approvals.some(
+          ({ contentId: candidateContentId, versionId, status }) =>
+            candidateContentId === contentId && versionId === content?.currentVersionId && status === "requested",
+        );
+        if (!content || !actor || actor.role !== "owner" || !reviewer || assignment?.versionId !== content.currentVersionId || assignment.reviewerMembershipId !== reviewer.id || duplicatePending) return false;
         const event = approvalEventSchema.parse({
           id: `${contentId}-approval-${state.approvals.length + 1}`,
           contentId,
@@ -1117,9 +1177,7 @@ export const useMuseboardStore = create<MuseboardState>()(
         if (!collaborationEnabled(state)) return false;
         const content = state.content.find(({ id }) => id === contentId);
         const latest = [...state.approvals].reverse().find(({ contentId: eventContentId }) => eventContentId === contentId);
-        const actor = state.memberships.find(
-          ({ id, status }) => id === state.currentActorMembershipId && status === "active",
-        );
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
         if (!content || !actor || latest?.status !== "requested" || latest.versionId !== content.currentVersionId || latest.reviewerMembershipId !== actor.id) return false;
         const event = approvalEventSchema.parse({
           id: `${contentId}-approval-${state.approvals.length + 1}`,
@@ -1165,8 +1223,10 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       openNotification: (notificationId, href, at = now()) => {
-        const notification = get().notifications.find(({ id }) => id === notificationId);
-        if (!notification || notification.href !== href) return false;
+        const state = get();
+        const notification = state.notifications.find(({ id }) => id === notificationId);
+        const actor = activeActor(state.memberships, state.currentActorMembershipId, at);
+        if (!notification || notification.href !== href || !actor || notification.recipientMembershipId !== actor.id) return false;
         if (notification.readAt) return true;
         set((state) => ({
           notifications: state.notifications.map((candidate) =>
