@@ -61,10 +61,58 @@ interface WorkshopWorkspaceProps {
 
 export function WorkshopWorkspace(props: WorkshopWorkspaceProps) {
   const available = useMuseboardStore((state) => state.content.some(({ id }) => id === props.contentId));
+  if (props.contentId === "new") return <CreateLauncher />;
   if (!available) {
     return <section className={styles.empty}><h1>No draft selected.</h1><Link href="/app/opportunities">Choose an opportunity</Link></section>;
   }
   return <WorkshopEditor {...props} />;
+}
+
+function CreateLauncher() {
+  const content = useMuseboardStore((state) => state.content);
+  const ideas = useMuseboardStore((state) => state.ideas);
+  const recentDrafts = [...content]
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .slice(0, 3);
+
+  return (
+    <section className={styles.launcher}>
+      <header>
+        <p className={styles.kicker}>Create workspace</p>
+        <h1>Move an idea into the work.</h1>
+        <span>
+          Shape a source-backed opportunity first, then build its angle, hooks, script, and shoot plan without losing the evidence behind it.
+        </span>
+        <div className={styles.launcherActions}>
+          <Link className={styles.launcherPrimary} href="/app/opportunities/ideas">
+            {ideas.length ? `Open Idea Board · ${ideas.length} shaped` : "Open Idea Board"}
+            <ArrowRight aria-hidden="true" size={18} />
+          </Link>
+          <Link href="/app/opportunities">Find an opportunity</Link>
+        </div>
+      </header>
+
+      {recentDrafts.length ? (
+        <div className={styles.recentDrafts}>
+          <div><p className={styles.kicker}>Continue working</p><span>Your latest sample drafts</span></div>
+          {recentDrafts.map((draft) => {
+            const stage = draft.stage === "signal" ? "evidence" : draft.stage;
+            return (
+              <Link href={`/app/create/${draft.id}?stage=${stage}`} key={draft.id}>
+                <span><strong>{draft.title}</strong><small>{stage} · {draft.platform.replaceAll("_", " ")}</small></span>
+                <ArrowRight aria-hidden="true" size={18} />
+              </Link>
+            );
+          })}
+        </div>
+      ) : (
+        <div className={styles.launcherNote}>
+          <Info aria-hidden="true" size={20} />
+          <span><strong>No draft yet.</strong> Shape an opportunity and promote it from the Idea Board to begin.</span>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function WorkshopEditor({
