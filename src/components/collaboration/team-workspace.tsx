@@ -201,8 +201,12 @@ function PeopleDesk({ focusId, notificationId }: { focusId?: string; notificatio
           <p>Pending invitations reserve a seat. This local demo records the invite but never claims delivery.</p>
           <label>Email<input aria-label="Collaborator email" disabled={!isOwner} onChange={(event) => setEmail(event.target.value)} placeholder="editor@example.com" type="email" value={email} /></label>
           <label>Role<select aria-label="Collaborator role" disabled={!isOwner} onChange={(event) => setRole(event.target.value as "editor" | "viewer")} value={role}><option value="editor">Editor</option><option value="viewer">Viewer</option></select></label>
-          <button className={styles.primaryButton} disabled={!isOwner} type="submit">Save local invite <ArrowRight aria-hidden="true" size={18} /></button>
+          <button className={styles.primaryButton} disabled={!isOwner || occupied >= limit} type="submit">
+            {occupied >= limit ? "Seat limit reached" : "Save local invite"}
+            <ArrowRight aria-hidden="true" size={18} />
+          </button>
           <p aria-live="polite" className={styles.formMessage}>{!isOwner ? "Only the workspace owner can manage invitations." : message || (occupied >= limit ? seatLimitMessage(plan) : `${limit - occupied} seat${limit - occupied === 1 ? "" : "s"} available.`)}</p>
+          {isOwner && occupied >= limit ? <Link href="/app/settings/billing">Compare plans and team seats</Link> : null}
         </form>
 
         {activeContent ? (
