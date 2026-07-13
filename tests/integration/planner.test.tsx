@@ -126,6 +126,7 @@ describe("creator planner", () => {
     expect(
       useMuseboardStore.getState().plannerTasks.find(({ id }) => id === overdue.id)?.status,
     ).toBe("done");
+    expect(screen.queryByRole("article", { name: overdue.title })).not.toBeInTheDocument();
   });
 
   it("rolls the visible planner to an injected current week", () => {

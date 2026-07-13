@@ -239,7 +239,11 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
     );
   }
 
-  const outsideTasks = tasks.filter((task) => !task.scheduledFor || !days.includes(partsInZone(task.scheduledFor, timezone).date));
+  const outsideTasks = tasks.filter((task) =>
+    task.status !== "cancelled"
+    && task.status !== "done"
+    && (!task.scheduledFor || !days.includes(partsInZone(task.scheduledFor, timezone).date)),
+  );
 
   return (
     <>
@@ -256,7 +260,12 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
 
         <div className={styles.week}>
           {days.map((date) => {
-            const dayTasks = tasks.filter((task) => task.scheduledFor && partsInZone(task.scheduledFor, timezone).date === date);
+            const dayTasks = tasks.filter((task) =>
+              task.status !== "cancelled"
+              && task.status !== "done"
+              && task.scheduledFor
+              && partsInZone(task.scheduledFor, timezone).date === date,
+            );
             const recovery = creator?.recoveryDays?.includes(weekdayIndex(date, timezone));
             const label = dayLabel(date, timezone);
             return (
