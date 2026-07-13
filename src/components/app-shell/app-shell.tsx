@@ -15,7 +15,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
@@ -56,17 +56,44 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const creator = useMuseboardStore((state) => state.creator);
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const moreSheetRef = useRef<HTMLElement>(null);
   const creatorName = creator?.name ?? "Sample creator";
   const creatorLane = creator?.contentPillars[0] ?? "Creator workspace";
 
   useEffect(() => {
     if (!moreOpen) return;
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setMoreOpen(false);
-    }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    const trigger = moreTriggerRef.current;
+    const frame = window.requestAnimationFrame(() => {
+      moreSheetRef.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      trigger?.focus();
+    };
   }, [moreOpen]);
+
+  function keepFocusInMoreSheet(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMoreOpen(false);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]"),
+    );
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   const moreActive = ["/app/learn", "/app/team", "/app/settings"].some(
     (href) => pathname.startsWith(href),
@@ -138,6 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className={styles.mobileNavLink}
           data-active={moreActive || moreOpen}
           onClick={() => setMoreOpen(true)}
+          ref={moreTriggerRef}
           type="button"
         >
           <DotsThree aria-hidden="true" size={22} weight="bold" />
@@ -151,7 +179,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-label="More Museboard destinations"
             aria-modal="true"
             className={styles.moreSheet}
+            onKeyDown={keepFocusInMoreSheet}
             onMouseDown={(event) => event.stopPropagation()}
+            ref={moreSheetRef}
             role="dialog"
           >
             <div className={styles.sheetHeading}>
