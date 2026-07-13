@@ -106,7 +106,11 @@ async function openToday(
 }
 
 for (const theme of ["light", "dark"] as const) {
-  test(`Today ${theme} desktop matches the approved hierarchy`, async ({ page }) => {
+  test(`Today ${theme} desktop matches the approved hierarchy`, async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "chromium",
+      "Canonical screenshots run once because each test sets its own viewport.",
+    );
     const errors = await openToday(page, {
       theme,
       viewport: { width: 1440, height: 1024 },
@@ -124,7 +128,11 @@ for (const theme of ["light", "dark"] as const) {
     expect(errors).toEqual([]);
   });
 
-  test(`Today ${theme} mobile keeps navigation and agenda usable`, async ({ page }) => {
+  test(`Today ${theme} mobile keeps navigation and agenda usable`, async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "chromium",
+      "Canonical screenshots run once because each test sets its own viewport.",
+    );
     const errors = await openToday(page, {
       theme,
       viewport: { width: 390, height: 844 },

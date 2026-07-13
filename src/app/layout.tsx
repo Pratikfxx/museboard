@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
+import Script from "next/script";
 import type { ReactNode } from "react";
 
-import { THEME_BOOTSTRAP_SCRIPT } from "@/components/ui/theme-bootstrap";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 
 import "./globals.css";
@@ -35,11 +35,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       lang="en"
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
-      </head>
       <body>
         <ThemeProvider>{children}</ThemeProvider>
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
       </body>
     </html>
   );
