@@ -10,8 +10,9 @@ import {
 
 import {
   deriveLearnings,
-  metricSampleDedupKey,
+  mergeMetricImport,
   metricSamplesSchema,
+  type DuplicatePolicy,
 } from "@/domain/analytics";
 import {
   approvalEventSchema,
@@ -37,7 +38,7 @@ import {
   reserveEntitlement,
   type EntitlementDecision,
 } from "@/domain/entitlements";
-import { buildExportManifest, exportManifestSchema } from "@/domain/export";
+import { exportRecordSchema } from "@/domain/export";
 import {
   ideaRecordSchema,
   opportunitySchema,
@@ -249,7 +250,7 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
     })
     .optional(),
   comments: z.array(commentSchema),
-  exports: z.array(exportManifestSchema),
+  exports: z.array(exportRecordSchema),
   publishReceipts: z.array(publishReceiptSchema),
   metrics: metricSamplesSchema,
   learnings: z.array(learningSchema),
@@ -314,6 +315,9 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
     reviewComments: Array.isArray(state.reviewComments) ? state.reviewComments : [],
     approvals: Array.isArray(state.approvals) ? state.approvals : [],
     notifications: Array.isArray(state.notifications) ? state.notifications : [],
+    exports: Array.isArray(state.exports)
+      ? state.exports.filter((value) => recordValue(value)?.status === "complete")
+      : [],
     opportunities: state.opportunities.map((value) => {
       const opportunity = recordValue(value);
       if (!opportunity) return value;
@@ -414,10 +418,12 @@ interface MuseboardActions {
   requestApproval: (contentId: string, reviewerMembershipId: string, at?: string) => boolean;
   decideApproval: (contentId: string, decision: "approved" | "changes_requested", note?: string, at?: string) => boolean;
   openNotification: (notificationId: string, href: string, at?: string) => boolean;
-  createExport: (contentId: string, requestedBy?: string, at?: string) => string | undefined;
+  recordExport: (record: unknown) => boolean;
   recordPublishReceipt: (receipt: unknown) => boolean;
-  importMetrics: (metrics: unknown) => boolean;
+  importMetrics: (metrics: unknown, policy?: DuplicatePolicy, at?: string) => boolean;
+  deleteMetricImport: (importId: string, at?: string) => boolean;
   dismissLearning: (learningId: string, at?: string) => void;
+  restoreLearning: (learningId: string) => void;
 }
 
 export type MuseboardState = DemoMuseboardData & MuseboardActions;
@@ -1170,42 +1176,78 @@ export const useMuseboardStore = create<MuseboardState>()(
         return true;
       },
 
-      createExport: (contentId, requestedBy = "You", at = now()) => {
-        const item = get().content.find(({ id }) => id === contentId);
-        if (!item) return undefined;
-
-        const manifest = buildExportManifest(item, {
-          requestedAt: at,
-          requestedBy,
-        });
-        set((state) => ({
-          exports: [
-            ...state.exports.filter(({ id }) => id !== manifest.id),
-            manifest,
-          ],
-        }));
-        return manifest.id;
+      recordExport: (payload) => {
+        const parsed = exportRecordSchema.safeParse(payload);
+        if (!parsed.success) return false;
+        const { manifest } = parsed.data;
+        if (
+          parsed.data.id !== manifest.id ||
+          parsed.data.contentId !== manifest.contentId ||
+          parsed.data.versionId !== manifest.versionId ||
+          parsed.data.variantId !== manifest.variantId ||
+          parsed.data.platform !== manifest.platform ||
+          parsed.data.generatedAt !== manifest.generatedAt
+        ) return false;
+        const existing = get().exports.find(({ id }) => id === parsed.data.id);
+        if (existing) return JSON.stringify(existing) === JSON.stringify(parsed.data);
+        const item = get().content.find(({ id }) => id === parsed.data.contentId);
+        if (!item || !item.versions.some(({ id }) => id === parsed.data.versionId) || item.platform !== parsed.data.platform) return false;
+        set((state) => ({ exports: [...state.exports, parsed.data] }));
+        return true;
       },
 
       recordPublishReceipt: (payload) => {
         const parsed = publishReceiptSchema.safeParse(payload);
         if (!parsed.success) return false;
 
-        const receipt: PublishReceipt = parsed.data;
+        let receiptUrl: URL;
+        try { receiptUrl = new URL(parsed.data.provenance.sourceUrl ?? ""); } catch { return false; }
+        receiptUrl.hash = "";
+        receiptUrl.hostname = receiptUrl.hostname.toLowerCase();
+        receiptUrl.pathname = receiptUrl.pathname.replace(/\/+$/u, "") || "/";
+        const receipt: PublishReceipt = {
+          ...parsed.data,
+          provenance: { ...parsed.data.provenance, sourceUrl: receiptUrl.href },
+        };
         const contentItem = get().content.find(
           ({ id }) => id === receipt.contentId,
         );
-        if (!contentItem || contentItem.platform !== receipt.platform) {
+        const exportRecord = get().exports.find(({ id }) => id === receipt.exportId);
+        const duplicateUrl = get().publishReceipts.some(({ provenance }) => {
+          try {
+            const existing = new URL(provenance.sourceUrl ?? "");
+            existing.hash = "";
+            existing.hostname = existing.hostname.toLowerCase();
+            existing.pathname = existing.pathname.replace(/\/+$/u, "") || "/";
+            return existing.href === receipt.provenance.sourceUrl;
+          } catch { return false; }
+        });
+        const platformHostMatches = (() => {
+          try {
+            const host = new URL(receipt.provenance.sourceUrl ?? "").hostname.toLowerCase();
+            if (receipt.platform === "instagram_reels") return host === "instagram.com" || host.endsWith(".instagram.com");
+            if (receipt.platform === "tiktok_video") return host === "tiktok.com" || host.endsWith(".tiktok.com");
+            return host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtu.be";
+          } catch { return false; }
+        })();
+        if (
+          !contentItem ||
+          contentItem.platform !== receipt.platform ||
+          !exportRecord ||
+          exportRecord.contentId !== receipt.contentId ||
+          exportRecord.versionId !== receipt.versionId ||
+          exportRecord.platform !== receipt.platform ||
+          !receipt.provenance.sourceUrl?.startsWith("https://") ||
+          !platformHostMatches ||
+          duplicateUrl
+        ) {
           return false;
         }
 
         set((state) => ({
-          publishReceipts: [
-            ...state.publishReceipts.filter(({ id }) => id !== receipt.id),
-            receipt,
-          ],
+          publishReceipts: [...state.publishReceipts, receipt],
           content: state.content.map((item) =>
-            item.id === receipt.contentId
+            item.id === receipt.contentId && item.currentVersionId === receipt.versionId
               ? transitionStage(item, {
                   type: "MOVE",
                   stage: "published",
@@ -1217,28 +1259,32 @@ export const useMuseboardStore = create<MuseboardState>()(
         return true;
       },
 
-      importMetrics: (payload) => {
+      importMetrics: (payload, policy = "skip", at = now()) => {
         const parsed = metricSamplesSchema.safeParse(payload);
         if (!parsed.success) return false;
-
+        const merged = mergeMetricImport(get().metrics, parsed.data, policy);
+        if (!merged.ok) return false;
         set((state) => {
-          const deduplicationKeys = new Set(
-            state.metrics.map(metricSampleDedupKey),
-          );
-          const metrics = [...state.metrics];
-          for (const metric of parsed.data) {
-            const key = metricSampleDedupKey(metric);
-            if (deduplicationKeys.has(key)) continue;
-            deduplicationKeys.add(key);
-            metrics.push(metric);
-          }
-
           const dismissals = new Map(
             state.learnings
               .filter(({ dismissedAt }) => dismissedAt !== undefined)
               .map(({ id, dismissedAt }) => [id, dismissedAt]),
           );
-          const learnings = deriveLearnings(metrics).map((learning) => {
+          const learnings = deriveLearnings(merged.metrics, at).map((learning) => {
+            const dismissedAt = dismissals.get(learning.id);
+            return dismissedAt ? { ...learning, dismissedAt } : learning;
+          });
+          return { metrics: merged.metrics, learnings };
+        });
+        return true;
+      },
+
+      deleteMetricImport: (importId, at = now()) => {
+        if (!get().metrics.some(({ importId: candidate }) => candidate === importId)) return false;
+        set((state) => {
+          const metrics = state.metrics.filter(({ importId: candidate }) => candidate !== importId);
+          const dismissals = new Map(state.learnings.filter(({ dismissedAt }) => dismissedAt).map(({ id, dismissedAt }) => [id, dismissedAt]));
+          const learnings = deriveLearnings(metrics, at).map((learning) => {
             const dismissedAt = dismissals.get(learning.id);
             return dismissedAt ? { ...learning, dismissedAt } : learning;
           });
@@ -1254,6 +1300,12 @@ export const useMuseboardStore = create<MuseboardState>()(
               ? { ...learning, dismissedAt: at }
               : learning,
           ),
+        }));
+      },
+
+      restoreLearning: (learningId) => {
+        set((state) => ({
+          learnings: state.learnings.map((learning) => learning.id === learningId ? { ...learning, dismissedAt: undefined } : learning),
         }));
       },
     }),

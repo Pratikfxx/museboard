@@ -7,7 +7,7 @@ import type {
   ReviewComment,
   StageAssignment,
 } from "@/domain/collaboration";
-import type { ExportManifest } from "@/domain/export";
+import type { ExportRecord } from "@/domain/export";
 import type {
   IdeaRecord,
   Opportunity,
@@ -89,7 +89,7 @@ export interface DemoMuseboardData {
   reviewComments: ReviewComment[];
   approvals: ApprovalEvent[];
   notifications: CollaborationNotification[];
-  exports: ExportManifest[];
+  exports: ExportRecord[];
   publishReceipts: PublishReceipt[];
   metrics: MetricSample[];
   learnings: Learning[];

@@ -115,6 +115,8 @@ export interface Comment {
 
 export interface PublishReceipt {
   id: string;
+  exportId?: string;
+  versionId?: string;
   contentId: string;
   platform: ContentPlatform;
   externalPostId?: string;
@@ -136,6 +138,11 @@ export interface Learning {
   sampleSize: number;
   confidence: "low" | "medium" | "high";
   includedContentIds: string[];
+  excludedContentIds?: string[];
+  effectPercent?: number;
+  comparison?: string;
+  confidenceRule?: string;
+  lastRecomputedAt?: string;
   dismissedAt?: string;
 }
 
@@ -228,6 +235,8 @@ export const commentSchema: z.ZodType<Comment> = z.object({
 
 export const publishReceiptSchema: z.ZodType<PublishReceipt> = z.object({
   id: z.string().min(1),
+  exportId: z.string().min(1).optional(),
+  versionId: z.string().min(1).optional(),
   contentId: z.string().min(1),
   platform: contentPlatformSchema,
   externalPostId: z.string().min(1).optional(),
@@ -249,5 +258,10 @@ export const learningSchema: z.ZodType<Learning> = z.object({
   sampleSize: z.number().int().nonnegative(),
   confidence: z.enum(["low", "medium", "high"]),
   includedContentIds: z.array(z.string().min(1)),
+  excludedContentIds: z.array(z.string().min(1)).optional(),
+  effectPercent: z.number().finite().optional(),
+  comparison: z.string().min(1).optional(),
+  confidenceRule: z.string().min(1).optional(),
+  lastRecomputedAt: z.iso.datetime().optional(),
   dismissedAt: z.iso.datetime().optional(),
 });

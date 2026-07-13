@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { hasRequiredEvidence, type WorkshopVersionPatch } from "@/domain/workflow";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
+import { ExportPanel } from "./export-panel";
 import styles from "./workshop.module.css";
 
 const stages = ["evidence", "angle", "hook", "outline", "script", "shoot", "review", "ready"] as const;
@@ -77,6 +78,7 @@ function WorkshopEditor({
   const content = useMuseboardStore((state) => state.content);
   const hooks = useMuseboardStore((state) => state.hooks);
   const creator = useMuseboardStore((state) => state.creator);
+  const plan = useMuseboardStore((state) => state.entitlementUsage.plan);
   const opportunities = useMuseboardStore((state) => state.opportunities);
   const saveWorkshopVersion = useMuseboardStore((state) => state.saveWorkshopVersion);
   const moveTask = useMuseboardStore((state) => state.moveTask);
@@ -219,10 +221,28 @@ function WorkshopEditor({
         setError("Attach evidence for source-required claims before marking this ready.");
         return;
       }
+      const dirty = editRevisionRef.current !== lastSavedRevision.current || Boolean(pendingPatch.current);
+      const approvalRequired = plan === "pro" || plan === "studio";
+      if (approvalRequired && dirty) {
+        lastSavedRevision.current = editRevisionRef.current;
+        pendingPatch.current = undefined;
+        saveWorkshopVersion({ contentId: liveItem.id, patch: draft, nextStage: "review" });
+        setStage("review");
+        setError("Your edits are saved as a new version. Request a fresh review before exporting.");
+        setSaveStatus("Saved · new version needs review");
+        return;
+      }
+      const approvedCurrent = liveItem.approval?.versionId === liveItem.currentVersionId && liveItem.approval.status === "approved";
+      if (approvalRequired && !approvedCurrent) {
+        setStage("review");
+        setError("This current version needs approval before it can be exported.");
+        return;
+      }
       lastSavedRevision.current = editRevisionRef.current;
       pendingPatch.current = undefined;
-      saveWorkshopVersion({ contentId: liveItem.id, patch: draft, nextStage: "ready" });
-      setSaveStatus("Saved · ready version added to this browser");
+      if (dirty) saveWorkshopVersion({ contentId: liveItem.id, patch: draft, nextStage: "ready" });
+      else moveTask(liveItem.id, "ready");
+      setSaveStatus(dirty ? "Saved · ready version added to this browser" : "Approved version · ready for handoff");
     } else {
       flushPendingDraft();
       moveTask(activeItem.id, domainStage(next));
@@ -299,7 +319,7 @@ function WorkshopEditor({
           ) : null}
 
           {stage === "review" && displayedReviewVersion ? <section><p className={styles.kicker}>{requestedVersion ? `Historical version ${requestedVersion.number} · read only` : "Final read-through"}</p><h2>Does the promise survive the cut?</h2>{requestedVersion ? <p className={styles.historicalNote}>You opened the version attached to this team activity. <Link href={`/app/create/${item.id}?stage=review`}>Return to current version {currentVersion.number}</Link></p> : null}<div className={styles.review}><strong>{displayedReviewVersion.selectedHookText ?? itemHooks.find(({ id }) => id === displayedReviewVersion.selectedHookId)?.text}</strong><ol>{(displayedReviewVersion.outline ?? []).map((beat) => <li key={beat}>{beat}</li>)}</ol><p>{displayedReviewVersion.script}</p></div>{!requestedVersion ? <button className={styles.primaryButton} onClick={() => goToStage("ready")} type="button">Ready for handoff <ArrowRight aria-hidden="true" size={18} /></button> : null}</section> : null}
-          {stage === "ready" ? <section className={styles.ready}><CheckCircle aria-hidden="true" size={44} weight="fill" /><p className={styles.kicker}>Draft locked</p><h2>Ready to schedule and share.</h2><p>Your sources, creator edits, and latest version stay attached.</p><Link href="/app/plan">Open the weekly planner <ArrowRight aria-hidden="true" size={18} /></Link></section> : null}
+          {stage === "ready" ? <ExportPanel item={item} /> : null}
         </main>
 
         <aside aria-label="Craft guidance" className={styles.guidance}>

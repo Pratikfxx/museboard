@@ -67,10 +67,7 @@ describe("transitionStage", () => {
 
     expect(manifest.versionId).toBe("content-1-v1");
     expect(manifest.approvalStatus).toBe("approved");
-    expect(manifest.files.map((file) => file.name)).toEqual([
-      "caption.txt",
-      "script.txt",
-      "manifest.json",
-    ]);
+    expect(manifest.variantId).toBe("content-1-instagram_reels-content-1-v1");
+    expect(manifest.validation.status).toBe("passed");
   });
 });

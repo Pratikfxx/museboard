@@ -198,6 +198,23 @@ describe("content workshop", () => {
     expect(active.versions.at(-1)?.angle).toBe("A live creator edit that must survive Ready.");
   });
 
+  it("moves a clean approved paid-workspace version to Ready without staling or cloning it", async () => {
+    const user = userEvent.setup();
+    const { contentId } = renderWorkshop();
+    const current = useMuseboardStore.getState().content.find(({ id }) => id === contentId)!;
+    useMuseboardStore.setState((state) => ({
+      entitlementUsage: { ...state.entitlementUsage, plan: "studio" },
+      content: state.content.map((item) => item.id === contentId ? { ...item, approval: { status: "approved", versionId: item.currentVersionId, approvedBy: "Reviewer", approvedAt: "2026-07-13T10:00:00.000Z" } } : item),
+    }));
+
+    await user.click(screen.getByRole("button", { name: /^ready$/i }));
+
+    const active = useMuseboardStore.getState().content.find(({ id }) => id === contentId)!;
+    expect(active.stage).toBe("ready");
+    expect(active.versions).toHaveLength(current.versions.length);
+    expect(active.approval).toMatchObject({ status: "approved", versionId: current.currentVersionId });
+  });
+
   it("flushes a dirty editor on unmount", () => {
     const view = renderWorkshop({ stage: "script" });
     fireEvent.change(screen.getByRole("textbox", { name: /script draft/i }), {
