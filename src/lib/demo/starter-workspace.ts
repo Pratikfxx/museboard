@@ -13,6 +13,7 @@ import {
 } from "@/lib/demo/fixtures";
 
 export interface StarterWorkspaceInput {
+  name?: string;
   outcome: CreatorOutcome;
   archetype: CreatorArchetype;
   audience: string;
@@ -263,7 +264,7 @@ export function buildStarterWorkspace(
 
   return {
     creator: {
-      name: `${input.archetype.replaceAll("_", " ")} creator`,
+      name: input.name?.trim() || `${input.archetype.replaceAll("_", " ")} creator`,
       outcome: input.outcome,
       archetype: input.archetype,
       archetypes: [input.archetype],

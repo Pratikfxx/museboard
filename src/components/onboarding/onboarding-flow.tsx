@@ -33,6 +33,7 @@ let volatileDraft: string | null = null;
 
 interface OnboardingDraft {
   step: number;
+  name: string;
   outcome?: CreatorOutcome;
   archetype?: CreatorArchetype;
   audience: string;
@@ -45,6 +46,7 @@ interface OnboardingDraft {
 
 const DEFAULT_DRAFT: OnboardingDraft = {
   step: 0,
+  name: "",
   audience: "",
   platforms: [],
   weeklyCapacityMinutes: 240,
@@ -252,6 +254,7 @@ export function OnboardingFlow() {
     if (!draft.archetype || !draft.outcome) return;
 
     const workspace = buildStarterWorkspace({
+      name: draft.name,
       outcome: draft.outcome,
       archetype: draft.archetype,
       audience: draft.audience,
@@ -423,11 +426,22 @@ export function OnboardingFlow() {
             {draft.step === 2 ? (
               <div>
                 <QuestionHeader
-                  description="We inferred a starting audience from your lane. Make it sound like the people you actually want to reach."
-                  eyebrow="Editable suggestion"
-                  title="Who do you make things for?"
+                  description="Tell us what to call you, then make the inferred audience sound like the people you actually want to reach."
+                  eyebrow="Your starting profile"
+                  title="Who are you creating for?"
                 />
-                <label className="block font-semibold" htmlFor="creator-audience">
+                <label className="block font-semibold" htmlFor="creator-name">
+                  What should we call you?
+                </label>
+                <input
+                  autoComplete="name"
+                  className="mt-3 min-h-12 w-full rounded-2xl border border-border bg-surface px-4 text-base text-ink shadow-sm placeholder:text-muted/70"
+                  id="creator-name"
+                  onChange={(event) => updateDraft({ name: event.target.value })}
+                  placeholder="Your name or creator name"
+                  value={draft.name}
+                />
+                <label className="mt-6 block font-semibold" htmlFor="creator-audience">
                   Who do you make things for?
                 </label>
                 <textarea
@@ -437,7 +451,7 @@ export function OnboardingFlow() {
                   value={draft.audience}
                 />
                 <ContinueButton
-                  disabled={!draft.audience.trim()}
+                  disabled={!draft.name.trim() || !draft.audience.trim()}
                   onClick={() => updateDraft({ step: 3 })}
                 >
                   Continue to formats
