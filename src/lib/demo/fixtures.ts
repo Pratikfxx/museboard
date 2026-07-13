@@ -1,7 +1,11 @@
 import type { MetricSample } from "@/domain/analytics";
 import type { EntitlementUsage } from "@/domain/entitlements";
 import type { ExportManifest } from "@/domain/export";
-import type { Opportunity } from "@/domain/opportunities";
+import type {
+  IdeaRecord,
+  Opportunity,
+  VisionReference,
+} from "@/domain/opportunities";
 import type { PlannerTask } from "@/domain/planner";
 import type {
   Comment,
@@ -54,6 +58,10 @@ export interface DemoMuseboardData {
   creator?: CreatorProfile;
   opportunities: Opportunity[];
   selectedOpportunityId?: string;
+  opportunityDecisions: Record<string, "saved" | "dismissed">;
+  ideas: IdeaRecord[];
+  visionReferences: VisionReference[];
+  selectedReferenceIds: string[];
   hooks: HookOption[];
   content: ContentItem[];
   plannerTasks: PlannerTask[];
@@ -98,8 +106,28 @@ export function createDemoState(): DemoMuseboardData {
       summary: "Show one small setup change that removes resistance before recording.",
       platform: "instagram_reels",
       archetypes: ["tech_education", "lifestyle_business"],
+      format: "tutorial",
+      pillar: "Practical creator systems",
+      readiness: "ready",
+      goal: "trust",
+      geography: "Global",
       signals: { relevance: 92, momentum: 76, originality: 81, creatorFit: 94 },
-      provenance: { provider: "museboard-demo", mode: "sample", fetchedAt: DEMO_NOW },
+      evidence: [
+        {
+          summary: "A sample editorial observation about reducing setup friction.",
+          sourceLabel: "Museboard demo desk",
+        },
+      ],
+      provenance: {
+        provider: "museboard-demo",
+        mode: "sample",
+        fetchedAt: DEMO_NOW,
+        sourceClass: "creator_submission",
+        sourceLabel: "Museboard demo desk",
+        sourceUrl: "https://museboard.example/sample/creator-desk",
+        observedAt: "2026-07-13T06:00:00.000Z",
+        expiresAt: "2026-07-14T06:00:00.000Z",
+      },
     },
     {
       id: "opportunity-chorus",
@@ -107,8 +135,28 @@ export function createDemoState(): DemoMuseboardData {
       summary: "Turn one production choice into an audience participation moment.",
       platform: "tiktok_video",
       archetypes: ["music"],
+      format: "behind_scenes",
+      pillar: "Making music in public",
+      readiness: "shape",
+      goal: "community",
+      geography: "Global",
       signals: { relevance: 86, momentum: 91, originality: 75, creatorFit: 82 },
-      provenance: { provider: "museboard-demo", mode: "sample", fetchedAt: DEMO_NOW },
+      evidence: [
+        {
+          summary: "A sample prompt for audience participation during songcraft.",
+          sourceLabel: "Museboard demo desk",
+        },
+      ],
+      provenance: {
+        provider: "museboard-demo",
+        mode: "sample",
+        fetchedAt: DEMO_NOW,
+        sourceClass: "creator_submission",
+        sourceLabel: "Museboard demo desk",
+        sourceUrl: "https://museboard.example/sample/chorus-in-public",
+        observedAt: "2026-07-13T05:00:00.000Z",
+        expiresAt: "2026-07-15T05:00:00.000Z",
+      },
     },
     {
       id: "opportunity-systems",
@@ -116,8 +164,28 @@ export function createDemoState(): DemoMuseboardData {
       summary: "Teach a useful weekly ritual through one concrete before-and-after.",
       platform: "youtube_shorts",
       archetypes: ["lifestyle_business", "tech_education"],
+      format: "demonstration",
+      pillar: "Calm operating systems",
+      readiness: "spark",
+      goal: "reach",
+      geography: "India + global English",
       signals: { relevance: 89, momentum: 72, originality: 84, creatorFit: 88 },
-      provenance: { provider: "museboard-demo", mode: "sample", fetchedAt: DEMO_NOW },
+      evidence: [
+        {
+          summary: "A sample editorial pattern for showing a sustainable weekly ritual.",
+          sourceLabel: "Museboard demo desk",
+        },
+      ],
+      provenance: {
+        provider: "museboard-demo",
+        mode: "sample",
+        fetchedAt: DEMO_NOW,
+        sourceClass: "creator_submission",
+        sourceLabel: "Museboard demo desk",
+        sourceUrl: "https://museboard.example/sample/tiny-system",
+        observedAt: "2026-07-13T04:00:00.000Z",
+        expiresAt: "2026-07-16T04:00:00.000Z",
+      },
     },
   ];
 
@@ -128,6 +196,10 @@ export function createDemoState(): DemoMuseboardData {
     creator: undefined,
     opportunities,
     selectedOpportunityId: undefined,
+    opportunityDecisions: {},
+    ideas: [],
+    visionReferences: [],
+    selectedReferenceIds: [],
     hooks: [
       {
         id: "hook-desk-1",

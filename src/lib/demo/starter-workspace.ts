@@ -114,16 +114,34 @@ function createOpportunities({
     summary: `A sample angle for ${audience.toLocaleLowerCase()} that can become a concrete short-form post.`,
     platform: platforms[index % platforms.length],
     archetypes: [archetype],
+    format: (["tutorial", "behind_scenes", "story", "demonstration"] as const)[
+      index % 4
+    ],
+    pillar: CONTENT_PILLARS[archetype][index % CONTENT_PILLARS[archetype].length],
+    readiness: (["ready", "shape", "spark"] as const)[index % 3],
+    goal: (["trust", "community", "reach", "conversion"] as const)[index % 4],
+    geography: "Global",
     signals: {
       relevance: 94 - index * 2,
       momentum: 82 - index,
       originality: 78 + index * 2,
       creatorFit: 96 - index,
     },
+    evidence: [
+      {
+        summary: "A local sample prompt generated from the onboarding choices.",
+        sourceLabel: "Museboard onboarding sample",
+      },
+    ],
     provenance: {
       provider: "museboard-onboarding",
       mode: "sample",
       fetchedAt: DEMO_NOW,
+      sourceClass: "creator_submission",
+      sourceLabel: "Museboard onboarding sample",
+      sourceUrl: `https://museboard.example/sample/${archetype}/${index + 1}`,
+      observedAt: DEMO_NOW,
+      expiresAt: addDays(DEMO_NOW, 7),
     },
   }));
 }

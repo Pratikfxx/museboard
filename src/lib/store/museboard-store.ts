@@ -15,7 +15,12 @@ import {
 } from "@/domain/analytics";
 import { entitlementUsageSchema } from "@/domain/entitlements";
 import { buildExportManifest, exportManifestSchema } from "@/domain/export";
-import { opportunitySchema } from "@/domain/opportunities";
+import {
+  ideaRecordSchema,
+  opportunitySchema,
+  visionReferenceSchema,
+} from "@/domain/opportunities";
+import type { VisionReference } from "@/domain/opportunities";
 import { plannerTaskSchema } from "@/domain/planner";
 import {
   commentSchema,
@@ -41,6 +46,12 @@ import {
   type DemoMuseboardData,
   type StarterWorkspace,
 } from "@/lib/demo/fixtures";
+import {
+  createIdeaFromOpportunity,
+  findDuplicateReference,
+  validateVisionReference,
+  type VisionReferenceInput,
+} from "@/lib/providers/opportunities";
 
 export const MUSEBOARD_STORAGE_KEY = "museboard-demo-v1";
 const fallbackStorage = new Map<string, string>();
@@ -194,6 +205,12 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   creator: creatorProfileSchema.optional(),
   opportunities: z.array(opportunitySchema),
   selectedOpportunityId: z.string().min(1).optional(),
+  opportunityDecisions: z
+    .record(z.string(), z.enum(["saved", "dismissed"]))
+    .default({}),
+  ideas: z.array(ideaRecordSchema).default([]),
+  visionReferences: z.array(visionReferenceSchema).default([]),
+  selectedReferenceIds: z.array(z.string().min(1)).default([]),
   hooks: z.array(hookOptionSchema),
   content: z.array(contentItemSchema),
   plannerTasks: z.array(plannerTaskSchema),
@@ -205,10 +222,93 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   entitlementUsage: entitlementUsageSchema,
 });
 
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function futureIso(value: unknown): string {
+  const start =
+    typeof value === "string" && Number.isFinite(new Date(value).getTime())
+      ? new Date(value)
+      : new Date("2026-07-13T09:00:00.000Z");
+  start.setUTCDate(start.getUTCDate() + 7);
+  return start.toISOString();
+}
+
+export function upgradePersistedMuseboardData(payload: unknown): unknown {
+  const state = recordValue(payload);
+  if (!state || !Array.isArray(state.opportunities)) return payload;
+  const creator = recordValue(state.creator);
+  const contentPillars = Array.isArray(creator?.contentPillars)
+    ? creator.contentPillars
+    : [];
+
+  return {
+    ...state,
+    opportunities: state.opportunities.map((value) => {
+      const opportunity = recordValue(value);
+      if (!opportunity) return value;
+      const provenance = recordValue(opportunity.provenance) ?? {};
+      const provider =
+        typeof provenance.provider === "string"
+          ? provenance.provider
+          : "Museboard saved sample";
+      const fetchedAt =
+        typeof provenance.fetchedAt === "string"
+          ? provenance.fetchedAt
+          : "2026-07-13T09:00:00.000Z";
+      const sourceLabel =
+        typeof provenance.sourceLabel === "string"
+          ? provenance.sourceLabel
+          : provider;
+      return {
+        format: "tutorial",
+        pillar:
+          typeof contentPillars[0] === "string"
+            ? contentPillars[0]
+            : "Creator practice",
+        readiness: "shape",
+        goal: "trust",
+        geography: "Global",
+        evidence: [
+          {
+            summary:
+              "Legacy sample opportunity restored from this browser; source detail may be incomplete.",
+            sourceLabel,
+          },
+        ],
+        ...opportunity,
+        provenance: {
+          sourceClass: "creator_submission",
+          sourceLabel,
+          observedAt: fetchedAt,
+          expiresAt: futureIso(fetchedAt),
+          ...provenance,
+        },
+      };
+    }),
+  };
+}
+
 interface MuseboardActions {
   resetDemo: () => void;
   completeOnboarding: (workspace: StarterWorkspace) => void;
   selectOpportunity: (opportunityId: string) => void;
+  saveOpportunity: (opportunityId: string) => void;
+  dismissOpportunity: (opportunityId: string) => void;
+  restoreOpportunity: (opportunityId: string) => void;
+  shapeOpportunity: (opportunityId: string, at?: string) => string | undefined;
+  promoteIdea: (ideaId: string, at?: string) => string | undefined;
+  addVisionReference: (
+    input: VisionReferenceInput,
+    at?: string,
+  ) =>
+    | { ok: true; id: string; reused: boolean }
+    | { ok: false; error: string };
+  removeVisionReference: (referenceId: string) => void;
+  toggleReferenceSelection: (referenceId: string) => boolean;
   chooseHook: (contentId: string, hookId: string, at?: string) => void;
   moveTask: (contentId: string, stage: WorkflowStage, at?: string) => void;
   addComment: (
@@ -238,6 +338,10 @@ function persistedState(state: MuseboardState): DemoMuseboardData {
     creator: state.creator,
     opportunities: state.opportunities,
     selectedOpportunityId: state.selectedOpportunityId,
+    opportunityDecisions: state.opportunityDecisions,
+    ideas: state.ideas,
+    visionReferences: state.visionReferences,
+    selectedReferenceIds: state.selectedReferenceIds,
     hooks: state.hooks,
     content: state.content,
     plannerTasks: state.plannerTasks,
@@ -264,6 +368,10 @@ export const useMuseboardStore = create<MuseboardState>()(
           creator: parsed.creator,
           opportunities: parsed.opportunities,
           selectedOpportunityId: parsed.selectedOpportunityId,
+          opportunityDecisions: {},
+          ideas: [],
+          visionReferences: [],
+          selectedReferenceIds: [],
           hooks: parsed.hooks,
           content: parsed.content,
           plannerTasks: parsed.plannerTasks,
@@ -273,6 +381,159 @@ export const useMuseboardStore = create<MuseboardState>()(
       selectOpportunity: (opportunityId) => {
         if (!get().opportunities.some(({ id }) => id === opportunityId)) return;
         set({ selectedOpportunityId: opportunityId });
+      },
+
+      saveOpportunity: (opportunityId) => {
+        if (!get().opportunities.some(({ id }) => id === opportunityId)) return;
+        set((state) => ({
+          opportunityDecisions: {
+            ...state.opportunityDecisions,
+            [opportunityId]: "saved",
+          },
+        }));
+      },
+
+      dismissOpportunity: (opportunityId) => {
+        if (!get().opportunities.some(({ id }) => id === opportunityId)) return;
+        set((state) => ({
+          opportunityDecisions: {
+            ...state.opportunityDecisions,
+            [opportunityId]: "dismissed",
+          },
+        }));
+      },
+
+      restoreOpportunity: (opportunityId) => {
+        set((state) => {
+          const opportunityDecisions = { ...state.opportunityDecisions };
+          delete opportunityDecisions[opportunityId];
+          return { opportunityDecisions };
+        });
+      },
+
+      shapeOpportunity: (opportunityId, at = now()) => {
+        const state = get();
+        if (state.opportunityDecisions[opportunityId] === "dismissed") {
+          return undefined;
+        }
+        const existing = state.ideas.find(
+          (idea) => idea.opportunityId === opportunityId,
+        );
+        if (existing) return existing.id;
+        const opportunity = state.opportunities.find(
+          ({ id }) => id === opportunityId,
+        );
+        if (!opportunity) return undefined;
+        const idea = createIdeaFromOpportunity(opportunity, at);
+        set((current) => ({ ideas: [...current.ideas, idea] }));
+        return idea.id;
+      },
+
+      promoteIdea: (ideaId, at = now()) => {
+        const state = get();
+        const idea = state.ideas.find(({ id }) => id === ideaId);
+        if (!idea) return undefined;
+        if (
+          idea.promotedContentId &&
+          state.content.some(({ id }) => id === idea.promotedContentId)
+        ) {
+          return idea.promotedContentId;
+        }
+        const contentId = idea.promotedContentId ?? `content-from-${idea.id}`;
+        const existing = state.content.find(({ id }) => id === contentId);
+        if (existing) return existing.id;
+        const opportunity = state.opportunities.find(
+          ({ id }) => id === idea.opportunityId,
+        );
+        const versionId = `${contentId}-v1`;
+        const item = contentItemSchema.parse({
+          id: contentId,
+          title: idea.title,
+          platform: idea.platform,
+          archetype:
+            opportunity?.archetypes.find((archetype) =>
+              state.creator?.archetypes.includes(archetype),
+            ) ?? opportunity?.archetypes[0] ?? "tech_education",
+          stage: "angle",
+          currentVersionId: versionId,
+          opportunityId: idea.opportunityId,
+          versions: [
+            {
+              id: versionId,
+              contentId,
+              number: 1,
+              angle: idea.summary,
+              script: "",
+              createdAt: at,
+            },
+          ],
+          createdAt: at,
+          updatedAt: at,
+        });
+        set((current) => ({
+          content: [...current.content, item],
+          ideas: current.ideas.map((candidate) =>
+            candidate.id === ideaId
+              ? { ...candidate, promotedContentId: contentId }
+              : candidate,
+          ),
+        }));
+        return contentId;
+      },
+
+      addVisionReference: (input, at = now()) => {
+        const state = get();
+        const baseValidation = validateVisionReference(input);
+        if (!baseValidation.ok) return baseValidation;
+        const duplicate = findDuplicateReference(
+          state.visionReferences,
+          baseValidation.input,
+        );
+        if (duplicate) return { ok: true, id: duplicate.id, reused: true };
+        const usedBytes = state.visionReferences.reduce(
+          (total, reference) => total + reference.sizeBytes,
+          0,
+        );
+        const validation = validateVisionReference(
+          baseValidation.input,
+          usedBytes,
+        );
+        if (!validation.ok) return validation;
+        const reference: VisionReference = visionReferenceSchema.parse({
+          ...validation.input,
+          id: `reference-${validation.input.sha256.slice(0, 16)}`,
+          addedAt: at,
+          provenance: { provider: "museboard-local", mode: "sample" },
+        });
+        set((current) => ({
+          visionReferences: [...current.visionReferences, reference],
+        }));
+        return { ok: true, id: reference.id, reused: false };
+      },
+
+      removeVisionReference: (referenceId) => {
+        set((state) => ({
+          visionReferences: state.visionReferences.filter(
+            ({ id }) => id !== referenceId,
+          ),
+          selectedReferenceIds: state.selectedReferenceIds.filter(
+            (id) => id !== referenceId,
+          ),
+        }));
+      },
+
+      toggleReferenceSelection: (referenceId) => {
+        const state = get();
+        const reference = state.visionReferences.find(
+          ({ id }) => id === referenceId,
+        );
+        if (!reference || reference.rightsStatus === "unknown") return false;
+        set((current) => ({
+          selectedReferenceIds: current.selectedReferenceIds.includes(referenceId)
+            ? current.selectedReferenceIds.filter((id) => id !== referenceId)
+            : [...current.selectedReferenceIds, referenceId],
+        }));
+        return true;
       },
 
       chooseHook: (contentId, hookId, at = now()) => {
@@ -421,7 +682,9 @@ export const useMuseboardStore = create<MuseboardState>()(
       storage: createJSONStorage(() => safeStateStorage),
       partialize: persistedState,
       merge: (persisted, current) => {
-        const parsed = persistedMuseboardSchema.safeParse(persisted);
+        const parsed = persistedMuseboardSchema.safeParse(
+          upgradePersistedMuseboardData(persisted),
+        );
         return parsed.success ? { ...current, ...parsed.data } : current;
       },
     },

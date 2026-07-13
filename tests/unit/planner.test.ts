@@ -59,16 +59,29 @@ describe("rankOpportunities", () => {
       summary: "A source-backed idea",
       platform: "youtube_shorts",
       archetypes: ["tech_education"],
+      format: "tutorial",
+      pillar: "Useful concepts made clear",
+      readiness: "ready",
+      goal: "trust",
+      geography: "Global",
       signals: {
         relevance: 80,
         momentum: 70,
         originality: 60,
         creatorFit: 90,
       },
+      evidence: [
+        { summary: "A public metadata observation.", sourceLabel: "Demo" },
+      ],
       provenance: {
         provider: "museboard-demo",
         mode: "sample",
         fetchedAt: "2026-07-13T09:00:00.000Z",
+        sourceClass: "public_research",
+        sourceLabel: "Demo",
+        sourceUrl: "https://museboard.example/sample",
+        observedAt: "2026-07-13T06:00:00.000Z",
+        expiresAt: "2026-07-14T06:00:00.000Z",
       },
     };
     const opportunities: Opportunity[] = [
@@ -100,16 +113,29 @@ describe("rankOpportunities", () => {
       summary: "A source-backed idea",
       platform: "youtube_shorts",
       archetypes: ["tech_education"],
+      format: "tutorial",
+      pillar: "Useful concepts made clear",
+      readiness: "ready",
+      goal: "trust",
+      geography: "Global",
       signals: {
         relevance: 80,
         momentum: 70,
         originality: 60,
         creatorFit: 90,
       },
+      evidence: [
+        { summary: "A public metadata observation.", sourceLabel: "Demo" },
+      ],
       provenance: {
         provider: "museboard-demo",
         mode: "sample",
         fetchedAt: "2026-07-13T09:00:00.000Z",
+        sourceClass: "public_research",
+        sourceLabel: "Demo",
+        sourceUrl: "https://museboard.example/sample",
+        observedAt: "2026-07-13T06:00:00.000Z",
+        expiresAt: "2026-07-14T06:00:00.000Z",
       },
     };
 

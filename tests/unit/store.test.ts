@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
-import { useMuseboardStore } from "@/lib/store/museboard-store";
+import {
+  upgradePersistedMuseboardData,
+  useMuseboardStore,
+} from "@/lib/store/museboard-store";
 
 function starterWorkspace() {
   return buildStarterWorkspace({
@@ -66,6 +69,50 @@ describe("Museboard demo store", () => {
     expect(state.dataMode).toBe("sample");
     expect(state.onboardingComplete).toBe(true);
     expect(state.creator?.name).toBe("Aarav");
+  });
+
+  it("upgrades a pre-Task-5 opportunity without discarding the saved creator", () => {
+    const workspace = starterWorkspace();
+    const legacy = {
+      ...useMuseboardStore.getState(),
+      onboardingComplete: true,
+      creator: workspace.creator,
+      opportunities: workspace.opportunities.map((opportunity) => {
+        const candidate = structuredClone(opportunity) as unknown as Record<
+          string,
+          unknown
+        >;
+        delete candidate.format;
+        delete candidate.pillar;
+        delete candidate.readiness;
+        delete candidate.goal;
+        delete candidate.geography;
+        delete candidate.evidence;
+        candidate.provenance = {
+          provider: opportunity.provenance.provider,
+          mode: opportunity.provenance.mode,
+          fetchedAt: opportunity.provenance.fetchedAt,
+        };
+        return candidate;
+      }),
+    };
+
+    const upgraded = upgradePersistedMuseboardData(legacy) as {
+      creator?: { audience: string };
+      opportunities: Array<{
+        format: string;
+        provenance: { sourceLabel: string; expiresAt: string };
+      }>;
+    };
+
+    expect(upgraded.creator?.audience).toBe("Curious builders");
+    expect(upgraded.opportunities[0]).toMatchObject({
+      format: "tutorial",
+      provenance: {
+        sourceLabel: "museboard-onboarding",
+        expiresAt: expect.any(String),
+      },
+    });
   });
 
   it("rejects malformed provider metrics without changing state", () => {
