@@ -78,7 +78,7 @@
 .plans li { display: flex; align-items: center; gap: .45rem; }
 .plans li svg { flex: 0 0 auto; color: var(--success); }
 
-.plans button, .footer > button {
+.plans button, .footerActions > button, .footerActions > a {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -89,9 +89,10 @@
   background: var(--ink);
   color: var(--background);
   font-weight: 800;
+  text-decoration: none;
 }
 
-.plans button:disabled, .footer > button:disabled { cursor: not-allowed; opacity: .46; }
+.plans button:disabled, .footerActions > button:disabled { cursor: not-allowed; opacity: .46; }
 
 .footer {
   display: flex;
@@ -103,7 +104,8 @@
 
 .status { display: flex; gap: .65rem; align-items: center; color: var(--muted); font-size: .84rem; }
 .status svg { flex: 0 0 auto; color: var(--cobalt); }
-.footer > button { border: 1px solid var(--border); background: transparent; color: var(--ink); }
+.footerActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .75rem; }
+.footerActions > button, .footerActions > a { border: 1px solid var(--border); background: transparent; color: var(--ink); }
 
 @media (max-width: 72rem) {
   .plans article { grid-template-columns: 1fr 1fr; }
@@ -118,6 +120,8 @@
   .plans article { grid-template-columns: 1fr auto; gap: 1rem; }
   .plans button { grid-column: 1 / -1; width: 100%; }
   .footer { align-items: stretch; flex-direction: column; }
+  .footerActions { justify-content: stretch; }
+  .footerActions > button, .footerActions > a { flex: 1 1 12rem; }
 }
 
 @media (max-width: 30rem) {

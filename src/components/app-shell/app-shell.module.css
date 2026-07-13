@@ -221,7 +221,7 @@
   }
 
   .mobileNavLink[data-active="true"] {
-    background: color-mix(in srgb, var(--coral) 12%, transparent);
+    background: color-mix(in srgb, var(--coral) 5%, transparent);
     color: var(--coral);
   }
 

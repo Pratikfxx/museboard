@@ -26,8 +26,10 @@ function downloadJson(payload: object, filename: string): void {
   const anchor = document.createElement("a");
   anchor.href = href;
   anchor.download = filename;
+  document.body.append(anchor);
   anchor.click();
-  URL.revokeObjectURL(href);
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(href), 0);
 }
 
 export function AccountDataWorkspace() {

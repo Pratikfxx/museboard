@@ -43,4 +43,13 @@ describe("billing settings", () => {
     expect(config.billingMode).toBe("unavailable");
     expect(config.features.liveBilling).toBe(false);
   });
+
+  it("links billing settings to local data controls", () => {
+    render(<BillingWorkspace mode="demo" />);
+
+    expect(screen.getByRole("link", { name: /data controls/i })).toHaveAttribute(
+      "href",
+      "/app/settings/data",
+    );
+  });
 });

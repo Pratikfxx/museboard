@@ -8,7 +8,13 @@ for (const route of ["/", "/app/today", "/app/plan"] as const) {
     await installSampleWorkspace(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(route);
-    await page.locator("main, body").first().waitFor();
+    if (route === "/app/today") {
+      await expect(page.getByRole("heading", { name: "Good morning, Maya" })).toBeVisible();
+    } else if (route === "/app/plan") {
+      await expect(page.getByRole("heading", { name: /production week/i })).toBeVisible();
+    } else {
+      await page.getByRole("main").waitFor();
+    }
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
@@ -30,4 +36,18 @@ test("keyboard users can skip straight to the workspace", async ({ page }) => {
   await expect(skip).toBeFocused();
   await skip.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
+});
+
+test("dark Today keeps the same serious-violation accessibility gate", async ({ page }) => {
+  await installSampleWorkspace(page);
+  await page.addInitScript(() => localStorage.setItem("museboard-theme", "dark"));
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.goto("/app/today");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("heading", { name: "Good morning, Maya" })).toBeVisible();
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+    .analyze();
+  expect(results.violations.filter(({ impact }) => impact === "serious" || impact === "critical")).toEqual([]);
 });

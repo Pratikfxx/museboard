@@ -448,7 +448,7 @@
   padding: 0 18px 0 50%;
   border: 1px solid var(--coral);
   background: var(--coral);
-  color: #fff;
+  color: var(--background);
 }
 
 .rewriteButton {
@@ -865,7 +865,7 @@
   border-radius: 999px;
   background: var(--coral);
   padding: 0 24px;
-  color: white;
+  color: var(--background);
   font-weight: 700;
   text-decoration: none;
 }
@@ -1047,6 +1047,12 @@
 
   .evidence {
     margin-top: 20px;
+  }
+
+  .evidence .audienceLine {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .angleField {

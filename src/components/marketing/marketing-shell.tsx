@@ -46,6 +46,9 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
             <Link className="min-h-11 py-2.5 hover:text-ink" href="/pricing">Pricing</Link>
             <Link className="min-h-11 py-2.5 hover:text-ink" href="/signup">Sample access</Link>
+            <Link className="min-h-11 py-2.5 hover:text-ink" href="/privacy">Privacy</Link>
+            <Link className="min-h-11 py-2.5 hover:text-ink" href="/terms">Terms</Link>
+            <Link className="min-h-11 py-2.5 hover:text-ink" href="/data-policy">Data policy</Link>
             <span className="min-h-11 py-2.5">No live accounts connected</span>
           </nav>
         </div>

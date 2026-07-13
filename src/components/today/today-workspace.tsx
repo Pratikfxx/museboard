@@ -317,26 +317,6 @@ export function TodayWorkspace() {
               <NotePencil aria-hidden="true" size={18} />
             </div>
 
-            <form className={styles.quickCapture} onSubmit={handleCapture}>
-              <label htmlFor="quick-capture">Quick capture</label>
-              <div>
-                <textarea
-                  id="quick-capture"
-                  maxLength={500}
-                  onChange={(event) => {
-                    setCapture(event.target.value);
-                    setCaptureStatus("");
-                  }}
-                  placeholder="Save the spark before it disappears"
-                  rows={2}
-                  value={capture}
-                />
-                <button disabled={!capture.trim()} type="submit">Save idea</button>
-              </div>
-              <small>{isOnline ? "Sample mode · stored on this device" : "Offline · this stays on your device"}</small>
-              <p aria-live="polite">{captureStatus}</p>
-            </form>
-
             <ol aria-label="Content workflow" className={styles.stageSpine}>
               {todayStages.map((stage, index) => {
                 const state = stageState(activeContent.stage, stage);
@@ -430,6 +410,26 @@ export function TodayWorkspace() {
                 <LazyIdeaSculpture />
               </Suspense>
             </div>
+
+            <form className={styles.quickCapture} onSubmit={handleCapture}>
+              <label htmlFor="quick-capture">Quick capture</label>
+              <div>
+                <textarea
+                  id="quick-capture"
+                  maxLength={500}
+                  onChange={(event) => {
+                    setCapture(event.target.value);
+                    setCaptureStatus("");
+                  }}
+                  placeholder="Save the spark before it disappears"
+                  rows={2}
+                  value={capture}
+                />
+                <button disabled={!capture.trim()} type="submit">Save idea</button>
+              </div>
+              <small>{isOnline ? "Sample mode · stored on this device" : "Offline · this stays on your device"}</small>
+              <p aria-live="polite">{captureStatus}</p>
+            </form>
 
             <section className={styles.collaborators}>
               <p className={styles.eyebrow}>Collaborators</p>

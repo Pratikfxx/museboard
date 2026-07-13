@@ -80,7 +80,6 @@ test("opportunity tabs shape an idea and validate Vision metadata without overfl
 
   await page.goto("/app/internal/opportunities");
   await expect(
-    page.getByRole("heading", { name: /page could not be found/i }),
+    page.getByRole("heading", { name: /couldn.t find that view/i }),
   ).toBeVisible();
-
 });

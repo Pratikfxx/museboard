@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowSquareOut, CheckCircle, CreditCard, ShieldCheck } from "@phosphor-icons/react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { PLAN_CATALOG, type Plan } from "@/domain/entitlements";
@@ -136,9 +137,12 @@ export function BillingWorkspace({ mode, unavailableReason }: BillingWorkspacePr
           <CreditCard aria-hidden="true" size={20} />
           <span>{status ?? (mode === "demo" ? "Explore paid capabilities freely. No payment was made." : "Plan access changes only after a verified billing event.")}</span>
         </div>
-        <button disabled={mode !== "live" || pending !== undefined} onClick={() => void manageBilling()} type="button">
-          {pending === "portal" ? "Opening portal…" : "Manage billing on Stripe"}
-        </button>
+        <div className={styles.footerActions}>
+          <Link href="/app/settings/data">Data controls</Link>
+          <button disabled={mode !== "live" || pending !== undefined} onClick={() => void manageBilling()} type="button">
+            {pending === "portal" ? "Opening portal…" : "Manage billing on Stripe"}
+          </button>
+        </div>
       </footer>
     </section>
   );

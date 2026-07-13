@@ -5,7 +5,14 @@ import { getFeatureConfig } from "@/lib/config/features";
 
 export async function proxy(request: NextRequest) {
   const config = getFeatureConfig();
+  const protectsOperations = request.nextUrl.pathname === "/app/internal/ops";
   if (!config.supabase.configured || !config.supabase.url || !config.supabase.publishableKey) {
+    if (protectsOperations) {
+      return new NextResponse(null, {
+        status: 404,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
     return NextResponse.next({ request });
   }
 
@@ -23,7 +30,13 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getClaims();
+  const { data, error } = await supabase.auth.getClaims();
+  if (protectsOperations && (error || !data?.claims)) {
+    return new NextResponse(null, {
+      status: 404,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   return response;
 }
 

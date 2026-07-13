@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import DataPolicyPage from "@/app/data-policy/page";
 import PrivacyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
+import { MarketingShell } from "@/components/marketing/marketing-shell";
+import { ThemeProvider } from "@/components/ui/theme-provider";
 
 const DRAFT_BANNER = "Pre-launch draft · pending legal review";
 
@@ -49,5 +51,14 @@ describe("legal trust surfaces", () => {
     expect(within(nav).getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
     expect(within(nav).getByRole("link", { name: "Data policy" })).toHaveAttribute("href", "/data-policy");
     expect(screen.getByRole("link", { name: /back to museboard/i })).toHaveAttribute("href", "/");
+  });
+
+  it("keeps every trust document reachable from the public product footer", () => {
+    render(<ThemeProvider><MarketingShell><main>Product</main></MarketingShell></ThemeProvider>);
+    const footer = screen.getByRole("navigation", { name: "Footer" });
+
+    expect(within(footer).getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");
+    expect(within(footer).getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
+    expect(within(footer).getByRole("link", { name: "Data policy" })).toHaveAttribute("href", "/data-policy");
   });
 });
