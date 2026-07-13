@@ -1,0 +1,57 @@
+.page {
+  min-height: 100%;
+  padding: 3rem clamp(1.25rem, 4vw, 3.5rem) 7rem;
+  color: var(--ink);
+}
+
+.eyebrow {
+  margin: 0 0 .5rem;
+  color: var(--coral);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.page h1 {
+  margin: 0;
+  font-family: var(--font-instrument-serif), serif;
+  font-size: clamp(3rem, 6vw, 5rem);
+  font-weight: 400;
+  line-height: .94;
+}
+
+.identity {
+  margin: 1rem 0 2rem;
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block: 3px solid var(--ink);
+}
+
+.summary article { min-height: 8rem; padding: 1.25rem; border-right: 1px solid var(--border); }
+.summary article:last-child { border-right: 0; }
+.summary span { display: block; color: var(--muted); font-size: .74rem; }
+.summary strong { font-family: var(--font-instrument-serif), serif; font-size: 2rem; font-weight: 400; }
+
+.empty {
+  display: grid;
+  max-width: 48rem;
+  gap: .5rem;
+  padding: 3rem 0;
+}
+
+.empty h2 { margin: 0; font-family: var(--font-instrument-serif), serif; font-size: 2.5rem; font-weight: 400; }
+.empty p { margin: 0; color: var(--muted); font-size: .86rem; }
+.empty button { width: fit-content; min-height: 44px; margin-top: .75rem; padding: .7rem 1rem; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+
+@media (max-width: 42rem) {
+  .page { padding: 2rem 1rem 7rem; }
+  .summary { grid-template-columns: 1fr; }
+  .summary article { min-height: 0; border-right: 0; border-bottom: 1px solid var(--border); }
+  .summary article:last-child { border-bottom: 0; }
+}

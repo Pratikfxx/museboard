@@ -70,6 +70,7 @@ import {
   transitionStage,
   type WorkshopVersionPatch,
 } from "@/domain/workflow";
+import { createClearedSampleWorkspace } from "@/lib/account/sample-workspace";
 import {
   CREATOR_OUTCOMES,
   createDemoState,
@@ -401,6 +402,7 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
 
 interface MuseboardActions {
   resetDemo: () => void;
+  clearSampleWorkspace: () => boolean;
   setDemoPlan: (plan: Plan) => boolean;
   completeOnboarding: (workspace: StarterWorkspace) => void;
   selectOpportunity: (opportunityId: string) => void;
@@ -529,6 +531,13 @@ export const useMuseboardStore = create<MuseboardState>()(
       ...createDemoState(),
 
       resetDemo: () => set(createDemoState()),
+
+      clearSampleWorkspace: () => {
+        const state = get();
+        if (state.dataMode !== "sample") return false;
+        set(createClearedSampleWorkspace(state.entitlementUsage.resetAt));
+        return true;
+      },
 
       setDemoPlan: (plan) => {
         const parsedPlan = z.enum(["free", "creator", "pro", "studio"]).safeParse(plan);
