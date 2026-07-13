@@ -13,6 +13,23 @@ export type WorkflowAction =
     }
   | { type: "MOVE"; stage: WorkflowStage; at: string };
 
+export type WorkshopVersionPatch = Partial<
+  Pick<
+    ContentVersion,
+    | "angle"
+    | "selectedHookId"
+    | "selectedHookText"
+    | "evidence"
+    | "outline"
+    | "script"
+    | "shotList"
+    | "assets"
+    | "sourceRequiredClaims"
+    | "platformVariants"
+    | "generationProvenance"
+  >
+>;
+
 function currentVersion(item: ContentItem): ContentVersion {
   const version = item.versions.find(
     (candidate) => candidate.id === item.currentVersionId,
@@ -58,6 +75,44 @@ export function transitionStage(
       ? { ...item.approval, status: "stale" }
       : undefined,
     updatedAt: action.at,
+  };
+}
+
+export function hasRequiredEvidence(version: ContentVersion): boolean {
+  return (
+    !version.sourceRequiredClaims?.length ||
+    Boolean(version.evidence?.some(({ attached }) => attached))
+  );
+}
+
+export function saveVersionAndAdvance(
+  item: ContentItem,
+  patch: WorkshopVersionPatch,
+  at: string,
+  nextStage?: WorkflowStage,
+): ContentItem {
+  const priorVersion = currentVersion(item);
+  const number = Math.max(...item.versions.map((version) => version.number), 0) + 1;
+  const version: ContentVersion = {
+    ...priorVersion,
+    ...patch,
+    id: `${item.id}-v${number}`,
+    contentId: item.id,
+    number,
+    createdAt: at,
+  };
+
+  if (nextStage === "ready" && !hasRequiredEvidence(version)) {
+    return item;
+  }
+
+  return {
+    ...item,
+    stage: nextStage ?? item.stage,
+    currentVersionId: version.id,
+    versions: [...item.versions, version],
+    approval: item.approval ? { ...item.approval, status: "stale" } : undefined,
+    updatedAt: at,
   };
 }
 

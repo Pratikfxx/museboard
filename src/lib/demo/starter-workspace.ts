@@ -261,6 +261,8 @@ export function buildStarterWorkspace(
       voiceTraits: splitTraits(input.voice),
       boundaries: splitBoundaries(input.boundaries),
       contentPillars: CONTENT_PILLARS[input.archetype],
+      timezone: "UTC",
+      recoveryDays: [4],
     },
     opportunities,
     selectedOpportunityId: selectedOpportunity.id,

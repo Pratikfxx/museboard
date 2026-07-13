@@ -33,13 +33,43 @@ export const CREATOR_ARCHETYPES = [
 export type CreatorArchetype = (typeof CREATOR_ARCHETYPES)[number];
 export type DataMode = "sample" | "curated" | "live";
 
+export interface ContentEvidence {
+  id: string;
+  label: string;
+  summary: string;
+  url?: string;
+  attached: boolean;
+}
+
+export interface GenerationProvenance {
+  provider: string;
+  model: string;
+  promptVersion: string;
+  inputHash: string;
+  voiceProfileVersion: string;
+  opportunityId?: string;
+  evidenceIds: string[];
+  generatedAt: string;
+  latencyMs: number;
+  outputSchemaVersion: string;
+  mode: "sample" | "live";
+}
+
 export interface ContentVersion {
   id: string;
   contentId: string;
   number: number;
   angle: string;
   selectedHookId?: string;
+  selectedHookText?: string;
+  evidence?: ContentEvidence[];
+  outline?: string[];
   script: string;
+  shotList?: string[];
+  assets?: string[];
+  sourceRequiredClaims?: string[];
+  platformVariants?: Partial<Record<ContentPlatform, string>>;
+  generationProvenance?: GenerationProvenance;
   createdAt: string;
 }
 
@@ -117,7 +147,39 @@ export const contentVersionSchema: z.ZodType<ContentVersion> = z.object({
   number: z.number().int().positive(),
   angle: z.string(),
   selectedHookId: z.string().min(1).optional(),
+  selectedHookText: z.string().optional(),
+  evidence: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        summary: z.string().min(1),
+        url: z.url().optional(),
+        attached: z.boolean(),
+      }),
+    )
+    .optional(),
+  outline: z.array(z.string().min(1)).optional(),
   script: z.string(),
+  shotList: z.array(z.string().min(1)).optional(),
+  assets: z.array(z.string().min(1)).optional(),
+  sourceRequiredClaims: z.array(z.string().min(1)).optional(),
+  platformVariants: z.record(contentPlatformSchema, z.string()).optional(),
+  generationProvenance: z
+    .object({
+      provider: z.string().min(1),
+      model: z.string().min(1),
+      promptVersion: z.string().min(1),
+      inputHash: z.string().min(1),
+      voiceProfileVersion: z.string().min(1),
+      opportunityId: z.string().min(1).optional(),
+      evidenceIds: z.array(z.string().min(1)),
+      generatedAt: z.iso.datetime(),
+      latencyMs: z.number().nonnegative(),
+      outputSchemaVersion: z.string().min(1),
+      mode: z.enum(["sample", "live"]),
+    })
+    .optional(),
   createdAt: z.iso.datetime(),
 });
 

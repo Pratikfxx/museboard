@@ -40,6 +40,15 @@ export interface CreatorProfile {
   voiceTraits: string[];
   boundaries: string[];
   contentPillars: [string, string, string];
+  timezone?: string;
+  recoveryDays?: number[];
+}
+
+export interface PlannerUndo {
+  taskId: string;
+  before: PlannerTask;
+  after: PlannerTask;
+  label: string;
 }
 
 export interface StarterWorkspace {
@@ -65,6 +74,7 @@ export interface DemoMuseboardData {
   hooks: HookOption[];
   content: ContentItem[];
   plannerTasks: PlannerTask[];
+  plannerUndo?: PlannerUndo;
   comments: Comment[];
   exports: ExportManifest[];
   publishReceipts: PublishReceipt[];
@@ -225,6 +235,7 @@ export function createDemoState(): DemoMuseboardData {
         opportunityScore: 88,
       },
     ],
+    plannerUndo: undefined,
     comments: [],
     exports: [],
     publishReceipts: [],

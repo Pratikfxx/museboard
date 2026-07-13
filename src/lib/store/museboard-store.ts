@@ -13,7 +13,13 @@ import {
   metricSampleDedupKey,
   metricSamplesSchema,
 } from "@/domain/analytics";
-import { entitlementUsageSchema } from "@/domain/entitlements";
+import {
+  commitEntitlement,
+  entitlementUsageSchema,
+  releaseEntitlement,
+  reserveEntitlement,
+  type EntitlementDecision,
+} from "@/domain/entitlements";
 import { buildExportManifest, exportManifestSchema } from "@/domain/export";
 import {
   ideaRecordSchema,
@@ -21,7 +27,7 @@ import {
   visionReferenceSchema,
 } from "@/domain/opportunities";
 import type { VisionReference } from "@/domain/opportunities";
-import { plannerTaskSchema } from "@/domain/planner";
+import { plannerTaskSchema, type PlannerTask } from "@/domain/planner";
 import {
   commentSchema,
   contentPlatformSchema,
@@ -38,12 +44,18 @@ import type {
   PublishReceipt,
   WorkflowStage,
 } from "@/domain/schema";
-import { approveCurrentVersion, transitionStage } from "@/domain/workflow";
+import {
+  approveCurrentVersion,
+  saveVersionAndAdvance,
+  transitionStage,
+  type WorkshopVersionPatch,
+} from "@/domain/workflow";
 import {
   CREATOR_OUTCOMES,
   createDemoState,
   type CreatorProfile,
   type DemoMuseboardData,
+  type PlannerUndo,
   type StarterWorkspace,
 } from "@/lib/demo/fixtures";
 import {
@@ -104,6 +116,8 @@ const creatorProfileSchema: z.ZodType<CreatorProfile> = z.object({
     z.string().trim().min(1),
     z.string().trim().min(1),
   ]),
+  timezone: z.string().min(1).optional(),
+  recoveryDays: z.array(z.number().int().min(0).max(6)).optional(),
 });
 
 const starterWorkspaceSchema: z.ZodType<StarterWorkspace> = z
@@ -214,6 +228,14 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   hooks: z.array(hookOptionSchema),
   content: z.array(contentItemSchema),
   plannerTasks: z.array(plannerTaskSchema),
+  plannerUndo: z
+    .object({
+      taskId: z.string().min(1),
+      before: plannerTaskSchema,
+      after: plannerTaskSchema,
+      label: z.string().min(1),
+    })
+    .optional(),
   comments: z.array(commentSchema),
   exports: z.array(exportManifestSchema),
   publishReceipts: z.array(publishReceiptSchema),
@@ -310,7 +332,26 @@ interface MuseboardActions {
   removeVisionReference: (referenceId: string) => void;
   toggleReferenceSelection: (referenceId: string) => boolean;
   chooseHook: (contentId: string, hookId: string, at?: string) => void;
+  saveWorkshopVersion: (input: {
+    contentId: string;
+    patch: WorkshopVersionPatch;
+    nextStage?: WorkflowStage;
+    at?: string;
+  }) => boolean;
   moveTask: (contentId: string, stage: WorkflowStage, at?: string) => void;
+  reschedulePlannerTask: (
+    taskId: string,
+    scheduledFor: string,
+    timezone?: string,
+  ) => boolean;
+  updatePlannerTaskStatus: (
+    taskId: string,
+    status: NonNullable<PlannerTask["status"]>,
+  ) => boolean;
+  undoPlannerChange: () => boolean;
+  reserveStrategistPack: () => EntitlementDecision;
+  commitStrategistPack: () => void;
+  releaseStrategistPack: () => void;
   addComment: (
     contentId: string,
     body: string,
@@ -345,6 +386,7 @@ function persistedState(state: MuseboardState): DemoMuseboardData {
     hooks: state.hooks,
     content: state.content,
     plannerTasks: state.plannerTasks,
+    plannerUndo: state.plannerUndo,
     comments: state.comments,
     exports: state.exports,
     publishReceipts: state.publishReceipts,
@@ -375,6 +417,7 @@ export const useMuseboardStore = create<MuseboardState>()(
           hooks: parsed.hooks,
           content: parsed.content,
           plannerTasks: parsed.plannerTasks,
+          plannerUndo: undefined,
         });
       },
 
@@ -565,6 +608,19 @@ export const useMuseboardStore = create<MuseboardState>()(
         }));
       },
 
+      saveWorkshopVersion: ({ contentId, patch, nextStage, at = now() }) => {
+        const item = get().content.find(({ id }) => id === contentId);
+        if (!item) return false;
+        const updated = saveVersionAndAdvance(item, patch, at, nextStage);
+        if (updated === item) return false;
+        set((state) => ({
+          content: state.content.map((candidate) =>
+            candidate.id === contentId ? updated : candidate,
+          ),
+        }));
+        return true;
+      },
+
       moveTask: (contentId, stage, at = now()) => {
         const parsedStage = workflowStageSchema.parse(stage);
         set((state) => ({
@@ -574,6 +630,96 @@ export const useMuseboardStore = create<MuseboardState>()(
               : item,
           ),
         }));
+      },
+
+      reschedulePlannerTask: (taskId, scheduledFor, timezone) => {
+        const parsedDate = z.iso.datetime().safeParse(scheduledFor);
+        const task = get().plannerTasks.find(({ id }) => id === taskId);
+        if (!parsedDate.success || !task) return false;
+        const after: PlannerTask = {
+          ...task,
+          scheduledFor: parsedDate.data,
+          dueAt: task.dueAt ?? parsedDate.data,
+          timezone: timezone ?? task.timezone,
+          status: task.status === "missed" ? "planned" : (task.status ?? "planned"),
+        };
+        const undo: PlannerUndo = {
+          taskId,
+          before: task,
+          after,
+          label: `Moved ${task.title}`,
+        };
+        set((state) => ({
+          plannerTasks: state.plannerTasks.map((candidate) =>
+            candidate.id === taskId ? after : candidate,
+          ),
+          plannerUndo: undo,
+        }));
+        return true;
+      },
+
+      updatePlannerTaskStatus: (taskId, status) => {
+        const parsedStatus = z
+          .enum(["planned", "in_progress", "done", "missed", "cancelled"])
+          .safeParse(status);
+        const task = get().plannerTasks.find(({ id }) => id === taskId);
+        if (!parsedStatus.success || !task) return false;
+        const after = { ...task, status: parsedStatus.data };
+        set((state) => ({
+          plannerTasks: state.plannerTasks.map((candidate) =>
+            candidate.id === taskId ? after : candidate,
+          ),
+          plannerUndo: {
+            taskId,
+            before: task,
+            after,
+            label: `Updated ${task.title}`,
+          },
+        }));
+        return true;
+      },
+
+      undoPlannerChange: () => {
+        const undo = get().plannerUndo;
+        if (!undo) return false;
+        set((state) => ({
+          plannerTasks: state.plannerTasks.map((task) =>
+            task.id === undo.taskId ? undo.before : task,
+          ),
+          plannerUndo: undefined,
+        }));
+        return true;
+      },
+
+      reserveStrategistPack: () => {
+        const reservation = reserveEntitlement(
+          get().entitlementUsage,
+          "strategist_pack",
+        );
+        if (reservation.decision.allowed) {
+          set({ entitlementUsage: reservation.usage });
+        }
+        return reservation.decision;
+      },
+
+      commitStrategistPack: () => {
+        if ((get().entitlementUsage.reserved.strategist_pack ?? 0) < 1) return;
+        set({
+          entitlementUsage: commitEntitlement(
+            get().entitlementUsage,
+            "strategist_pack",
+          ),
+        });
+      },
+
+      releaseStrategistPack: () => {
+        if ((get().entitlementUsage.reserved.strategist_pack ?? 0) < 1) return;
+        set({
+          entitlementUsage: releaseEntitlement(
+            get().entitlementUsage,
+            "strategist_pack",
+          ),
+        });
       },
 
       addComment: (contentId, body, author = "You", at = now()) => {
