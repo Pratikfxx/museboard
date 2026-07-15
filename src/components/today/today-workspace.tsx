@@ -398,8 +398,8 @@ export function TodayWorkspace() {
 
           <aside className={styles.contextColumn} aria-label="Idea and collaborator context">
             <div className={styles.desktopSculpture}>
-              <Suspense fallback={<IdeaSculptureFallback reason="loading" />}>
-                <LazyIdeaSculpture />
+              <Suspense fallback={<IdeaSculptureFallback reason="loading" title={selectedOpportunity.title} />}>
+                <LazyIdeaSculpture title={selectedOpportunity.title} />
               </Suspense>
             </div>
 

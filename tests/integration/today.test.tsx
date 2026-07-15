@@ -251,7 +251,7 @@ describe("Idea sculpture fallback", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses the real themed raster and semantic label for reduced motion", () => {
+  it("uses the semantic signal-to-post preview for reduced motion", () => {
     vi.stubGlobal(
       "matchMedia",
       vi.fn().mockImplementation((query: string) => ({
@@ -278,15 +278,12 @@ describe("Idea sculpture fallback", () => {
     expect(
       container.querySelector('[data-renderer="static"]'),
     ).toHaveAttribute("data-fallback-reason", "reduced-motion");
-    const images = container.querySelectorAll('img[src*="idea-sculpture-"]');
-    expect(images).toHaveLength(1);
-    expect(images[0]).toHaveAttribute(
-      "src",
-      expect.stringContaining("idea-sculpture-light.png"),
+    expect(container.querySelector('[data-renderer="static"]')).toHaveTextContent(
+      "Audience signal",
     );
-    expect(images[0]).toHaveAttribute("loading", "eager");
-    expect(screen.getByText("Process stories")).toBeVisible();
-    expect(screen.getByText("Imperfection as trust")).toBeVisible();
-    expect(screen.getByText("Creative courage")).toBeVisible();
+    expect(screen.getByText("1.8× saves")).toBeVisible();
+    expect(screen.getByText("Honest process")).toBeVisible();
+    expect(screen.getByText("18 sec reel")).toBeVisible();
+    expect(screen.getByText("READY TO SHAPE")).toBeVisible();
   });
 });

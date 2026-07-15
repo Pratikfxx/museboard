@@ -530,11 +530,255 @@
   pointer-events: none;
 }
 
-.sculptureCanvas > div,
-.sculptureCanvas canvas {
+.sculptureCanvas > div {
   width: 100% !important;
   height: 100% !important;
   pointer-events: none !important;
+}
+
+.signalPostPreview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    linear-gradient(var(--border), var(--border)) 50% 0 / 1px 100% no-repeat,
+    var(--background);
+}
+
+.signalPaths {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: color-mix(in srgb, var(--muted) 38%, transparent);
+  stroke-dasharray: 5 7;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+.signalPaths path {
+  transform-origin: center;
+}
+
+.signalPostPreview[data-animated="true"] .signalPaths path {
+  animation: signal-path 2.8s linear infinite;
+}
+
+.signalPostPreview[data-animated="true"] .signalPaths path:nth-child(2) {
+  animation-delay: -0.8s;
+}
+
+.signalPostPreview[data-animated="true"] .signalPaths path:nth-child(3) {
+  animation-delay: -1.6s;
+}
+
+.signalNodes {
+  position: absolute;
+  inset: 0;
+}
+
+.signalNodes > div {
+  position: absolute;
+  left: 0;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  width: 135px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.signalNodes > div:nth-child(1) {
+  top: 14%;
+}
+
+.signalNodes > div:nth-child(2) {
+  top: 44%;
+}
+
+.signalNodes > div:nth-child(3) {
+  top: 73%;
+}
+
+.signalNodes svg {
+  width: 30px;
+  color: var(--muted);
+}
+
+.signalNodes [data-tone="cobalt"] svg {
+  color: var(--cobalt);
+}
+
+.signalNodes [data-tone="warning"] svg {
+  color: var(--warning);
+}
+
+.signalNodes [data-tone="coral"] svg {
+  color: var(--coral);
+}
+
+.signalNodes span {
+  min-width: 0;
+}
+
+.signalNodes small,
+.signalNodes b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signalNodes small {
+  color: var(--muted);
+  font-size: 0.58rem;
+  line-height: 1.25;
+}
+
+.signalNodes b {
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 0.66rem;
+  line-height: 1.25;
+}
+
+.postPreviewCard {
+  position: absolute;
+  top: 8%;
+  right: 0;
+  display: grid;
+  width: 158px;
+  min-height: 335px;
+  grid-template-rows: auto 154px 1fr auto;
+  gap: 11px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: var(--surface);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--ink) 13%, transparent);
+}
+
+.postPreviewCard > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.5rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+}
+
+.postPreviewCard > header b {
+  color: var(--success);
+  font-size: 0.45rem;
+}
+
+.postPreviewFrame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--ink);
+}
+
+.playMark {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 50%;
+  color: var(--background);
+}
+
+.waveform {
+  position: absolute;
+  right: 13px;
+  bottom: 15px;
+  left: 13px;
+  display: flex;
+  height: 55px;
+  align-items: end;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.waveform i {
+  width: 6px;
+  max-height: 52px;
+  border-radius: 999px;
+  background: var(--coral);
+  transform-origin: bottom;
+}
+
+.signalPostPreview[data-animated="true"] .waveform i {
+  animation: waveform-pulse 1.15s ease-in-out infinite alternate;
+}
+
+.signalPostPreview[data-animated="true"] .waveform i:nth-child(2n) {
+  animation-delay: -0.5s;
+}
+
+.signalPostPreview[data-animated="true"] .waveform i:nth-child(3n) {
+  animation-delay: -0.8s;
+}
+
+.postPreviewCard > p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-instrument-serif), serif;
+  font-size: 1rem;
+  line-height: 1.04;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.postPreviewCard > footer {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.52rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.postPreviewCard > footer i {
+  height: 1px;
+  background: var(--border);
+}
+
+.postPreviewCard > footer b {
+  color: var(--coral);
+}
+
+@keyframes signal-path {
+  to {
+    stroke-dashoffset: -48;
+  }
+}
+
+@keyframes waveform-pulse {
+  from {
+    transform: scaleY(0.58);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
 }
 
 .sculptureCaption {
@@ -545,57 +789,6 @@
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-.sculptureLabels {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  pointer-events: none;
-}
-
-.sculptureLabels li {
-  position: absolute;
-  right: 2px;
-  display: inline-flex;
-  max-width: 74px;
-  align-items: flex-start;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.sculptureLabels li:nth-child(1) {
-  top: 23%;
-}
-
-.sculptureLabels li:nth-child(2) {
-  top: 49%;
-}
-
-.sculptureLabels li:nth-child(3) {
-  top: 73%;
-}
-
-.sculptureLabels svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
-
-.sculptureLabels li[data-tone="cobalt"] svg {
-  color: var(--cobalt);
-}
-
-.sculptureLabels li[data-tone="warning"] svg {
-  color: var(--warning);
-}
-
-.sculptureLabels li[data-tone="coral"] svg {
-  color: var(--coral);
 }
 
 .sculptureControl {
@@ -632,11 +825,6 @@
   color: var(--muted);
   font-size: 0.75rem;
   text-transform: capitalize;
-}
-
-.sculptureFallbackImage {
-  object-fit: cover;
-  object-position: 56% center;
 }
 
 .collaborators {
