@@ -673,13 +673,14 @@ describe("Curated operator contract and craft guidance", () => {
     });
   });
 
-  it("keeps the unlinked ingestion console owner-only and previews the same opportunity component", async () => {
-    const user = userEvent.setup();
+  it("keeps the unlinked ingestion console owner-only and previews the same opportunity component", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
     render(<OwnerOpportunityConsole />);
 
     expect(screen.getByText(/owner-only operator view/i)).toBeVisible();
     expect(screen.getByText(/no ingestion endpoint is connected/i)).toBeVisible();
-    await user.click(
+    fireEvent.click(
       screen.getByRole("button", { name: /preview exact opportunity/i }),
     );
     expect(
