@@ -698,7 +698,11 @@ export const useMuseboardStore = create<MuseboardState>()(
     (set, get) => ({
       ...createDemoState(),
 
-      resetDemo: () => set(createDemoState()),
+      resetDemo: () => {
+        const demo = createDemoState();
+        set(demo);
+        useThinkingRoomStore.getState().resetSample(demo.memberships);
+      },
 
       clearSampleWorkspace: () => {
         const state = get();
@@ -722,7 +726,13 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       completeOnboarding: (workspace) => {
-        set(createOnboardedWorkspacePayload(workspacePayloadFromState(get()), workspace, "sample"));
+        const onboarded = createOnboardedWorkspacePayload(
+          workspacePayloadFromState(get()),
+          workspace,
+          "sample",
+        );
+        set(onboarded);
+        useThinkingRoomStore.getState().resetSample(onboarded.memberships);
       },
 
       hydrateLiveWorkspace: (payload) => {

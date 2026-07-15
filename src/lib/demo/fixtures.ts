@@ -131,10 +131,13 @@ export interface SampleThinkingRoomData {
 export function createSampleThinkingRoomData(
   memberships: readonly Membership[],
 ): SampleThinkingRoomData {
-  const owner = memberships.find(({ id }) => id === "member-owner");
-  const collaborator = memberships.find(({ id }) => id === "member-sam");
+  const activeMemberships = memberships.filter(
+    ({ status }) => status === "active",
+  );
+  const owner = activeMemberships.find(({ role }) => role === "owner");
+  const collaborator = activeMemberships.find(({ id }) => id !== owner?.id) ?? owner;
   if (!owner || !collaborator) {
-    throw new Error("Sample Thinking Room requires the current sample workspace members");
+    throw new Error("Sample Thinking Room requires an active workspace owner");
   }
 
   const roomId = "thinking-room-sample-direction";

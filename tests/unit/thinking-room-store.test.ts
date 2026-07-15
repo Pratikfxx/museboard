@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import type { Membership } from "@/domain/collaboration";
 import { createDemoState } from "@/lib/demo/fixtures";
+import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
 import {
   THINKING_ROOM_STORAGE_KEY,
   useThinkingRoomStore,
@@ -16,7 +18,6 @@ describe("Thinking Room sample store", () => {
   beforeEach(() => {
     localStorage.clear();
     useMuseboardStore.getState().resetDemo();
-    useThinkingRoomStore.getState().resetSample();
   });
 
   it("hydrates a plainly labelled sample room using current member snapshots", () => {
@@ -44,6 +45,87 @@ describe("Thinking Room sample store", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("resets sample authors from the supplied active memberships", () => {
+    const activeMemberships: Membership[] = [
+      {
+        id: "custom-owner-71",
+        email: "anika@example.com",
+        displayNameSnapshot: "Anika Rao",
+        role: "owner",
+        status: "active",
+        invitedAt: CREATED_AT,
+        joinedAt: CREATED_AT,
+      },
+      {
+        id: "custom-editor-42",
+        email: "jo@example.com",
+        displayNameSnapshot: "Jo Mercer",
+        role: "editor",
+        status: "active",
+        invitedAt: CREATED_AT,
+        joinedAt: CREATED_AT,
+      },
+    ];
+
+    useThinkingRoomStore.getState().resetSample(activeMemberships);
+
+    const state = useThinkingRoomStore.getState();
+    expect(state.rooms[0]).toMatchObject({
+      facilitatorMembershipId: "custom-owner-71",
+      decisionOwnerMembershipId: "custom-owner-71",
+    });
+    expect(
+      new Set(
+        state.contributions.map(
+          ({ authorMembershipId }) => authorMembershipId,
+        ),
+      ),
+    ).toEqual(new Set(["custom-owner-71", "custom-editor-42"]));
+    expect(
+      state.contributions.every((contribution) =>
+        activeMemberships.some(
+          (member) =>
+            member.id === contribution.authorMembershipId &&
+            member.displayNameSnapshot === contribution.authorDisplayNameSnapshot,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("refreshes sample author snapshots when onboarding changes active members", () => {
+    const workspace = buildStarterWorkspace({
+      outcome: "find_ideas",
+      archetype: "music",
+      audience: "Independent artists",
+      platforms: ["instagram_reels"],
+      weeklyCapacityMinutes: 240,
+      voice: "Warm and specific",
+      boundaries: "No fake urgency",
+      firstHook: "The unfinished version is the useful one.",
+    });
+    workspace.creator.name = "Nila Bose";
+
+    useMuseboardStore.getState().completeOnboarding(workspace);
+
+    const activeMemberships = useMuseboardStore.getState().memberships;
+    const contributions = useThinkingRoomStore.getState().contributions;
+    expect(activeMemberships).toMatchObject([
+      { id: "member-owner", displayNameSnapshot: "Nila Bose" },
+    ]);
+    expect(
+      contributions.every((contribution) =>
+        activeMemberships.some(
+          (member) =>
+            member.id === contribution.authorMembershipId &&
+            member.displayNameSnapshot === contribution.authorDisplayNameSnapshot,
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      new Set(contributions.map(({ authorDisplayNameSnapshot }) => authorDisplayNameSnapshot)),
+    ).toEqual(new Set(["Nila Bose"]));
   });
 
   it("persists only under its own versioned key and never enters workspace payloads", () => {

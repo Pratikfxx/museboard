@@ -8,7 +8,6 @@ describe("promoted idea workshop", () => {
   beforeEach(() => {
     localStorage.clear();
     useMuseboardStore.getState().resetDemo();
-    useThinkingRoomStore.getState().resetSample();
   });
 
   it("creates three usable hook choices when an idea is promoted", () => {

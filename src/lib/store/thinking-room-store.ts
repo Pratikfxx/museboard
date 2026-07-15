@@ -4,6 +4,7 @@ import { z } from "zod";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import type { Membership } from "@/domain/collaboration";
 import {
   addThinkingContribution,
   contributionReactionSchema,
@@ -31,7 +32,7 @@ export const THINKING_ROOM_STORAGE_KEY = "museboard-thinking-rooms-v1";
 export type ThinkingRoomSyncState = SampleThinkingRoomData["syncState"];
 
 interface ThinkingRoomActions {
-  resetSample: () => void;
+  resetSample: (memberships: readonly Membership[]) => void;
   selectRoom: (roomId?: string) => boolean;
   createRoom: (input: CreateThinkingRoomInput, at?: string) => string | undefined;
   updateRoomStatus: (
@@ -76,8 +77,8 @@ function now(): string {
   return new Date().toISOString();
 }
 
-function sampleData(): SampleThinkingRoomData {
-  return createSampleThinkingRoomData(createDemoState().memberships);
+function sampleData(memberships: readonly Membership[]): SampleThinkingRoomData {
+  return createSampleThinkingRoomData(memberships);
 }
 
 function nextId(prefix: string, existingIds: readonly string[]): string {
@@ -104,9 +105,9 @@ function dataFromState(state: ThinkingRoomStoreState): SampleThinkingRoomData {
 export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
   persist<ThinkingRoomStoreState, [], [], SampleThinkingRoomData>(
     (set, get) => ({
-      ...sampleData(),
+      ...sampleData(createDemoState().memberships),
 
-      resetSample: () => set(sampleData()),
+      resetSample: (memberships) => set(sampleData(memberships)),
 
       selectRoom: (roomId) => {
         if (roomId && !get().rooms.some(({ id }) => id === roomId)) return false;
