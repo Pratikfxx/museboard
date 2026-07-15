@@ -24,7 +24,11 @@ import type {
 } from "@/domain/schema";
 import type { CreatorOutcome } from "@/lib/demo/fixtures";
 import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
-import { useMuseboardStore } from "@/lib/store/museboard-store";
+import {
+  createOnboardedWorkspacePayload,
+  useMuseboardStore,
+  workspacePayloadFromState,
+} from "@/lib/store/museboard-store";
 
 import styles from "./onboarding-flow.module.css";
 
@@ -307,8 +311,9 @@ function SetupPreview({ draft }: { draft: OnboardingDraft }) {
   );
 }
 
-export function OnboardingFlow() {
+export function OnboardingFlow({ liveOrganizationId }: { liveOrganizationId?: string }) {
   const router = useRouter();
+  const [submissionState, setSubmissionState] = useState<"idle" | "saving" | "error">("idle");
   const isHydrated = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -324,7 +329,7 @@ export function OnboardingFlow() {
     persistDraft(nextDraft);
   }
 
-  function finishOnboarding() {
+  async function finishOnboarding() {
     if (!draft.archetype || !draft.outcome) return;
 
     const workspace = buildStarterWorkspace({
@@ -339,7 +344,34 @@ export function OnboardingFlow() {
       firstHook: draft.firstHook,
       now: new Date().toISOString(),
     });
-    useMuseboardStore.getState().completeOnboarding(workspace);
+    if (liveOrganizationId) {
+      setSubmissionState("saving");
+      const payload = createOnboardedWorkspacePayload(
+        workspacePayloadFromState(useMuseboardStore.getState()),
+        workspace,
+        "live",
+      );
+      try {
+        const response = await fetch("/api/workspace", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            organizationId: liveOrganizationId,
+            expectedRevision: 0,
+            payload,
+          }),
+        });
+        const result = (await response.json()) as { payload?: unknown };
+        if (!response.ok || !useMuseboardStore.getState().hydrateLiveWorkspace(result.payload)) {
+          throw new Error("Cloud workspace creation failed");
+        }
+      } catch {
+        setSubmissionState("error");
+        return;
+      }
+    } else {
+      useMuseboardStore.getState().completeOnboarding(workspace);
+    }
     clearDraft();
     router.push("/app/today");
   }
@@ -368,7 +400,7 @@ export function OnboardingFlow() {
           </Link>
           <span className={styles.sampleBadge}>
             <Sparkle aria-hidden="true" className="text-coral" size={15} weight="fill" />
-            Sample workspace · not live
+            {liveOrganizationId ? "Secure cloud workspace" : "Sample workspace · not live"}
           </span>
         </div>
       </header>
@@ -412,7 +444,7 @@ export function OnboardingFlow() {
           <SetupPreview draft={draft} />
           <p className={styles.privacyNote}>
             <LockSimple aria-hidden="true" size={17} />
-            No account connection or card required.
+            {liveOrganizationId ? "Saved securely to your account. No card required." : "No account connection or card required."}
           </p>
         </aside>
 
@@ -672,7 +704,7 @@ export function OnboardingFlow() {
             {draft.step === 7 ? (
               <div>
                 <QuestionHeader
-                  description="This gives your sample plan a real first move. Edit it freely—nothing is posted or connected."
+                  description={`This gives your ${liveOrganizationId ? "workspace" : "sample plan"} a real first move. Edit it freely—nothing is posted or connected.`}
                   eyebrow="Your first value"
                   title="What could your next post open with?"
                 />
@@ -688,14 +720,25 @@ export function OnboardingFlow() {
                 <div className="mt-5 flex items-start gap-3 rounded-2xl bg-sage/20 p-4 text-sm leading-6 text-muted">
                   <LockSimple aria-hidden="true" className="mt-0.5 shrink-0 text-success" size={20} />
                   <p>
-                    No social account or card is needed. This creates a local sample workspace and never publishes anything.
+                    {liveOrganizationId
+                      ? "No social account or card is needed. Your setup is saved to your Museboard account and never publishes anything."
+                      : "No social account or card is needed. This creates a local sample workspace and never publishes anything."}
                   </p>
                 </div>
+                {submissionState === "error" ? (
+                  <p className="mt-4 rounded-xl border border-coral/30 bg-coral/10 p-3 text-sm" role="alert">
+                    We could not create your cloud workspace. Your answers are still here—please try again.
+                  </p>
+                ) : null}
                 <ContinueButton
-                  disabled={!draft.firstHook.trim()}
-                  onClick={finishOnboarding}
+                  disabled={!draft.firstHook.trim() || submissionState === "saving"}
+                  onClick={() => void finishOnboarding()}
                 >
-                  Create sample workspace
+                  {submissionState === "saving"
+                    ? "Creating your workspace…"
+                    : liveOrganizationId
+                      ? "Create cloud workspace"
+                      : "Create sample workspace"}
                 </ContinueButton>
               </div>
             ) : null}

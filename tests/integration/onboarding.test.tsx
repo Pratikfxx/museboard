@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
-async function completeMusicCreatorFlow() {
+async function completeMusicCreatorFlow(finalButton: RegExp = /create sample workspace/i) {
   const user = userEvent.setup();
 
   await user.click(
@@ -63,7 +63,7 @@ async function completeMusicCreatorFlow() {
   await user.clear(hook);
   await user.type(hook, "Your unfinished chorus is already content.");
   await user.click(
-    screen.getByRole("button", { name: /create sample workspace/i }),
+    screen.getByRole("button", { name: finalButton }),
   );
 }
 
@@ -152,6 +152,28 @@ describe("creator onboarding", () => {
     expect(persisted.hooks).toEqual(store.hooks);
     expect(persisted.plannerTasks).toEqual(store.plannerTasks);
     expect(screen.getByText(/sample workspace · not live/i)).toBeVisible();
+    expect(push).toHaveBeenCalledWith("/app/today");
+  });
+
+  it("creates a signed-in cloud workspace before entering the app", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const request = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ revision: 1, payload: request.payload }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    render(<OnboardingFlow liveOrganizationId="4f0b3ec4-d507-4726-974c-9b1ea51f73b9" />);
+    await completeMusicCreatorFlow(/create cloud workspace/i);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      organizationId: "4f0b3ec4-d507-4726-974c-9b1ea51f73b9",
+      expectedRevision: 0,
+      payload: { dataMode: "live", onboardingComplete: true },
+    });
+    expect(useMuseboardStore.getState().dataMode).toBe("live");
     expect(push).toHaveBeenCalledWith("/app/today");
   });
 

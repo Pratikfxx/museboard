@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
 import {
+  createOnboardedWorkspacePayload,
   upgradePersistedMuseboardData,
   useMuseboardStore,
+  workspacePayloadFromState,
 } from "@/lib/store/museboard-store";
 
 function starterWorkspace() {
@@ -69,6 +71,48 @@ describe("Museboard demo store", () => {
     expect(state.dataMode).toBe("sample");
     expect(state.onboardingComplete).toBe(true);
     expect(state.creator?.name).toBe("Aarav");
+  });
+
+  it("can build a live onboarding payload without mutating the sample store", () => {
+    const sampleBefore = workspacePayloadFromState(useMuseboardStore.getState());
+    const payload = createOnboardedWorkspacePayload(
+      sampleBefore,
+      starterWorkspace(),
+      "live",
+    );
+
+    expect(payload.dataMode).toBe("live");
+    expect(payload.onboardingComplete).toBe(true);
+    expect(payload.creator?.audience).toBe("Curious builders");
+    expect(payload.exports).toEqual([]);
+    expect(payload.publishReceipts).toEqual([]);
+    expect(payload.metrics).toEqual([]);
+    expect(payload.learnings).toEqual([]);
+    expect(workspacePayloadFromState(useMuseboardStore.getState())).toEqual(sampleBefore);
+  });
+
+  it("hydrates live data without overwriting the separate sample workspace", () => {
+    const sampleEnvelope = localStorage.getItem("museboard-demo-v1");
+    const payload = {
+      ...workspacePayloadFromState(useMuseboardStore.getState()),
+      dataMode: "live" as const,
+      onboardingComplete: true,
+    };
+
+    expect(useMuseboardStore.getState().hydrateLiveWorkspace(payload)).toBe(true);
+    useMuseboardStore.getState().saveOpportunity("opportunity-desk");
+
+    expect(useMuseboardStore.getState().dataMode).toBe("live");
+    expect(localStorage.getItem("museboard-demo-v1")).toBe(sampleEnvelope);
+    expect(workspacePayloadFromState(useMuseboardStore.getState())).not.toHaveProperty(
+      "hydrateLiveWorkspace",
+    );
+  });
+
+  it("rejects sample payloads at the live hydration boundary", () => {
+    const payload = workspacePayloadFromState(useMuseboardStore.getState());
+    expect(useMuseboardStore.getState().hydrateLiveWorkspace(payload)).toBe(false);
+    expect(useMuseboardStore.getState().dataMode).toBe("sample");
   });
 
   it("upgrades a pre-Task-5 opportunity without discarding the saved creator", () => {

@@ -2,8 +2,16 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell/app-shell";
+import { LiveWorkspaceProvider } from "@/components/workspace/live-workspace-provider";
 import { getAuthenticatedWorkspace } from "@/lib/auth/workspace";
 import { getFeatureConfig } from "@/lib/config/features";
+import { createClient } from "@/lib/supabase/server";
+import {
+  createSupabaseWorkspaceSnapshotStore,
+  entitlementResetAt,
+  loadCanonicalWorkspace,
+  type SupabaseWorkspaceSnapshotClient,
+} from "@/lib/workspace/repository";
 
 export default async function WorkspaceLayout({ children }: { children: ReactNode }) {
   const config = getFeatureConfig();
@@ -11,6 +19,21 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
   if (config.authMode === "live") {
     const workspace = await getAuthenticatedWorkspace();
     if (!workspace) redirect("/login?next=/app/today");
+    const supabase = await createClient();
+    const snapshot = await loadCanonicalWorkspace(
+      createSupabaseWorkspaceSnapshotStore(
+        supabase as unknown as SupabaseWorkspaceSnapshotClient,
+      ),
+      workspace.organizationId,
+      {
+        userId: workspace.userId,
+        email: workspace.email,
+        displayName: workspace.displayName,
+        plan: workspace.plan,
+        resetAt: entitlementResetAt(workspace.plan),
+      },
+    );
+    if (!snapshot) redirect("/onboarding");
     return (
       <AppShell
         liveWorkspace={{
@@ -19,7 +42,12 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
           plan: workspace.plan,
         }}
       >
-        {children}
+        <LiveWorkspaceProvider
+          initialSnapshot={snapshot}
+          organizationId={workspace.organizationId}
+        >
+          {children}
+        </LiveWorkspaceProvider>
       </AppShell>
     );
   }

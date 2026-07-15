@@ -2,7 +2,7 @@
 
 Date: 2026-07-15  
 Branch: `codex/museboard-creator-loop`  
-Status: the credential-free product remains a coherent demo. Production account identity, atomic workspace bootstrap, billing ownership, and plan projection foundations now exist; creator content and collaboration are not yet cloud-durable.
+Status: the credential-free product remains a coherent demo. Production account identity, atomic workspace bootstrap, billing ownership, plan projection, and a revision-safe cloud workspace snapshot now exist; real-time collaboration and normalized creator-data repositories remain future work.
 
 ## Executive decision
 
@@ -22,7 +22,7 @@ The current UI already communicates the product well enough to support this work
 
 | Area | Current truth | Production readiness |
 | --- | --- | --- |
-| Personalized onboarding | Eight-step, resumable, local setup with a live preview | Strong demo; needs multi-niche ranking, timezone, recovery days, and creator examples |
+| Personalized onboarding | Eight-step, resumable setup with a live preview; signed-in completion creates the cloud workspace before entering the app | Durable activation path; needs multi-niche ranking, timezone, recovery days, and creator examples |
 | Today | Personalized decision, hooks, workflow state, capture, agenda, semantic signal visual | Strong local workflow |
 | Opportunities | Provenance-bearing sample opportunities, idea shaping, reference metadata | No live provider ingestion; freshness clock has defects |
 | Create workshop | Versioned stage workflow, claims/evidence checks, approval staleness | Evidence attachment is a dead end; several deep links collapse to Hook |
@@ -32,11 +32,11 @@ The current UI already communicates the product well enough to support this work
 | Team | Local invitations, actor simulation, comments, approvals, notifications | No email invite, invite acceptance, external review token, or live persistence |
 | Export/publish | Validated ZIP, manifest, platform handoff, manual receipt | Export endpoint trusts client state; history cannot redownload exact bytes |
 | Billing | Authenticated, organization-scoped Checkout/Portal, idempotent retries, existing-subscription protection, webhook projection | Needs real Stripe/Supabase environment validation and server enforcement across every paid mutation |
-| Account/data | Honest local JSON export and destructive clear | No import/restore; live export/delete APIs intentionally return 409 |
+| Account/data | Sample data stays local; live creator state is an organization-scoped, RLS-protected, revisioned cloud snapshot | No import/restore; live export/delete APIs intentionally return 409; normalized repositories remain pending |
 
 ## P0 — must fix before charging users
 
-### 1. Production identity and workspace activation — foundation implemented
+### 1. Production identity and workspace activation — durable activation implemented
 
 Evidence:
 
@@ -45,7 +45,7 @@ Evidence:
 - `src/lib/auth/session.ts:20-36` requires an authenticated owner for checkout, but there is no supported sign-up → organization bootstrap → workspace path.
 - `src/app/api/account/export/route.ts` and `delete/route.ts` always return `409 sample_local_only`.
 
-Impact: a configured live-billing environment still cannot create a real customer workspace.
+Current result: a configured live environment now creates the first cloud workspace atomically, hydrates returning users from server-authoritative state, autosaves with compare-and-swap revision protection, and keeps the local sample repository separate.
 
 Acceptance criteria:
 
@@ -226,14 +226,17 @@ Build: schema-validated import preview, backup-before-replace, merge/replace cho
 - Added durable active-organization selection and server-loaded identity, role, plan, Stripe status, grace/period access, and subscription identity.
 - Scoped Checkout and Customer Portal to an explicitly verified owner organization, reused Customer Portal for existing subscriptions, and added Stripe idempotency keys.
 - Closed the callback open-redirect edge case for protocol-relative, backslash, encoded-backslash, malformed, and external destinations.
-- Added an honest live-workspace boundary: account and plan are synced, while creator drafts remain labeled as device-local until repository sync ships.
+- Added a durable, organization-scoped workspace snapshot with RLS, explicit API grants, a 5 MB payload ceiling, and compare-and-swap revision writes.
+- Made signed-in onboarding save successfully before entering the app; failed saves retain the answers and show a retryable error.
+- Added server-authoritative hydration, debounced autosave status, and safe conflict handling that stops writes instead of overwriting a newer device revision.
+- Kept sample and live persistence separate: live state is never written into the sample local-storage repository.
 - Reordered production authentication on mobile so the form appears before promotional content, made footer account state truthful, and added an application icon.
 
 ## Recommended build sequence
 
 ### Sprint 1 — activation and creator truth
 
-- Production auth, organization bootstrap, and returning-user routing are implemented; cloud creator-data repositories remain next.
+- Production auth, organization bootstrap, returning-user routing, and revision-safe cloud workspace persistence are implemented; normalized per-domain repositories remain next.
 - Wire Creator Memory into a real rewrite preview and version save.
 - Fix workshop stage/deep-link routing and evidence attachment.
 

@@ -145,6 +145,15 @@ const safeStateStorage: StateStorage = {
     }
   },
   setItem: (name, value) => {
+    if (name === MUSEBOARD_STORAGE_KEY) {
+      try {
+        const envelope = recordValue(JSON.parse(value));
+        const state = recordValue(envelope?.state);
+        if (state?.dataMode === "live") return;
+      } catch {
+        // Malformed values continue through the recovery-aware sample storage.
+      }
+    }
     fallbackStorage.set(name, value);
     try {
       window.localStorage.setItem(name, value);
@@ -475,6 +484,7 @@ interface MuseboardActions {
   clearSampleWorkspace: () => boolean;
   setDemoPlan: (plan: Plan) => boolean;
   completeOnboarding: (workspace: StarterWorkspace) => void;
+  hydrateLiveWorkspace: (payload: unknown) => boolean;
   selectOpportunity: (opportunityId: string) => void;
   saveOpportunity: (opportunityId: string) => void;
   dismissOpportunity: (opportunityId: string) => void;
@@ -590,7 +600,7 @@ function collaborationEnabled(state: Pick<MuseboardState, "entitlementUsage">): 
   return state.entitlementUsage.plan === "pro" || state.entitlementUsage.plan === "studio";
 }
 
-function persistedState(state: MuseboardState): DemoMuseboardData {
+export function workspacePayloadFromState(state: MuseboardState): DemoMuseboardData {
   return {
     schemaVersion: state.schemaVersion,
     dataMode: state.dataMode,
@@ -628,6 +638,58 @@ function persistedState(state: MuseboardState): DemoMuseboardData {
   };
 }
 
+export function createOnboardedWorkspacePayload(
+  base: DemoMuseboardData,
+  workspace: StarterWorkspace,
+  dataMode: DemoMuseboardData["dataMode"],
+): DemoMuseboardData {
+  const parsed = starterWorkspaceSchema.parse(workspace);
+  const onboardingAt = parsed.content[0]?.createdAt ?? now();
+  return {
+    ...base,
+    dataMode,
+    onboardingComplete: true,
+    creator: parsed.creator,
+    opportunities: parsed.opportunities,
+    selectedOpportunityId: parsed.selectedOpportunityId,
+    opportunityDecisions: {},
+    ideas: [],
+    visionReferences: [],
+    selectedReferenceIds: [],
+    hooks: parsed.hooks,
+    content: parsed.content,
+    plannerTasks: parsed.plannerTasks,
+    plannerUndo: undefined,
+    comments: [],
+    hypotheses: [],
+    series: [],
+    creatorMemory: {
+      version: 1,
+      preferredPhrases: [],
+      avoidPhrases: parsed.creator.boundaries,
+      preferredStructures: [],
+      notes: parsed.creator.voiceTraits,
+      updatedAt: onboardingAt,
+    },
+    opportunityFeedback: [],
+    offlineCaptures: [],
+    recoveryNotice: undefined,
+    memberships: [ownerMembership(parsed.creator.name, onboardingAt)],
+    currentActorMembershipId: "member-owner",
+    assignments: [],
+    reviewComments: [],
+    commentEvents: [],
+    approvals: [],
+    notifications: [],
+    entitlementUsage: {
+      plan: "free",
+      used: {},
+      reserved: {},
+      resetAt: base.entitlementUsage.resetAt,
+    },
+  };
+}
+
 export const useMuseboardStore = create<MuseboardState>()(
   persist<MuseboardState, [], [], DemoMuseboardData>(
     (set, get) => ({
@@ -657,49 +719,14 @@ export const useMuseboardStore = create<MuseboardState>()(
       },
 
       completeOnboarding: (workspace) => {
-        const parsed = starterWorkspaceSchema.parse(workspace);
-        const onboardingAt = parsed.content[0]?.createdAt ?? now();
-        set({
-          onboardingComplete: true,
-          creator: parsed.creator,
-          opportunities: parsed.opportunities,
-          selectedOpportunityId: parsed.selectedOpportunityId,
-          opportunityDecisions: {},
-          ideas: [],
-          visionReferences: [],
-          selectedReferenceIds: [],
-          hooks: parsed.hooks,
-          content: parsed.content,
-          plannerTasks: parsed.plannerTasks,
-          plannerUndo: undefined,
-          comments: [],
-          hypotheses: [],
-          series: [],
-          creatorMemory: {
-            version: 1,
-            preferredPhrases: [],
-            avoidPhrases: parsed.creator.boundaries,
-            preferredStructures: [],
-            notes: parsed.creator.voiceTraits,
-            updatedAt: onboardingAt,
-          },
-          opportunityFeedback: [],
-          offlineCaptures: [],
-          recoveryNotice: undefined,
-          memberships: [ownerMembership(parsed.creator.name, onboardingAt)],
-          currentActorMembershipId: "member-owner",
-          assignments: [],
-          reviewComments: [],
-          commentEvents: [],
-          approvals: [],
-          notifications: [],
-          entitlementUsage: {
-            plan: "free",
-            used: {},
-            reserved: {},
-            resetAt: get().entitlementUsage.resetAt,
-          },
-        });
+        set(createOnboardedWorkspacePayload(workspacePayloadFromState(get()), workspace, "sample"));
+      },
+
+      hydrateLiveWorkspace: (payload) => {
+        const parsed = validatePersistedMuseboardData(payload);
+        if (!parsed.success || parsed.data.dataMode !== "live") return false;
+        set(parsed.data);
+        return true;
       },
 
       selectOpportunity: (opportunityId) => {
@@ -1725,7 +1752,7 @@ export const useMuseboardStore = create<MuseboardState>()(
       name: MUSEBOARD_STORAGE_KEY,
       version: 1,
       storage: createJSONStorage(() => safeStateStorage),
-      partialize: persistedState,
+      partialize: workspacePayloadFromState,
       merge: (persisted, current) => {
         const parsed = validatePersistedMuseboardData(persisted);
         return parsed.success ? { ...current, ...parsed.data } : current;
