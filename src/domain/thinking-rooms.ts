@@ -224,6 +224,7 @@ export interface ToggleContributionReactionInput {
   contributionId: string;
   membershipId: string;
   kind: ContributionReaction["kind"];
+  active: boolean;
 }
 
 export function toggleContributionReaction(
@@ -231,17 +232,17 @@ export function toggleContributionReaction(
   input: ToggleContributionReactionInput,
   injected: DeterministicEntityInput,
 ): ContributionReaction[] {
-  const existing = reactions.find(
-    (reaction) =>
-      reaction.roomId === input.roomId &&
-      reaction.contributionId === input.contributionId &&
-      reaction.membershipId === input.membershipId &&
-      reaction.kind === input.kind,
-  );
+  const matchesInput = (reaction: ContributionReaction) =>
+    reaction.roomId === input.roomId &&
+    reaction.contributionId === input.contributionId &&
+    reaction.membershipId === input.membershipId &&
+    reaction.kind === input.kind;
+  const existing = reactions.find(matchesInput);
 
-  if (existing) {
-    return reactions.filter((reaction) => reaction.id !== existing.id);
+  if (!input.active) {
+    return reactions.filter((reaction) => !matchesInput(reaction));
   }
+  if (existing) return [...reactions];
 
   const reaction = contributionReactionSchema.parse({
     ...input,
@@ -309,10 +310,10 @@ export function updateThinkingRoomState(
   status: ThinkingRoomState,
   injected: { at: string; expectedRevision: number },
 ): ThinkingRoom {
+  if (status === room.status) return room;
   if (room.revision !== injected.expectedRevision) {
     throw new Error("Thinking Room revision is stale");
   }
-  if (status === room.status) return room;
   if (!ALLOWED_STATE_TRANSITIONS[room.status].includes(status)) {
     throw new Error(`Cannot move a Thinking Room from ${room.status} to ${status}`);
   }
@@ -336,7 +337,13 @@ export function roomCanConvert(
     .filter((revision) => revision.roomId === room.id)
     .toSorted((left, right) => left.number - right.number)
     .at(-1);
-  if (!current || current.status !== "accepted") return false;
+  if (
+    !current ||
+    current.status !== "accepted" ||
+    current.acceptedByMembershipId !== room.decisionOwnerMembershipId
+  ) {
+    return false;
+  }
 
   const direction = current.chosenDirection;
   return (

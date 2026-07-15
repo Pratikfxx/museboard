@@ -147,7 +147,7 @@ describe("addThinkingContribution", () => {
 });
 
 describe("toggleContributionReaction", () => {
-  it("keeps at most one active reaction of a kind per actor and contribution", () => {
+  it("applies the desired reaction state idempotently across retries", () => {
     const added = toggleContributionReaction(
       [],
       {
@@ -155,6 +155,7 @@ describe("toggleContributionReaction", () => {
         contributionId: "contribution-1",
         membershipId: "member-2",
         kind: "promising",
+        active: true,
       },
       { id: "reaction-1", at: CREATED_AT },
     );
@@ -167,18 +168,45 @@ describe("toggleContributionReaction", () => {
       createdAt: CREATED_AT,
     });
 
-    const removed = toggleContributionReaction(
+    const retriedAdd = toggleContributionReaction(
       added,
       {
         roomId: "room-1",
         contributionId: "contribution-1",
         membershipId: "member-2",
         kind: "promising",
+        active: true,
+      },
+      { id: "unused-reaction", at: UPDATED_AT },
+    );
+
+    expect(retriedAdd).toEqual(added);
+
+    const removed = toggleContributionReaction(
+      retriedAdd,
+      {
+        roomId: "room-1",
+        contributionId: "contribution-1",
+        membershipId: "member-2",
+        kind: "promising",
+        active: false,
+      },
+      { id: "unused-reaction", at: UPDATED_AT },
+    );
+    const retriedRemove = toggleContributionReaction(
+      removed,
+      {
+        roomId: "room-1",
+        contributionId: "contribution-1",
+        membershipId: "member-2",
+        kind: "promising",
+        active: false,
       },
       { id: "unused-reaction", at: UPDATED_AT },
     );
 
     expect(removed).toEqual([]);
+    expect(retriedRemove).toEqual([]);
     expect(added).toHaveLength(1);
   });
 });
@@ -286,6 +314,23 @@ describe("updateThinkingRoomState", () => {
       }),
     ).toThrow("Thinking Room revision is stale");
   });
+
+  it("returns the achieved state when an identical transition is retried", () => {
+    const room = createRoom();
+    const synthesizing = updateThinkingRoomState(room, "synthesizing", {
+      at: UPDATED_AT,
+      expectedRevision: 1,
+    });
+
+    const retried = updateThinkingRoomState(synthesizing, "synthesizing", {
+      at: "2026-07-16T11:00:00.000Z",
+      expectedRevision: 1,
+    });
+
+    expect(retried).toBe(synthesizing);
+    expect(retried.revision).toBe(2);
+    expect(retried.updatedAt).toBe(UPDATED_AT);
+  });
 });
 
 describe("roomCanConvert", () => {
@@ -320,6 +365,11 @@ describe("roomCanConvert", () => {
     expect(roomCanConvert({ ...room, decisionOwnerMembershipId: undefined }, [accepted])).toBe(
       false,
     );
+    expect(
+      roomCanConvert(room, [
+        { ...accepted, acceptedByMembershipId: "member-2" },
+      ]),
+    ).toBe(false);
     expect(roomCanConvert(room, [{ ...accepted, status: "draft" }])).toBe(false);
     expect(
       roomCanConvert(room, [
