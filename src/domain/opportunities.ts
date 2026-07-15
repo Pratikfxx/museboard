@@ -10,6 +10,10 @@ import {
   creatorArchetypeSchema,
   dataModeSchema,
 } from "@/domain/schema";
+import {
+  thinkingRoomOriginSchema,
+  type ThinkingRoomOrigin,
+} from "@/domain/thinking-rooms";
 
 export const OPPORTUNITY_FORMATS = [
   "tutorial",
@@ -98,7 +102,7 @@ export interface RankedOpportunity extends Opportunity {
 
 export interface IdeaRecord {
   id: string;
-  opportunityId: string;
+  opportunityId?: string;
   title: string;
   summary: string;
   platform: ContentPlatform;
@@ -109,10 +113,11 @@ export interface IdeaRecord {
   createdAt: string;
   promotedContentId?: string;
   provenance: {
-    opportunityId: string;
+    opportunityId?: string;
     provider: string;
     mode: DataMode;
     sourceUrl?: string;
+    readonly thinkingRoomOrigin?: Readonly<ThinkingRoomOrigin>;
   };
 }
 
@@ -191,25 +196,36 @@ export const opportunitySchema: z.ZodType<Opportunity> = z.object({
 
 export const opportunitiesSchema = z.array(opportunitySchema);
 
-export const ideaRecordSchema: z.ZodType<IdeaRecord> = z.object({
-  id: z.string().min(1),
-  opportunityId: z.string().min(1),
-  title: z.string().min(1),
-  summary: z.string().min(1),
-  platform: contentPlatformSchema,
-  format: opportunityFormatSchema,
-  pillar: z.string().min(1),
-  readiness: opportunityReadinessSchema,
-  goal: opportunityGoalSchema,
-  createdAt: z.iso.datetime(),
-  promotedContentId: z.string().min(1).optional(),
-  provenance: z.object({
-    opportunityId: z.string().min(1),
-    provider: z.string().min(1),
-    mode: dataModeSchema,
-    sourceUrl: httpsUrlSchema.optional(),
-  }),
-});
+export const ideaRecordSchema: z.ZodType<IdeaRecord> = z
+  .object({
+    id: z.string().min(1),
+    opportunityId: z.string().min(1).optional(),
+    title: z.string().min(1),
+    summary: z.string().min(1),
+    platform: contentPlatformSchema,
+    format: opportunityFormatSchema,
+    pillar: z.string().min(1),
+    readiness: opportunityReadinessSchema,
+    goal: opportunityGoalSchema,
+    createdAt: z.iso.datetime(),
+    promotedContentId: z.string().min(1).optional(),
+    provenance: z.object({
+      opportunityId: z.string().min(1).optional(),
+      provider: z.string().min(1),
+      mode: dataModeSchema,
+      sourceUrl: httpsUrlSchema.optional(),
+      thinkingRoomOrigin: thinkingRoomOriginSchema.optional(),
+    }),
+  })
+  .superRefine((idea, context) => {
+    if (!idea.provenance.opportunityId && !idea.provenance.thinkingRoomOrigin) {
+      context.addIssue({
+        code: "custom",
+        message: "Idea provenance requires an opportunity or Thinking Room origin",
+        path: ["provenance"],
+      });
+    }
+  });
 
 export const visionReferenceSchema: z.ZodType<VisionReference> = z.object({
   id: z.string().min(1),

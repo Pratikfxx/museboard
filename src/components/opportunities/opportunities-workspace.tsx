@@ -329,7 +329,9 @@ function IdeaBoardView({
                     <button
                       onClick={() => {
                         const contentId = promoteIdea(idea.id);
-                        if (contentId) onActivateOpportunity(idea.opportunityId);
+                        if (contentId && idea.opportunityId) {
+                          onActivateOpportunity(idea.opportunityId);
+                        }
                         setStatus(
                           contentId
                             ? `${idea.title} is ready in the Angle workshop.`

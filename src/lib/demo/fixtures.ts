@@ -25,6 +25,12 @@ import type {
 } from "@/domain/opportunities";
 import type { PlannerTask } from "@/domain/planner";
 import type {
+  ContributionReaction,
+  ThinkingContribution,
+  ThinkingRoom,
+  ThinkingSynthesisRevision,
+} from "@/domain/thinking-rooms";
+import type {
   Comment,
   ContentItem,
   ContentPlatform,
@@ -111,6 +117,134 @@ export interface DemoMuseboardData {
   offlineCaptures: OfflineCapture[];
   recoveryNotice?: WorkspaceRecoveryNotice;
   entitlementUsage: EntitlementUsage;
+}
+
+export interface SampleThinkingRoomData {
+  rooms: ThinkingRoom[];
+  contributions: ThinkingContribution[];
+  reactions: ContributionReaction[];
+  synthesisRevisions: ThinkingSynthesisRevision[];
+  selectedRoomId?: string;
+  syncState: "idle" | "syncing" | "offline" | "error";
+}
+
+export function createSampleThinkingRoomData(
+  memberships: readonly Membership[],
+): SampleThinkingRoomData {
+  const owner = memberships.find(({ id }) => id === "member-owner");
+  const collaborator = memberships.find(({ id }) => id === "member-sam");
+  if (!owner || !collaborator) {
+    throw new Error("Sample Thinking Room requires the current sample workspace members");
+  }
+
+  const roomId = "thinking-room-sample-direction";
+  const createdAt = "2026-07-13T10:00:00.000Z";
+  const decidedAt = "2026-07-13T11:00:00.000Z";
+  const contributions: ThinkingContribution[] = [
+    {
+      id: "thinking-contribution-sample-tension",
+      roomId,
+      lens: "audience_tensions",
+      body: "Sample note: creators want consistency without sounding repetitive.",
+      authorMembershipId: owner.id,
+      authorDisplayNameSnapshot: owner.displayNameSnapshot,
+      createdAt,
+      updatedAt: createdAt,
+      revision: 1,
+    },
+    {
+      id: "thinking-contribution-sample-evidence",
+      roomId,
+      lens: "evidence",
+      body: "Sample note: recent audience replies ask for repeatable weekly formats.",
+      authorMembershipId: collaborator.id,
+      authorDisplayNameSnapshot: collaborator.displayNameSnapshot,
+      sourceReferenceId: "sample-reference-audience-replies",
+      createdAt: "2026-07-13T10:10:00.000Z",
+      updatedAt: "2026-07-13T10:10:00.000Z",
+      revision: 1,
+    },
+    {
+      id: "thinking-contribution-sample-challenge",
+      roomId,
+      lens: "challenges",
+      body: "Sample note: a rigid template could flatten the creator's voice.",
+      authorMembershipId: collaborator.id,
+      authorDisplayNameSnapshot: collaborator.displayNameSnapshot,
+      createdAt: "2026-07-13T10:20:00.000Z",
+      updatedAt: "2026-07-13T10:20:00.000Z",
+      revision: 1,
+    },
+    {
+      id: "thinking-contribution-sample-possibility",
+      roomId,
+      lens: "possibilities",
+      body: "Sample note: keep one recognizable constraint and vary the proof each week.",
+      authorMembershipId: owner.id,
+      authorDisplayNameSnapshot: owner.displayNameSnapshot,
+      relatedContributionId: "thinking-contribution-sample-challenge",
+      createdAt: "2026-07-13T10:30:00.000Z",
+      updatedAt: "2026-07-13T10:30:00.000Z",
+      revision: 1,
+    },
+  ];
+
+  return {
+    rooms: [
+      {
+        id: roomId,
+        organizationId: "organization-sample",
+        workspaceId: "workspace-sample",
+        question: "Sample room: Which tension should anchor our next series?",
+        templateId: "content-direction",
+        status: "decided",
+        facilitatorMembershipId: owner.id,
+        decisionOwnerMembershipId: owner.id,
+        context: "This is sample data for exploring the Thinking Room workflow.",
+        createdAt,
+        updatedAt: decidedAt,
+        revision: 3,
+      },
+    ],
+    contributions,
+    reactions: [
+      {
+        id: "thinking-reaction-sample-promising",
+        roomId,
+        contributionId: "thinking-contribution-sample-possibility",
+        membershipId: collaborator.id,
+        kind: "promising",
+        createdAt: "2026-07-13T10:35:00.000Z",
+      },
+    ],
+    synthesisRevisions: [
+      {
+        id: "thinking-synthesis-sample-accepted",
+        roomId,
+        number: 1,
+        belief: "A useful constraint can make a series recognizable without making it repetitive.",
+        unknowns: ["Which proof format earns the strongest response?"],
+        confidence: "high",
+        chosenDirection: {
+          title: "Sample direction: One constraint, fresh proof",
+          audienceTension: "Creators want consistency without becoming repetitive.",
+          angle: "Keep one recognizable constraint and reveal a different proof each week.",
+          keyChallenge: "The repeated structure must leave room for the creator's voice.",
+          evidenceReferenceIds: ["sample-reference-audience-replies"],
+          basis: "evidence",
+        },
+        openChallengeIds: [],
+        sourceContributionIds: contributions.map(({ id }) => id),
+        createdByMembershipId: owner.id,
+        status: "accepted",
+        createdAt: decidedAt,
+        acceptedAt: decidedAt,
+        acceptedByMembershipId: owner.id,
+      },
+    ],
+    selectedRoomId: roomId,
+    syncState: "idle",
+  };
 }
 
 export function createDemoState(): DemoMuseboardData {

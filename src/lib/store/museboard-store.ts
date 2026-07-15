@@ -64,6 +64,7 @@ import {
 } from "@/domain/opportunities";
 import type { VisionReference } from "@/domain/opportunities";
 import { plannerTaskSchema, type PlannerTask } from "@/domain/planner";
+import { roomCanConvert } from "@/domain/thinking-rooms";
 import {
   commentSchema,
   contentPlatformSchema,
@@ -100,6 +101,7 @@ import {
   inspectPersistedWorkspaceEnvelope,
   MUSEBOARD_RECOVERY_BACKUP_KEY,
 } from "@/lib/store/recovery";
+import { useThinkingRoomStore } from "@/lib/store/thinking-room-store";
 
 export const MUSEBOARD_STORAGE_KEY = "museboard-demo-v1";
 const fallbackStorage = new Map<string, string>();
@@ -490,6 +492,7 @@ interface MuseboardActions {
   dismissOpportunity: (opportunityId: string) => void;
   restoreOpportunity: (opportunityId: string) => void;
   shapeOpportunity: (opportunityId: string, at?: string) => string | undefined;
+  createIdeaFromThinkingRoom: (roomId: string, at?: string) => string | undefined;
   promoteIdea: (ideaId: string, at?: string) => string | undefined;
   addVisionReference: (
     input: VisionReferenceInput,
@@ -776,6 +779,62 @@ export const useMuseboardStore = create<MuseboardState>()(
         );
         if (!opportunity) return undefined;
         const idea = createIdeaFromOpportunity(opportunity, at);
+        set((current) => ({ ideas: [...current.ideas, idea] }));
+        return idea.id;
+      },
+
+      createIdeaFromThinkingRoom: (roomId, at = now()) => {
+        const state = get();
+        const existing = state.ideas.find(
+          ({ provenance }) => provenance.thinkingRoomOrigin?.roomId === roomId,
+        );
+        if (existing) return existing.id;
+
+        const thinkingRoomState = useThinkingRoomStore.getState();
+        const room = thinkingRoomState.rooms.find(({ id }) => id === roomId);
+        if (
+          !room ||
+          !roomCanConvert(room, thinkingRoomState.synthesisRevisions)
+        ) {
+          return undefined;
+        }
+        const synthesis = thinkingRoomState.synthesisRevisions
+          .filter(({ roomId: revisionRoomId }) => revisionRoomId === room.id)
+          .toSorted((left, right) => left.number - right.number)
+          .at(-1);
+        if (!synthesis) return undefined;
+
+        const contributorCount = new Set(
+          thinkingRoomState.contributions
+            .filter(
+              (contribution) =>
+                contribution.roomId === room.id && !contribution.deletedAt,
+            )
+            .map(({ authorMembershipId }) => authorMembershipId),
+        ).size;
+        const idea = ideaRecordSchema.parse({
+          id: `idea-thinking-room-${room.id}`,
+          title: synthesis.chosenDirection.title,
+          summary: synthesis.chosenDirection.angle,
+          platform: state.creator?.platforms[0] ?? "instagram_reels",
+          format: "story",
+          pillar: state.creator?.contentPillars[0] ?? "Creator perspective",
+          readiness: "ready",
+          goal: "trust",
+          createdAt: at,
+          provenance: {
+            provider: "museboard-thinking-room",
+            mode: state.dataMode,
+            thinkingRoomOrigin: {
+              roomId: room.id,
+              question: room.question,
+              synthesisRevisionId: synthesis.id,
+              contributorCount,
+              convertedAt: at,
+            },
+          },
+        });
+        if (!thinkingRoomState.markRoomConverted(room.id, at)) return undefined;
         set((current) => ({ ideas: [...current.ideas, idea] }));
         return idea.id;
       },
