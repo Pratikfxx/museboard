@@ -104,7 +104,7 @@ describe("content workshop", () => {
     expect(screen.getByText(/sample workspace · not live/i)).toBeVisible();
     expect(screen.getByRole("textbox", { name: /manual hook edit/i })).toBeVisible();
     expect(screen.getByRole("complementary", { name: /craft guidance/i })).toBeVisible();
-    expect(screen.getByText(/saved to this browser · no server sync/i)).toBeVisible();
+    expect(screen.getByText(/saved on this device/i)).toBeVisible();
   });
 
   it("chooses a hook and advances with one immutable version append", async () => {
@@ -156,10 +156,65 @@ describe("content workshop", () => {
     renderWorkshop({ stage: "script", voiceMode: true });
 
     expect(screen.getByRole("heading", { name: /rewrite in your voice/i })).toBeVisible();
-    expect(screen.getByText(/uses only the voice traits you confirmed/i)).toBeVisible();
+    expect(screen.getByText(/creator memory v1 guides this local voice pass/i)).toBeVisible();
     expect(screen.getByText(/warm, candid, precise/i)).toBeVisible();
     expect(screen.getByRole("textbox", { name: /script draft/i })).toBeEnabled();
     expect(screen.getByText(/manual editing stays unlimited/i)).toBeVisible();
+  });
+
+  it("previews a Creator Memory rewrite before saving exactly one provenance-bearing version", async () => {
+    const user = userEvent.setup();
+    const contentId = activateWorkshop();
+    useMuseboardStore.getState().updateCreatorMemory({
+      preferredPhrases: ["Here is the useful part"],
+      avoidPhrases: ["whole system"],
+      preferredStructures: ["Name the tension, show the reset, offer one action"],
+      notes: ["Keep it grounded"],
+    }, "2026-07-15T10:00:00.000Z");
+    render(<WorkshopWorkspace contentId={contentId} initialStage="script" voiceMode />);
+    const before = structuredClone(useMuseboardStore.getState().content[0]);
+
+    expect(screen.getByText(/creator memory v2/i)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /generate voice rewrite/i }));
+
+    expect(screen.getByRole("heading", { name: /suggested rewrite/i })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: /original script/i })).toHaveValue(
+      before.versions.at(-1)?.script,
+    );
+    expect((screen.getByRole("textbox", { name: /suggested script/i }) as HTMLTextAreaElement).value)
+      .toMatch(/^Here is the useful part/u);
+    expect(useMuseboardStore.getState().content[0].versions).toHaveLength(before.versions.length);
+
+    await user.click(screen.getByRole("button", { name: /use this rewrite/i }));
+
+    const after = useMuseboardStore.getState().content[0];
+    expect(after.versions).toHaveLength(before.versions.length + 1);
+    expect(after.versions.at(-1)?.script).toMatch(/^Here is the useful part/u);
+    expect(after.versions.at(-1)?.generationProvenance).toMatchObject({
+      provider: "museboard-local-voice",
+      voiceProfileVersion: "memory-v2",
+    });
+    expect(after.versions[0].script).toBe(before.versions[0].script);
+    expect(screen.getByText(/rewrite saved as version 2/i)).toBeVisible();
+  });
+
+  it("refuses to apply a stale preview after Creator Memory changes", async () => {
+    const user = userEvent.setup();
+    const contentId = activateWorkshop();
+    render(<WorkshopWorkspace contentId={contentId} initialStage="script" voiceMode />);
+    const beforeCount = useMuseboardStore.getState().content[0].versions.length;
+
+    await user.click(screen.getByRole("button", { name: /generate voice rewrite/i }));
+    act(() => {
+      useMuseboardStore.getState().updateCreatorMemory(
+        { preferredPhrases: ["A newly confirmed phrase"] },
+        "2026-07-15T10:20:00.000Z",
+      );
+    });
+    await user.click(screen.getByRole("button", { name: /use this rewrite/i }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/memory changed/i);
+    expect(useMuseboardStore.getState().content[0].versions).toHaveLength(beforeCount);
   });
 
   it("blocks Ready for source-required claims until evidence is attached", async () => {

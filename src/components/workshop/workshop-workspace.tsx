@@ -13,6 +13,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { activeActor } from "@/domain/collaboration";
 import { hasRequiredEvidence, type WorkshopVersionPatch } from "@/domain/workflow";
+import {
+  createVoiceRewrite,
+  type VoiceRewriteResult,
+} from "@/lib/providers/voice-rewrite";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
 import { ExportPanel } from "./export-panel";
@@ -127,6 +131,8 @@ function WorkshopEditor({
   const content = useMuseboardStore((state) => state.content);
   const hooks = useMuseboardStore((state) => state.hooks);
   const creator = useMuseboardStore((state) => state.creator);
+  const creatorMemory = useMuseboardStore((state) => state.creatorMemory);
+  const dataMode = useMuseboardStore((state) => state.dataMode);
   const plan = useMuseboardStore((state) => state.entitlementUsage.plan);
   const opportunities = useMuseboardStore((state) => state.opportunities);
   const saveWorkshopVersion = useMuseboardStore((state) => state.saveWorkshopVersion);
@@ -151,8 +157,14 @@ function WorkshopEditor({
   const [script, setScript] = useState(currentVersion?.script ?? "");
   const [shotList, setShotList] = useState((currentVersion?.shotList ?? ["Opening detail", "Process close-up", "Creator to camera"]).join("\n"));
   const [assets, setAssets] = useState((currentVersion?.assets ?? ["Creator-owned footage", "Rights-cleared audio"]).join("\n"));
-  const [saveStatus, setSaveStatus] = useState("Saved to this browser · no server sync");
+  const [saveStatus, setSaveStatus] = useState(
+    dataMode === "live" ? "Draft saved · workspace synced" : "Saved on this device",
+  );
   const [error, setError] = useState("");
+  const [rewriteResult, setRewriteResult] = useState<VoiceRewriteResult>();
+  const [rewriteStatus, setRewriteStatus] = useState<"idle" | "preview" | "saved">("idle");
+  const rewriteSourceRef = useRef<{ versionId: string; memoryVersion: number } | undefined>(undefined);
+  const rewriteHeadingRef = useRef<HTMLHeadingElement>(null);
   const [editRevision, setEditRevision] = useState(0);
   const editRevisionRef = useRef(0);
   const lastSavedRevision = useRef(0);
@@ -216,8 +228,10 @@ function WorkshopEditor({
     lastSavedRevision.current = revision;
     useMuseboardStore.getState().saveWorkshopVersion({ contentId: liveItem.id, patch });
     pendingPatch.current = undefined;
-    if (updateStatus) setSaveStatus("Saved · version added to this browser");
-  }, [contentId]);
+    if (updateStatus) {
+      setSaveStatus(dataMode === "live" ? "Draft version saved · syncing workspace" : "Saved on this device");
+    }
+  }, [contentId, dataMode]);
 
   useEffect(() => {
     const timer = window.setTimeout(flushPendingDraft, 500);
@@ -264,7 +278,69 @@ function WorkshopEditor({
       nextStage: "outline",
     });
     setStage("outline");
-    setSaveStatus("Saved · version added to this browser");
+    setSaveStatus(dataMode === "live" ? "Draft version saved · syncing workspace" : "Saved on this device");
+  }
+
+  function generateVoiceRewrite() {
+    const sourceVersionId = currentVersion?.id;
+    if (!creator || !sourceVersionId || !script.trim()) return;
+    setError("");
+    const result = createVoiceRewrite({
+      contentId: activeItem.id,
+      versionId: sourceVersionId,
+      script,
+      voiceTraits: creator.voiceTraits,
+      boundaries: creator.boundaries,
+      memory: creatorMemory,
+      target: {
+        platform: activeItem.platform,
+        format: opportunity?.format ?? "short-form video",
+      },
+    });
+    rewriteSourceRef.current = {
+      versionId: sourceVersionId,
+      memoryVersion: creatorMemory.version,
+    };
+    setRewriteResult(result);
+    setRewriteStatus("preview");
+    window.requestAnimationFrame(() => rewriteHeadingRef.current?.focus());
+  }
+
+  function applyVoiceRewrite() {
+    if (!rewriteResult || rewriteStatus !== "preview") return;
+    const live = useMuseboardStore.getState();
+    const liveItem = live.content.find(({ id }) => id === contentId);
+    const source = rewriteSourceRef.current;
+    if (
+      !liveItem ||
+      !source ||
+      liveItem.currentVersionId !== source.versionId ||
+      live.creatorMemory.version !== source.memoryVersion
+    ) {
+      setError("The draft or Creator Memory changed after this preview. Generate a fresh rewrite before saving.");
+      return;
+    }
+    pendingPatch.current = undefined;
+    lastSavedRevision.current = editRevisionRef.current;
+    const saved = saveWorkshopVersion({
+      contentId,
+      patch: {
+        script: rewriteResult.rewrittenScript,
+        generationProvenance: rewriteResult.provenance,
+      },
+      nextStage: "script",
+    });
+    if (!saved) {
+      setError("Museboard could not save this rewrite. Your original draft is unchanged.");
+      return;
+    }
+    setScript(rewriteResult.rewrittenScript);
+    setRewriteStatus("saved");
+    setSaveStatus(
+      dataMode === "live"
+        ? `Rewrite saved as version ${liveItem.versions.length + 1} · syncing workspace`
+        : `Rewrite saved as version ${liveItem.versions.length + 1}`,
+    );
   }
 
   function goToStage(next: WorkshopStage) {
@@ -332,7 +408,7 @@ function WorkshopEditor({
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div><p>Sample workspace · not live</p><h1>{heading}</h1><span>{item.title}</span></div>
+        <div><p>{dataMode === "live" ? "Cloud workspace" : "Sample workspace · not live"}</p><h1>{heading}</h1><span>{item.title}</span></div>
         <div className={styles.saveState}><CheckCircle aria-hidden="true" size={18} /><span>{saveStatus}</span></div>
       </header>
 
@@ -358,7 +434,11 @@ function WorkshopEditor({
           {voiceMode && stage === "script" ? (
             <section className={styles.voiceNote}>
               <MagicWand aria-hidden="true" size={22} />
-              <div><strong>This uses only the voice traits you confirmed.</strong><p>{creator?.voiceTraits.join(", ") ?? "Warm, candid, precise"}. Your boundaries stay active, and you can always continue by hand.</p></div>
+              <div>
+                <strong>Creator Memory v{creatorMemory.version} guides this local voice pass.</strong>
+                <p>{creator?.voiceTraits.join(", ") ?? "Warm, candid, precise"}. Preferred phrases, avoided language, structures, notes, and boundaries stay visible for review.</p>
+                <Link href="/app/settings/memory">Review voice memory</Link>
+              </div>
             </section>
           ) : null}
 
@@ -379,7 +459,41 @@ function WorkshopEditor({
           ) : null}
 
           {stage === "script" ? (
-            <section><p className={styles.kicker}>Creator-owned draft</p><h2>Keep the language speakable.</h2><label className={styles.field}>Script draft<textarea aria-label="Script draft" onChange={(event) => changeEditor(event.target.value, setScript, { script: event.target.value })} rows={16} value={script} /></label><p className={styles.manualNote}>Manual editing stays unlimited. Suggestions never replace your draft without a version.</p></section>
+            <section>
+              <p className={styles.kicker}>Creator-owned draft</p><h2>Keep the language speakable.</h2>
+              <label className={styles.field}>Script draft<textarea aria-label="Script draft" onChange={(event) => { setRewriteResult(undefined); setRewriteStatus("idle"); changeEditor(event.target.value, setScript, { script: event.target.value }); }} rows={voiceMode ? 9 : 16} value={script} /></label>
+              <p className={styles.manualNote}>Manual editing stays unlimited. Suggestions never replace your draft without a version.</p>
+              {voiceMode ? (
+                <div aria-busy="false" className={styles.rewriteWorkbench}>
+                  <div className={styles.rewriteActions}>
+                    <button className={styles.primaryButton} disabled={!script.trim()} onClick={generateVoiceRewrite} type="button">
+                      {rewriteStatus === "preview" ? "Generate another rewrite" : "Generate voice rewrite"}
+                    </button>
+                    {rewriteStatus === "preview" ? <button onClick={() => { setRewriteResult(undefined); setRewriteStatus("idle"); }} type="button">Keep original</button> : null}
+                  </div>
+                  {rewriteResult ? (
+                    <section aria-label="Voice rewrite comparison" className={styles.rewritePreview}>
+                      <h2 ref={rewriteHeadingRef} tabIndex={-1}>Suggested rewrite</h2>
+                      <p>This preview is not saved yet. Compare it with your source before creating a new version.</p>
+                      <div className={styles.rewriteComparison}>
+                        <label className={styles.field}>Original script<textarea aria-label="Original script" readOnly rows={9} value={rewriteResult.originalScript} /></label>
+                        <label className={styles.field}>Suggested script<textarea aria-label="Suggested script" readOnly rows={9} value={rewriteResult.rewrittenScript} /></label>
+                      </div>
+                      {rewriteResult.warnings.map((warning) => <p className={styles.rewriteWarning} key={warning}>{warning}</p>)}
+                      <ul>{rewriteResult.changes.map((change) => <li key={change}>{change}</li>)}</ul>
+                      <div className={styles.rewriteActions}>
+                        <button className={styles.primaryButton} disabled={rewriteStatus !== "preview"} onClick={applyVoiceRewrite} type="button">Use this rewrite</button>
+                        <button onClick={() => { setRewriteResult(undefined); setRewriteStatus("idle"); }} type="button">Keep original</button>
+                      </div>
+                      <details>
+                        <summary>How this rewrite was made</summary>
+                        <p>Deterministic local voice pass · no live AI request. Creator Memory v{rewriteResult.appliedMemory.version}; {rewriteResult.provenance.model}.</p>
+                      </details>
+                    </section>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
           ) : null}
 
           {stage === "shoot" ? (

@@ -89,7 +89,7 @@ Acceptance criteria:
 - Checkout return shows an honest pending state until the signed webhook projection arrives.
 - Cancellation and payment-failure downgrades do not destroy creator work.
 
-### 4. “Rewrite in my voice” does not perform a voice rewrite
+### 4. “Rewrite in my voice” — deterministic preview workflow implemented
 
 Evidence:
 
@@ -97,7 +97,7 @@ Evidence:
 - Voice mode in `src/components/workshop/workshop-workspace.tsx` opens the existing script and displays `creator.voiceTraits`.
 - `creatorMemory` is editable but not read by workshop generation; `StrategistProvider` is not wired into a product component.
 
-Impact: the strongest differentiation claim is currently label-only.
+Current result: Voice mode now uses the active Creator Memory revision, shows an explicit source-versus-suggestion comparison, removes only avoided language actually present, records generation provenance, blocks stale previews, and saves only through an explicit immutable-version action. It is honestly labeled as a deterministic local voice pass, not live AI.
 
 Acceptance criteria:
 
@@ -230,6 +230,8 @@ Build: schema-validated import preview, backup-before-replace, merge/replace cho
 - Made signed-in onboarding save successfully before entering the app; failed saves retain the answers and show a retryable error.
 - Added server-authoritative hydration, debounced autosave status, and safe conflict handling that stops writes instead of overwriting a newer device revision.
 - Kept sample and live persistence separate: live state is never written into the sample local-storage repository.
+- Turned “Rewrite in my voice” into a Creator Memory-driven preview flow with exact memory revision, original/suggestion comparison, avoided-language checks, provenance disclosure, stale-preview protection, and explicit immutable save.
+- Corrected workshop save language so sample work says “saved on this device” while live work reports workspace syncing.
 - Reordered production authentication on mobile so the form appears before promotional content, made footer account state truthful, and added an application icon.
 
 ## Recommended build sequence
@@ -237,7 +239,7 @@ Build: schema-validated import preview, backup-before-replace, merge/replace cho
 ### Sprint 1 — activation and creator truth
 
 - Production auth, organization bootstrap, returning-user routing, and revision-safe cloud workspace persistence are implemented; normalized per-domain repositories remain next.
-- Wire Creator Memory into a real rewrite preview and version save.
+- Creator Memory rewrite preview and immutable version save are implemented; a paid live model remains gated on server-side quota and provider infrastructure.
 - Fix workshop stage/deep-link routing and evidence attachment.
 
 ### Sprint 2 — planning and learning truth

@@ -24,6 +24,14 @@ function activeWorkspace() {
     hooks: workspace.hooks,
     content: workspace.content,
     plannerTasks: workspace.plannerTasks,
+    creatorMemory: {
+      version: 2,
+      preferredPhrases: ["Here is the useful part"],
+      avoidPhrases: ["whole system"],
+      preferredStructures: ["Name the tension, show the reset, offer one action"],
+      notes: ["Keep the language grounded"],
+      updatedAt: "2026-07-15T10:00:00.000Z",
+    },
   };
 }
 
@@ -48,6 +56,13 @@ test("workshop stages and planner move persist in the sample workflow", async ({
   await page.getByRole("link", { name: /rewrite in my voice/i }).click();
   await expect(page.getByRole("heading", { name: /rewrite in your voice/i })).toBeVisible();
   await expect(page.getByRole("textbox", { name: /script draft/i })).toBeEditable();
+  await page.getByRole("button", { name: /generate voice rewrite/i }).click();
+  await expect(page.getByRole("heading", { name: /suggested rewrite/i })).toBeFocused();
+  await expect(page.getByRole("textbox", { name: /suggested script/i })).toHaveValue(/Here is the useful part/u);
+  await page.getByRole("button", { name: /use this rewrite/i }).click();
+  await expect(page.getByText(/rewrite saved as version 2/i)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: /script draft/i })).toContainText(/Here is the useful part/u);
 
   await page.getByRole("button", { name: /hooks/i }).click();
   await page.getByRole("radio").first().check();
