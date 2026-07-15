@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
-import { DEMO_NOW } from "@/lib/demo/fixtures";
 import {
   MUSEBOARD_STORAGE_KEY,
   useMuseboardStore,
@@ -127,7 +126,7 @@ describe("creator onboarding", () => {
           contentId === content.id && scheduledFor !== undefined,
       ),
     ).toBe(true);
-    const weekStart = new Date(DEMO_NOW).getTime();
+    const weekStart = new Date(content.createdAt).getTime();
     const weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000;
     expect(
       store.plannerTasks.every(({ scheduledFor }) => {

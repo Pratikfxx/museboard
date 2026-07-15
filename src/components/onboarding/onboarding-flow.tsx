@@ -26,9 +26,21 @@ import type { CreatorOutcome } from "@/lib/demo/fixtures";
 import { buildStarterWorkspace } from "@/lib/demo/starter-workspace";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
+import styles from "./onboarding-flow.module.css";
+
 const ONBOARDING_STORAGE_KEY = "museboard-onboarding-draft-v1";
 const ONBOARDING_CHANGE_EVENT = "museboard:onboarding-change";
 const TOTAL_STEPS = 8;
+const STEP_LABELS = [
+  "First win",
+  "Creative lane",
+  "Audience",
+  "Formats",
+  "Capacity",
+  "Voice",
+  "Boundaries",
+  "First hook",
+] as const;
 let volatileDraft: string | null = null;
 
 interface OnboardingDraft {
@@ -99,6 +111,18 @@ const platformOptions = [
     Icon: YoutubeLogo,
   },
 ];
+
+const outcomeLabels: Record<CreatorOutcome, string> = {
+  plan_week: "A realistic week",
+  find_ideas: "Five relevant ideas",
+  build_system: "A repeatable system",
+};
+
+const archetypeLabels: Record<CreatorArchetype, string> = {
+  music: "Music creator",
+  tech_education: "Tech & education",
+  lifestyle_business: "Lifestyle & business",
+};
 
 function parseDraft(raw: string): OnboardingDraft {
   if (!raw) return DEFAULT_DRAFT;
@@ -178,31 +202,36 @@ function ChoiceButton({
   description,
   disabled,
   Icon,
+  index,
   onClick,
 }: {
   children: ReactNode;
   description: string;
   disabled?: boolean;
   Icon: typeof Sparkle;
+  index: number;
   onClick: () => void;
 }) {
   return (
     <button
-      className="group flex min-h-24 w-full items-start gap-4 rounded-2xl border border-border bg-surface p-4 text-left text-ink shadow-sm transition hover:-translate-y-0.5 hover:border-coral hover:shadow-md disabled:cursor-wait disabled:opacity-60"
+      className={styles.choiceButton}
       disabled={disabled}
       onClick={onClick}
       type="button"
     >
-      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-butter/35 text-warning">
-        <Icon aria-hidden="true" size={22} weight="regular" />
+      <span aria-hidden="true" className={styles.choiceIndex}>
+        {String(index).padStart(2, "0")}
       </span>
-      <span className="flex-1">
-        <span className="block font-semibold">{children}</span>
-        <span className="mt-1 block text-sm leading-6 text-muted">{description}</span>
+      <span className={styles.choiceIcon}>
+        <Icon aria-hidden="true" size={24} weight="regular" />
+      </span>
+      <span className={styles.choiceCopy}>
+        <span>{children}</span>
+        <small>{description}</small>
       </span>
       <ArrowRight
         aria-hidden="true"
-        className="mt-3 shrink-0 transition group-hover:translate-x-1"
+        className={styles.choiceArrow}
         size={18}
       />
     </button>
@@ -211,10 +240,10 @@ function ChoiceButton({
 
 function QuestionHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return (
-    <div className="mb-7">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-coral">{eyebrow}</p>
-      <h1 className="mt-2 font-display text-4xl leading-none text-ink sm:text-5xl">{title}</h1>
-      <p className="mt-4 max-w-2xl text-base leading-7 text-muted">{description}</p>
+    <div className={styles.questionHeader}>
+      <p>{eyebrow}</p>
+      <h1>{title}</h1>
+      <span>{description}</span>
     </div>
   );
 }
@@ -222,7 +251,7 @@ function QuestionHeader({ eyebrow, title, description }: { eyebrow: string; titl
 function ContinueButton({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }) {
   return (
     <button
-      className="mt-7 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-background transition hover:bg-coral disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+      className={styles.continueButton}
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -230,6 +259,51 @@ function ContinueButton({ children, disabled, onClick }: { children: ReactNode; 
       {children}
       <ArrowRight aria-hidden="true" size={18} weight="bold" />
     </button>
+  );
+}
+
+function SetupPreview({ draft }: { draft: OnboardingDraft }) {
+  const direction = draft.outcome
+    ? outcomeLabels[draft.outcome]
+    : "Your first useful week";
+  const lane = draft.archetype
+    ? archetypeLabels[draft.archetype]
+    : "Your creative lane";
+  const hook = draft.firstHook.trim() || "One clear idea, ready to shape.";
+
+  return (
+    <section aria-label="Workspace preview" className={styles.previewPanel}>
+      <header>
+        <span>Live workspace preview</span>
+        <b>{draft.step + 1}/8</b>
+      </header>
+      <div className={styles.previewCard}>
+        <small>YOUR NEXT POST</small>
+        <strong>{hook}</strong>
+        <span>{draft.audience.trim() || "Personalized to the audience you choose"}</span>
+      </div>
+      <dl className={styles.previewFacts}>
+        <div>
+          <dt>Direction</dt>
+          <dd>{direction}</dd>
+        </div>
+        <div>
+          <dt>Lane</dt>
+          <dd>{lane}</dd>
+        </div>
+        <div>
+          <dt>Weekly pace</dt>
+          <dd>{draft.weeklyCapacityMinutes / 60} focused hours</dd>
+        </div>
+      </dl>
+      <div aria-label="Starter workflow" className={styles.previewFlow}>
+        <span data-ready={draft.step >= 1}>Signal</span>
+        <i aria-hidden="true" />
+        <span data-ready={draft.step >= 5}>Shape</span>
+        <i aria-hidden="true" />
+        <span data-ready={draft.step >= 7}>Plan</span>
+      </div>
+    </section>
   );
 }
 
@@ -274,7 +348,7 @@ export function OnboardingFlow() {
     draft.step > 0 ? (
       <button
         aria-label="Previous question"
-        className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-muted transition hover:bg-surface hover:text-ink"
+        className={styles.backButton}
         onClick={() => updateDraft({ step: draft.step - 1 })}
         type="button"
       >
@@ -286,30 +360,28 @@ export function OnboardingFlow() {
     );
 
   return (
-    <main className="min-h-screen bg-background text-ink">
-      <header className="border-b border-border/80 px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <Link className="font-display text-2xl" href="/">
+    <main className={styles.page}>
+      <header className={styles.topbar}>
+        <div>
+          <Link className={styles.wordmark} href="/">
             Museboard
           </Link>
-          <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-surface px-3 text-xs font-bold uppercase tracking-[0.12em] text-muted">
+          <span className={styles.sampleBadge}>
             <Sparkle aria-hidden="true" className="text-coral" size={15} weight="fill" />
             Sample workspace · not live
           </span>
         </div>
       </header>
 
-      <div className="mx-auto grid min-h-[calc(100vh-4.25rem)] max-w-6xl lg:grid-cols-[17rem_1fr]">
-        <aside className="border-b border-border/80 px-4 py-4 sm:px-6 lg:border-b-0 lg:border-r lg:py-8">
-          <div className="flex items-center justify-between gap-3 lg:block">
+      <div className={styles.setupShell}>
+        <aside className={styles.setupRail}>
+          <div className={styles.railHeading}>
             {back}
-            <div className="text-right lg:mt-10 lg:text-left">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">
-                Your setup
-              </p>
-              <p className="mt-1 text-sm font-semibold">
-                Question {draft.step + 1} of {TOTAL_STEPS}
-              </p>
+            <div>
+              <p>Your setup</p>
+              <strong>
+                {String(draft.step + 1).padStart(2, "0")} / {String(TOTAL_STEPS).padStart(2, "0")}
+              </strong>
             </div>
           </div>
           <div
@@ -317,25 +389,35 @@ export function OnboardingFlow() {
             aria-valuemax={TOTAL_STEPS}
             aria-valuemin={1}
             aria-valuenow={draft.step + 1}
-            className="mt-3 h-1.5 overflow-hidden rounded-full bg-border lg:mt-4"
+            className={styles.progressTrack}
             role="progressbar"
           >
             <div
-              className="h-full rounded-full bg-coral transition-[width]"
+              className={styles.progressValue}
               style={{ width: `${((draft.step + 1) / TOTAL_STEPS) * 100}%` }}
             />
           </div>
 
-          {draft.step > 0 ? (
-            <div className="mt-5 hidden rounded-2xl bg-sage/20 p-4 text-sm leading-6 text-muted lg:block">
-              <LockSimple aria-hidden="true" className="mb-2 text-success" size={20} />
-              Social accounts stay disconnected. Connect one only after your first plan, if you choose.
-            </div>
-          ) : null}
+          <ol aria-label="Setup steps" className={styles.stepList}>
+            {STEP_LABELS.map((label, index) => (
+              <li
+                data-state={index < draft.step ? "complete" : index === draft.step ? "active" : "next"}
+                key={label}
+              >
+                <span>{index < draft.step ? <Check aria-hidden="true" size={13} weight="bold" /> : index + 1}</span>
+                <b>{label}</b>
+              </li>
+            ))}
+          </ol>
+          <SetupPreview draft={draft} />
+          <p className={styles.privacyNote}>
+            <LockSimple aria-hidden="true" size={17} />
+            No account connection or card required.
+          </p>
         </aside>
 
-        <section className="flex items-center px-4 py-10 sm:px-8 lg:px-14 lg:py-16">
-          <div className="mx-auto w-full max-w-3xl">
+        <section className={styles.questionStage}>
+          <div className={styles.questionFrame}>
             {draft.step === 0 ? (
               <div>
                 <QuestionHeader
@@ -343,11 +425,12 @@ export function OnboardingFlow() {
                   eyebrow="Start with value"
                   title="What should Museboard help you do first?"
                 />
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className={styles.choiceList}>
                   <ChoiceButton
                     description="Turn your capacity into a realistic first plan."
                     disabled={!isHydrated}
                     Icon={Clock}
+                    index={1}
                     onClick={() => updateDraft({ outcome: "plan_week", step: 1 })}
                   >
                     Plan my next week
@@ -356,6 +439,7 @@ export function OnboardingFlow() {
                     description="Start from five relevant sample opportunities."
                     disabled={!isHydrated}
                     Icon={Sparkle}
+                    index={2}
                     onClick={() => updateDraft({ outcome: "find_ideas", step: 1 })}
                   >
                     Find my next ideas
@@ -364,6 +448,7 @@ export function OnboardingFlow() {
                     description="Create a repeatable path from signal to publish."
                     disabled={!isHydrated}
                     Icon={Check}
+                    index={3}
                     onClick={() => updateDraft({ outcome: "build_system", step: 1 })}
                   >
                     Grow with a clear system
@@ -379,10 +464,11 @@ export function OnboardingFlow() {
                   eyebrow="Your creative lane"
                   title="What kind of creator are you?"
                 />
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className={styles.choiceList}>
                   <ChoiceButton
                     description="Artists, producers, songwriters, and music storytellers."
                     Icon={MusicNotes}
+                    index={1}
                     onClick={() =>
                       updateDraft({
                         archetype: "music",
@@ -396,6 +482,7 @@ export function OnboardingFlow() {
                   <ChoiceButton
                     description="Teachers, builders, reviewers, and explainers."
                     Icon={ChalkboardTeacher}
+                    index={2}
                     onClick={() =>
                       updateDraft({
                         archetype: "tech_education",
@@ -409,6 +496,7 @@ export function OnboardingFlow() {
                   <ChoiceButton
                     description="Operators, coaches, founders, and lifestyle creators."
                     Icon={Briefcase}
+                    index={3}
                     onClick={() =>
                       updateDraft({
                         archetype: "lifestyle_business",
