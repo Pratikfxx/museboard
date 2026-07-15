@@ -21,9 +21,11 @@ export async function installSampleWorkspace(page: Page) {
     creator: { ...workspace.creator, name: "Maya Chen" },
   };
   await page.addInitScript((sample) => {
-    localStorage.setItem(
-      "museboard-demo-v1",
-      JSON.stringify({ state: sample, version: 1 }),
-    );
+    if (!localStorage.getItem("museboard-demo-v1")) {
+      localStorage.setItem(
+        "museboard-demo-v1",
+        JSON.stringify({ state: sample, version: 1 }),
+      );
+    }
   }, state);
 }

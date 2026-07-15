@@ -10,6 +10,15 @@ import type {
 } from "@/domain/collaboration";
 import type { ExportRecord } from "@/domain/export";
 import type {
+  ContentHypothesis,
+  ContentSeries,
+  CreatorMemory,
+  OfflineCapture,
+  OpportunityFeedback,
+  WorkspaceRecoveryNotice,
+} from "@/domain/creator-intelligence";
+import { EMPTY_CREATOR_MEMORY } from "@/domain/creator-intelligence";
+import type {
   IdeaRecord,
   Opportunity,
   VisionReference,
@@ -95,6 +104,12 @@ export interface DemoMuseboardData {
   publishReceipts: PublishReceipt[];
   metrics: MetricSample[];
   learnings: Learning[];
+  hypotheses: ContentHypothesis[];
+  series: ContentSeries[];
+  creatorMemory: CreatorMemory;
+  opportunityFeedback: OpportunityFeedback[];
+  offlineCaptures: OfflineCapture[];
+  recoveryNotice?: WorkspaceRecoveryNotice;
   entitlementUsage: EntitlementUsage;
 }
 
@@ -378,6 +393,12 @@ export function createDemoState(): DemoMuseboardData {
     publishReceipts: [],
     metrics: [],
     learnings: [],
+    hypotheses: [],
+    series: [],
+    creatorMemory: { ...EMPTY_CREATOR_MEMORY },
+    opportunityFeedback: [],
+    offlineCaptures: [],
+    recoveryNotice: undefined,
     entitlementUsage: {
       plan: "studio",
       used: {},

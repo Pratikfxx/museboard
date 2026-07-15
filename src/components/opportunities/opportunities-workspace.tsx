@@ -20,7 +20,9 @@ import {
 
 import { CraftGuideDrawer } from "@/components/opportunities/craft-guide-drawer";
 import { OpportunityStory } from "@/components/opportunities/opportunity-story";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import {
+  personalizeOpportunityScore,
+} from "@/domain/creator-intelligence";
 import {
   rankOpportunities,
   type IdeaRecord,
@@ -115,7 +117,6 @@ function WorkspaceHeader({
         </div>
         <div className={styles.headerActions}>
           <CraftGuideDrawer guides={guides} />
-          <ThemeToggle />
         </div>
       </header>
       <nav aria-label="Opportunity views" className={styles.viewNav}>
@@ -143,15 +144,14 @@ function ForYouView({
   const decisions = useMuseboardStore((state) => state.opportunityDecisions);
   const ideas = useMuseboardStore((state) => state.ideas);
   const saveOpportunity = useMuseboardStore((state) => state.saveOpportunity);
-  const dismissOpportunity = useMuseboardStore(
-    (state) => state.dismissOpportunity,
-  );
   const restoreOpportunity = useMuseboardStore(
     (state) => state.restoreOpportunity,
   );
   const shapeOpportunity = useMuseboardStore(
     (state) => state.shapeOpportunity,
   );
+  const opportunityFeedback = useMuseboardStore((state) => state.opportunityFeedback);
+  const recordOpportunityFeedback = useMuseboardStore((state) => state.recordOpportunityFeedback);
   const [status, setStatus] = useState("");
   const ranked = useMemo(
     () =>
@@ -160,8 +160,8 @@ function ForYouView({
           decisions[id] !== "dismissed" &&
           new Date(provenance.expiresAt).getTime() >
             new Date(DEMO_NOW).getTime(),
-      ),
-    [decisions, opportunities],
+      ).sort((left, right) => personalizeOpportunityScore(right, opportunityFeedback).score - personalizeOpportunityScore(left, opportunityFeedback).score),
+    [decisions, opportunities, opportunityFeedback],
   );
   const dismissed = opportunities.filter(
     ({ id }) => decisions[id] === "dismissed",
@@ -193,8 +193,12 @@ function ForYouView({
             decision={decisions[opportunity.id]}
             key={opportunity.id}
             onDismiss={() => {
-              dismissOpportunity(opportunity.id);
-              setStatus(`Dismissed ${opportunity.title}.`);
+              recordOpportunityFeedback(opportunity.id, "not_for_me");
+              setStatus(`Removed ${opportunity.title} and tuned future fits.`);
+            }}
+            onMoreLikeThis={() => {
+              recordOpportunityFeedback(opportunity.id, "more_like_this");
+              setStatus(`Museboard will favor more ${formatLabel(opportunity.format)} ideas in ${opportunity.pillar}.`);
             }}
             onSave={() => {
               saveOpportunity(opportunity.id);
@@ -210,6 +214,7 @@ function ForYouView({
               );
             }}
             opportunity={opportunity}
+            personalizedFit={personalizeOpportunityScore(opportunity, opportunityFeedback)}
             shaped={ideas.some(
               (idea) => idea.opportunityId === opportunity.id,
             )}

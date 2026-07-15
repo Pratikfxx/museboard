@@ -6,6 +6,7 @@ import {
   MagicWand,
   MapPin,
   Prohibit,
+  ThumbsUp,
 } from "@phosphor-icons/react";
 
 import {
@@ -57,7 +58,9 @@ export interface OpportunityStoryProps {
   preview?: boolean;
   onSave?: () => void;
   onDismiss?: () => void;
+  onMoreLikeThis?: () => void;
   onShape?: () => void;
+  personalizedFit?: { score: number; adjustment: number; explanation: string };
 }
 
 export function OpportunityStory({
@@ -67,7 +70,9 @@ export function OpportunityStory({
   preview = false,
   onSave,
   onDismiss,
+  onMoreLikeThis,
   onShape,
+  personalizedFit,
 }: OpportunityStoryProps) {
   const titleId = `opportunity-${opportunity.id}-title`;
   const sourceId = `opportunity-${opportunity.id}-source`;
@@ -84,7 +89,7 @@ export function OpportunityStory({
           <h2 id={titleId}>{opportunity.title}</h2>
         </div>
         <strong className={styles.score}>
-          {ranking.score}
+          {personalizedFit?.score ?? ranking.score}
           <span>fit score</span>
         </strong>
       </div>
@@ -129,38 +134,42 @@ export function OpportunityStory({
         ) : null}
       </p>
 
-      <div
-        aria-label="Ranking factor breakdown"
-        className={styles.factorList}
-        role="list"
-      >
-        {Object.entries(ranking.factorBreakdown).map(
-          ([factor, contribution]) => {
+      <details className={styles.rankingDetails}>
+        <summary>Why this fits · score explained</summary>
+        <div aria-label="Ranking factor breakdown" className={styles.factorList} role="list">
+          {Object.entries(ranking.factorBreakdown).map(([factor, contribution]) => {
             const factorKey = factor as keyof typeof factorLabels;
             const weight = OPPORTUNITY_RANKING_WEIGHTS[factorKey] * 100;
             const rawValue = opportunity.signals[factorKey];
             return (
               <div key={factor} role="listitem">
-                <span>
-                  {factorLabels[factorKey]} · {weight}% weight
-                </span>
+                <span>{factorLabels[factorKey]} · {weight}% weight</span>
                 <strong>{contribution} points</strong>
-                <span aria-hidden="true" className={styles.factorTrack}>
-                  <span style={{ width: `${rawValue}%` }} />
-                </span>
+                <span aria-hidden="true" className={styles.factorTrack}><span style={{ width: `${rawValue}%` }} /></span>
               </div>
             );
-          },
-        )}
-      </div>
+          })}
+        </div>
+      </details>
 
       <p className={styles.evidenceLine}>
         {opportunity.evidence[0]?.summary ??
           "Evidence is incomplete; ranking is capped until a source is added."}
       </p>
 
+      {personalizedFit?.adjustment ? (
+        <p className={styles.preferenceNote}>
+          {personalizedFit.adjustment > 0
+            ? "Your feedback raised this fit."
+            : "Your feedback lowered this fit."} {personalizedFit.explanation}
+        </p>
+      ) : null}
+
       {!preview ? (
         <div className={styles.storyActions}>
+          <button onClick={onMoreLikeThis} type="button">
+            <ThumbsUp aria-hidden="true" size={18} /> More like this
+          </button>
           <button
             aria-pressed={decision === "saved"}
             onClick={onSave}
@@ -173,8 +182,8 @@ export function OpportunityStory({
             />
             {decision === "saved" ? "Saved" : "Save"}
           </button>
-          <button onClick={onDismiss} type="button">
-            <Prohibit aria-hidden="true" size={18} /> Dismiss
+          <button aria-label="Dismiss · Not for me" onClick={onDismiss} type="button">
+            <Prohibit aria-hidden="true" size={18} /> Not for me
           </button>
           <button
             aria-label="Shape idea"

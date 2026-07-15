@@ -27,6 +27,7 @@ import styles from "./today-workspace.module.css";
 type StaticReason =
   | "loading"
   | "reduced-motion"
+  | "small-screen"
   | "save-data"
   | "webgl-unavailable";
 
@@ -38,6 +39,9 @@ function staticReason(): StaticReason | null {
   if (typeof window === "undefined") return "loading";
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
     return "reduced-motion";
+  }
+  if (window.matchMedia?.("(max-width: 780px)").matches) {
+    return "small-screen";
   }
   if ((window.navigator as NavigatorWithConnection).connection?.saveData) {
     return "save-data";
@@ -232,9 +236,14 @@ export default function IdeaSculpture() {
 
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const smallScreen = window.matchMedia?.("(max-width: 780px)");
     const handleMotionChange = () => setFallbackReason(staticReason());
     media?.addEventListener?.("change", handleMotionChange);
-    return () => media?.removeEventListener?.("change", handleMotionChange);
+    smallScreen?.addEventListener?.("change", handleMotionChange);
+    return () => {
+      media?.removeEventListener?.("change", handleMotionChange);
+      smallScreen?.removeEventListener?.("change", handleMotionChange);
+    };
   }, []);
 
   useEffect(() => {

@@ -1,0 +1,29 @@
+.center {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin: 16px clamp(16px, 3vw, 42px) 0;
+  border: 1px solid color-mix(in srgb, var(--coral) 42%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--coral) 8%, var(--surface));
+  padding: 14px;
+  color: var(--ink);
+}
+
+.icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--coral) 16%, var(--surface)); color: var(--coral); }
+.copy { display: grid; gap: 3px; }
+.copy p { margin: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
+.copy small { color: var(--coral); font-weight: 700; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.actions button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 7px; border-radius: 999px; padding: 0 14px; font: inherit; font-size: 0.78rem; font-weight: 800; cursor: pointer; }
+.secondary { border: 1px solid var(--border); background: var(--surface); color: var(--ink); }
+.primary { border: 1px solid var(--ink); background: var(--ink); color: var(--background); }
+
+@media (max-width: 780px) {
+  .center { grid-template-columns: auto minmax(0, 1fr); margin: 12px 12px 0; }
+  .actions { grid-column: 1 / -1; justify-content: stretch; }
+  .actions button { flex: 1 1 180px; }
+}

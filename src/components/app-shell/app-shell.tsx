@@ -2,11 +2,13 @@
 
 import {
   BookOpen,
+  Brain,
   CalendarBlank,
   Compass,
   DotsThree,
   GearSix,
   House,
+  Lightbulb,
   PencilSimple,
   ShieldCheck,
   X,
@@ -17,6 +19,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
+import { RecoveryCenter } from "@/components/recovery/recovery-center";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
 import styles from "./app-shell.module.css";
@@ -55,6 +59,9 @@ function NavigationLinks() {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const creator = useMuseboardStore((state) => state.creator);
+  const queuedCaptureCount = useMuseboardStore(
+    (state) => state.offlineCaptures.filter(({ status }) => status === "queued").length,
+  );
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const moreSheetRef = useRef<HTMLElement>(null);
@@ -111,6 +118,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className={styles.nav}>
           <NavigationLinks />
         </nav>
+        <div className={styles.railTools}>
+          <ThemeToggle />
+          <Link
+            aria-label={`${queuedCaptureCount} queued ${queuedCaptureCount === 1 ? "capture" : "captures"}`}
+            className={styles.captureLink}
+            data-empty={queuedCaptureCount === 0}
+            href="/app/today#capture-inbox"
+          >
+            <Lightbulb aria-hidden="true" size={18} />
+            <span>Captures</span>
+            <strong>{queuedCaptureCount}</strong>
+          </Link>
+        </div>
         <div className={styles.profile}>
           <Image
             alt=""
@@ -125,9 +145,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <small>{creatorLane}</small>
           </span>
         </div>
-        <Link className={styles.settingsLink} href="/app/settings/billing">
-          <GearSix aria-hidden="true" size={18} />
-          Settings
+        <Link className={styles.settingsLink} href="/app/settings/memory">
+          <Brain aria-hidden="true" size={18} />
+          Creator memory
         </Link>
       </aside>
 
@@ -140,7 +160,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
       </header>
 
-      <main className={styles.main} id="workspace-main" tabIndex={-1}>{children}</main>
+      <main className={styles.main} id="workspace-main" tabIndex={-1}>
+        <RecoveryCenter />
+        {children}
+      </main>
 
       <nav aria-label="Mobile primary" className={styles.mobileNav}>
         {mobileNavigation.map(({ href, label, Icon }) => {
@@ -191,8 +214,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
             </div>
             <nav aria-label="More destinations" className={styles.moreLinks}>
+              <div className={styles.mobileTheme}><span><strong>Appearance</strong><small>Light, dark, or follow your device</small></span><ThemeToggle /></div>
+              <Link href="/app/today#capture-inbox" onClick={() => setMoreOpen(false)}><Lightbulb aria-hidden="true" size={22} /><span><strong>Captures · {queuedCaptureCount}</strong><small>Ideas waiting to be shaped</small></span></Link>
               <Link href="/app/learn" onClick={() => setMoreOpen(false)}><BookOpen aria-hidden="true" size={22} /><span><strong>Learn</strong><small>Turn measured results into patterns</small></span></Link>
               <Link href="/app/team" onClick={() => setMoreOpen(false)}><UsersThree aria-hidden="true" size={22} /><span><strong>Team</strong><small>Assignments, reviews, and collaborators</small></span></Link>
+              <Link href="/app/settings/memory" onClick={() => setMoreOpen(false)}><Brain aria-hidden="true" size={22} /><span><strong>Creator memory</strong><small>Versioned voice and language rules</small></span></Link>
               <Link href="/app/settings/billing" onClick={() => setMoreOpen(false)}><GearSix aria-hidden="true" size={22} /><span><strong>Billing</strong><small>Plan and sample mode controls</small></span></Link>
               <Link href="/app/settings/data" onClick={() => setMoreOpen(false)}><ShieldCheck aria-hidden="true" size={22} /><span><strong>Data controls</strong><small>Export or clear this workspace</small></span></Link>
             </nav>

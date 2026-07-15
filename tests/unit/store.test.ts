@@ -138,6 +138,91 @@ describe("Museboard demo store", () => {
     expect(useMuseboardStore.getState().selectedOpportunityId).toBeUndefined();
   });
 
+  it("persists a series and creator hypothesis around existing content", () => {
+    const state = useMuseboardStore.getState();
+    const seriesId = state.createSeries({
+      contentId: "content-desk",
+      title: "Creator systems in practice",
+      goal: "Teach one sustainable system across three posts",
+      at: "2026-07-13T11:00:00.000Z",
+    });
+    const hypothesisId = state.setContentHypothesis({
+      contentId: "content-desk",
+      statement: "Question-led openings will improve completion.",
+      expectedOutcome: "Seven-day completion rate",
+      at: "2026-07-13T11:01:00.000Z",
+    });
+
+    expect(seriesId).toBe("series-content-desk");
+    expect(hypothesisId).toBe("hypothesis-content-desk-1");
+    expect(useMuseboardStore.getState().series[0]).toMatchObject({
+      title: "Creator systems in practice",
+      contentIds: ["content-desk"],
+    });
+    expect(useMuseboardStore.getState().hypotheses[0]).toMatchObject({
+      contentId: "content-desk",
+      statement: "Question-led openings will improve completion.",
+      status: "planned",
+    });
+  });
+
+  it("records explainable opportunity feedback and versions creator memory", () => {
+    const state = useMuseboardStore.getState();
+    expect(
+      state.recordOpportunityFeedback(
+        "opportunity-desk",
+        "more_like_this",
+        "2026-07-13T11:00:00.000Z",
+      ),
+    ).toBe(true);
+    expect(
+      state.updateCreatorMemory(
+        {
+          preferredPhrases: ["Here is the useful part"],
+          avoidPhrases: ["game changer"],
+          preferredStructures: ["question then demonstration"],
+        },
+        "2026-07-13T11:01:00.000Z",
+      ),
+    ).toBe(true);
+
+    const updated = useMuseboardStore.getState();
+    expect(updated.opportunityFeedback[0]).toMatchObject({
+      opportunityId: "opportunity-desk",
+      signal: "more_like_this",
+      pillar: "Practical creator systems",
+    });
+    expect(updated.creatorMemory).toMatchObject({
+      version: 2,
+      preferredPhrases: ["Here is the useful part"],
+      avoidPhrases: ["game changer"],
+    });
+  });
+
+  it("keeps quick captures visible and promotes one into the idea board", () => {
+    const state = useMuseboardStore.getState();
+    const captureId = state.captureIdea(
+      "Show the one shortcut I use before every recording",
+      "2026-07-13T11:00:00.000Z",
+    );
+
+    expect(captureId).toBe("capture-1");
+    expect(useMuseboardStore.getState().offlineCaptures[0]).toMatchObject({
+      text: "Show the one shortcut I use before every recording",
+      status: "queued",
+    });
+
+    const ideaId = useMuseboardStore
+      .getState()
+      .promoteCapture(captureId!, "2026-07-13T11:02:00.000Z");
+
+    expect(ideaId).toBe("idea-capture-opportunity-capture-1");
+    expect(useMuseboardStore.getState().ideas.at(-1)?.title).toBe(
+      "Show the one shortcut I use before every recording",
+    );
+    expect(useMuseboardStore.getState().offlineCaptures[0].status).toBe("promoted");
+  });
+
   it("deduplicates a reimported provider metric by stable source sample", () => {
     const sample = metricSample(1);
 

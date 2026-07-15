@@ -190,6 +190,10 @@ describe("Today workspace", () => {
     renderToday();
 
     expect(screen.getByText("Active learning should lead the strip.")).toBeVisible();
+    expect(screen.getByRole("link", { name: /use this in next post/i })).toHaveAttribute(
+      "href",
+      "/app/learn?learningId=active-learning",
+    );
     expect(
       screen.queryByText("Dismissed learning should stay hidden."),
     ).not.toBeInTheDocument();
@@ -215,7 +219,7 @@ describe("Today workspace", () => {
     expect(stylesheet).toMatch(/\.hookOption:has\(input:focus-visible\)/u);
   });
 
-  it("buffers distinct quick captures locally while offline", async () => {
+  it("keeps offline captures visible and promotes one into the Idea Board", async () => {
     Object.defineProperty(navigator, "onLine", {
       configurable: true,
       value: false,
@@ -228,13 +232,17 @@ describe("Today workspace", () => {
     await user.click(screen.getByRole("button", { name: "Save idea" }));
 
     expect(screen.getByText(/saved on this device/i)).toBeVisible();
-    expect(JSON.parse(localStorage.getItem("museboard-offline-captures-v1") ?? "[]"))
-      .toEqual([expect.objectContaining({ text: "A candid studio reset", pending: true })]);
+    expect(useMuseboardStore.getState().offlineCaptures)
+      .toEqual([expect.objectContaining({ text: "A candid studio reset", status: "queued" })]);
+    expect(screen.getByText("A candid studio reset")).toBeVisible();
 
     await user.type(capture, "A second idea that must not overwrite the first");
     await user.click(screen.getByRole("button", { name: "Save idea" }));
-    expect(JSON.parse(localStorage.getItem("museboard-offline-captures-v1") ?? "[]"))
-      .toHaveLength(2);
+    expect(useMuseboardStore.getState().offlineCaptures).toHaveLength(2);
+
+    await user.click(screen.getAllByRole("button", { name: /shape capture/i })[0]);
+    expect(useMuseboardStore.getState().offlineCaptures[0].status).toBe("promoted");
+    expect(useMuseboardStore.getState().ideas.some(({ title }) => title === "A candid studio reset")).toBe(true);
   });
 });
 

@@ -251,6 +251,36 @@
   color: var(--success);
 }
 
+.captureInbox {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  scroll-margin-top: 76px;
+}
+
+.captureInbox > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.captureInbox > header span { display: grid; gap: 2px; }
+.captureInbox > header strong { font-size: 0.78rem; }
+.captureInbox > header small { color: var(--muted); font-size: 0.67rem; }
+.captureInbox > header b { display: grid; min-width: 24px; height: 24px; place-items: center; border-radius: 999px; background: var(--butter); color: var(--ink); font-size: 0.7rem; }
+.captureInbox ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.captureInbox li { display: grid; gap: 8px; padding-top: 9px; border-top: 1px solid var(--border); }
+.captureInbox li p { margin: 0; font-size: 0.74rem; line-height: 1.45; }
+.captureInbox li div { display: flex; gap: 6px; }
+.captureInbox li button { min-height: 38px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); padding: 0 10px; color: var(--ink); font-size: 0.68rem; font-weight: 800; }
+.captureInbox li button:last-child { min-width: 38px; padding: 0; color: var(--danger); }
+.emptyCaptures { margin: 0; color: var(--muted); font-size: 0.72rem; }
+
 .stageSpine {
   position: relative;
   display: grid;
@@ -834,6 +864,19 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.learningAction {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+  border-bottom: 1px solid currentColor;
+  color: var(--cobalt);
+  font-size: 0.75rem;
+  font-weight: 850;
+  text-decoration: none;
 }
 
 .emptyState {

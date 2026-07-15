@@ -48,7 +48,8 @@ describe("Opportunity integrity", () => {
     useMuseboardStore.getState().resetDemo();
   });
 
-  it("shows every sample signal with source, observation, expiry, geography, platform, and factors", () => {
+  it("shows every sample signal with source, observation, expiry, geography, platform, and inspectable factors", async () => {
+    const user = userEvent.setup();
     renderWorkspace();
 
     expect(screen.getByText(/sample workspace · not live/i)).toBeVisible();
@@ -61,6 +62,7 @@ describe("Opportunity integrity", () => {
     expect(within(story).getByText(/global/i)).toBeVisible();
     expect(within(story).getByText(/instagram reels/i)).toBeVisible();
     expect(within(story).getByText(/sample signal · not live/i)).toBeVisible();
+    await user.click(within(story).getByText(/why this fits/i));
     const breakdown = within(story).getByRole("list", {
       name: /ranking factor breakdown/i,
     });
@@ -190,6 +192,22 @@ describe("Opportunity integrity", () => {
       "href",
       `/app/create/${promotedState.content.at(-1)?.id}?stage=angle`,
     );
+  });
+
+  it("learns from explicit taste feedback and explains the adjusted fit", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    const story = screen.getByRole("article", { name: /low-friction creator desk/i });
+
+    await user.click(within(story).getByRole("button", { name: /more like this/i }));
+
+    expect(useMuseboardStore.getState().opportunityFeedback).toEqual([
+      expect.objectContaining({
+        opportunityId: "opportunity-desk",
+        signal: "more_like_this",
+      }),
+    ]);
+    expect(within(story).getByText(/your feedback raised this fit/i)).toBeVisible();
   });
 
   it("returns keyboard focus to the craft guide trigger after Escape", async () => {

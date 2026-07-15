@@ -182,4 +182,16 @@ describe("creator planner", () => {
     expect(within(dialog).getByLabelText(/time/i)).toHaveFocus();
     expect(dialog).toBeVisible();
   });
+
+  it("turns the current post into a visible repeatable series", async () => {
+    const user = userEvent.setup();
+    activatePlanner();
+    render(<PlannerWorkspace now="2026-07-13T09:00:00.000Z" />);
+
+    await user.click(screen.getByRole("button", { name: /turn current post into a series/i }));
+
+    const series = useMuseboardStore.getState().series[0];
+    expect(series).toMatchObject({ status: "active", contentIds: [useMuseboardStore.getState().content[0].id] });
+    expect(screen.getByRole("region", { name: /active series/i })).toHaveTextContent(series.title);
+  });
 });

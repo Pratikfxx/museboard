@@ -1,4 +1,5 @@
 import type { DemoMuseboardData } from "@/lib/demo/fixtures";
+import { EMPTY_CREATOR_MEMORY } from "@/domain/creator-intelligence";
 
 export const SAMPLE_WORKSPACE_DELETE_PHRASE = "DELETE SAMPLE WORKSPACE";
 
@@ -32,6 +33,12 @@ function workspaceData(state: WorkspaceLike): DemoMuseboardData {
     publishReceipts: state.publishReceipts,
     metrics: state.metrics,
     learnings: state.learnings,
+    hypotheses: state.hypotheses,
+    series: state.series,
+    creatorMemory: state.creatorMemory,
+    opportunityFeedback: state.opportunityFeedback,
+    offlineCaptures: state.offlineCaptures,
+    recoveryNotice: state.recoveryNotice,
     entitlementUsage: state.entitlementUsage,
   };
 }
@@ -78,6 +85,12 @@ export function createClearedSampleWorkspace(resetAt: string): DemoMuseboardData
     publishReceipts: [],
     metrics: [],
     learnings: [],
+    hypotheses: [],
+    series: [],
+    creatorMemory: { ...EMPTY_CREATOR_MEMORY },
+    opportunityFeedback: [],
+    offlineCaptures: [],
+    recoveryNotice: undefined,
     entitlementUsage: {
       plan: "free",
       used: {},

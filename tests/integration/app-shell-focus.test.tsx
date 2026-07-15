@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/app-shell/app-shell";
+import { ThemeProvider } from "@/components/ui/theme-provider";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/app/today",
@@ -11,7 +12,7 @@ vi.mock("next/navigation", () => ({
 describe("App shell More sheet focus", () => {
   it("traps keyboard focus and restores it to the More trigger", async () => {
     const user = userEvent.setup();
-    render(<AppShell><p>Workspace content</p></AppShell>);
+    render(<ThemeProvider><AppShell><p>Workspace content</p></AppShell></ThemeProvider>);
 
     const trigger = screen.getByRole("button", { name: "More" });
     await user.click(trigger);

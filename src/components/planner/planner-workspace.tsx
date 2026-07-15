@@ -9,6 +9,7 @@ import {
   Info,
   MoonStars,
   SkipForward,
+  Stack,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -166,6 +167,9 @@ function MoveDialog({
 export function PlannerWorkspace({ now }: { now?: string } = {}) {
   const creator = useMuseboardStore((state) => state.creator);
   const tasks = useMuseboardStore((state) => state.plannerTasks);
+  const content = useMuseboardStore((state) => state.content);
+  const series = useMuseboardStore((state) => state.series);
+  const createSeries = useMuseboardStore((state) => state.createSeries);
   const plannerUndo = useMuseboardStore((state) => state.plannerUndo);
   const reschedule = useMuseboardStore((state) => state.reschedulePlannerTask);
   const updateStatus = useMuseboardStore((state) => state.updatePlannerTaskStatus);
@@ -186,6 +190,13 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
   const loadTitle = `${load[0].toUpperCase()}${load.slice(1)} week`;
   const moving = tasks.find(({ id }) => id === movingId);
   const taskTitle = useMemo(() => new Map(tasks.map((task) => [task.id, task.title])), [tasks]);
+  const currentContent = content.find(({ stage }) => !["measured", "archived"].includes(stage)) ?? content[0];
+
+  function startSeries() {
+    if (!currentContent) return;
+    const id = createSeries({ contentId: currentContent.id, title: `${currentContent.title} · ongoing`, goal: "Build recognition by repeating a useful format with a fresh angle." });
+    setStatus(id ? "Series created. Keep the format; vary the evidence and angle." : "This post could not be turned into a series.");
+  }
 
   function closeMove() {
     setMovingId(undefined);
@@ -258,6 +269,11 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
 
         <div className={styles.explanation}><Info aria-hidden="true" size={20} /><p><strong>Museboard stops at 80% by default.</strong> Tasks are rounded to 15 minutes, dependencies remain visible, and recovery days keep their breathing room.</p></div>
 
+        <section aria-label="Active series" className={styles.seriesRail}>
+          <div><Stack aria-hidden="true" size={25} /><span><strong>Series</strong><small>Repeat what works without repeating yourself.</small></span></div>
+          {series.length ? series.map((item) => <article key={item.id}><span>{item.status}</span><h2>{item.title}</h2><p>{item.goal}</p><small>{item.contentIds.length} post{item.contentIds.length === 1 ? "" : "s"} connected</small></article>) : <><p>No repeatable format is active yet.</p><button disabled={!currentContent} onClick={startSeries} type="button">Turn current post into a series</button></>}
+        </section>
+
         <div aria-label="Production week days" className={styles.week} role="region" tabIndex={0}>
           {days.map((date) => {
             const dayTasks = tasks.filter((task) =>
@@ -279,7 +295,7 @@ export function PlannerWorkspace({ now }: { now?: string } = {}) {
 
         {outsideTasks.length ? <section aria-labelledby="outside-week-heading" className={styles.outsideWeek}><div><p>Needs a decision</p><h2 id="outside-week-heading">Outside this week</h2><span>Overdue, future, and unscheduled work stays visible until you move, finish, or skip it.</span></div><div className={styles.outsideGrid}>{outsideTasks.map(taskCard)}</div></section> : null}
 
-        <footer className={styles.statusBar}><p aria-live="polite" role="status">{status}</p>{plannerUndo ? <button onClick={() => { undo(); setStatus(`Restored ${plannerUndo.before.title} to its previous time.`); }} type="button"><ArrowCounterClockwise aria-hidden="true" size={18} /> Undo move</button> : null}</footer>
+        {status || plannerUndo ? <footer className={styles.statusBar}><p aria-live="polite" role="status">{status}</p>{plannerUndo ? <button onClick={() => { undo(); setStatus(`Restored ${plannerUndo.before.title} to its previous time.`); }} type="button"><ArrowCounterClockwise aria-hidden="true" size={18} /> Undo move</button> : null}</footer> : null}
       </div>
       {moving ? <MoveDialog days={days} onClose={closeMove} onMove={(date, time) => move(moving, date, time)} task={moving} timezone={timezone} /> : null}
     </>

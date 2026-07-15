@@ -9,6 +9,7 @@ import {
   Clock,
   LightbulbFilament,
   NotePencil,
+  Trash,
   Target,
   TrendUp,
   VideoCamera,
@@ -18,7 +19,6 @@ import Link from "next/link";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import { IdeaSculptureFallback } from "@/components/today/idea-sculpture-fallback";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   WORKFLOW_STAGES,
   type ContentPlatform,
@@ -38,7 +38,6 @@ const platformLabels: Record<ContentPlatform, string> = {
   youtube_shorts: "YouTube Shorts",
 };
 const todayStages = ["signal", "angle", "hook", "outline"] as const;
-const offlineCaptureKey = "museboard-offline-captures-v1";
 
 function stageState(
   currentStage: WorkflowStage,
@@ -94,6 +93,10 @@ export function TodayWorkspace() {
   const hooks = useMuseboardStore((state) => state.hooks);
   const plannerTasks = useMuseboardStore((state) => state.plannerTasks);
   const learnings = useMuseboardStore((state) => state.learnings);
+  const offlineCaptures = useMuseboardStore((state) => state.offlineCaptures);
+  const captureIdea = useMuseboardStore((state) => state.captureIdea);
+  const dismissCapture = useMuseboardStore((state) => state.dismissCapture);
+  const promoteCapture = useMuseboardStore((state) => state.promoteCapture);
   const saveWorkshopVersion = useMuseboardStore((state) => state.saveWorkshopVersion);
 
   const selectedOpportunity = useMemo(
@@ -187,7 +190,6 @@ export function TodayWorkspace() {
               <p className={styles.sampleMode}>Sample workspace · not live</p>
             </div>
             <div className={styles.topbarActions}>
-              <ThemeToggle />
               <button
                 aria-label="Notifications, no new alerts"
                 className={styles.iconButton}
@@ -231,24 +233,15 @@ export function TodayWorkspace() {
     event.preventDefault();
     const text = capture.trim();
     if (!text) return;
-    try {
-      const raw = window.localStorage.getItem(offlineCaptureKey);
-      const existing = raw ? JSON.parse(raw) : [];
-      const queue = Array.isArray(existing) ? existing.slice(-99) : [];
-      queue.push({
-        id: `capture-${Date.now()}-${queue.length + 1}`,
-        text,
-        pending: true,
-        createdAt: new Date().toISOString(),
-      });
-      window.localStorage.setItem(offlineCaptureKey, JSON.stringify(queue));
+    const captureId = captureIdea(text);
+    if (captureId) {
       setCapture("");
       setCaptureStatus(
         isOnline
-          ? "Saved in this sample workspace · connect an account to sync"
-          : "Saved on this device · waiting for a connected account to sync",
+          ? "Saved to your capture inbox · ready to shape"
+          : "Saved on this device · visible in your capture inbox",
       );
-    } catch {
+    } else {
       setCaptureStatus("Couldn’t save locally. Copy this idea before leaving.");
     }
   }
@@ -262,7 +255,6 @@ export function TodayWorkspace() {
             <p className={styles.sampleMode}>Sample workspace · not live</p>
           </div>
           <div className={styles.topbarActions}>
-            <ThemeToggle />
             <button
               aria-label="Notifications, no new alerts"
               className={styles.iconButton}
@@ -431,6 +423,23 @@ export function TodayWorkspace() {
               <p aria-live="polite">{captureStatus}</p>
             </form>
 
+            <section className={styles.captureInbox} id="capture-inbox">
+              <header><span><strong>Capture inbox</strong><small>Shape a spark when you are ready</small></span><b>{offlineCaptures.filter(({ status }) => status === "queued").length}</b></header>
+              {offlineCaptures.filter(({ status }) => status === "queued").length ? (
+                <ul>
+                  {offlineCaptures.filter(({ status }) => status === "queued").map((item) => (
+                    <li key={item.id}>
+                      <p>{item.text}</p>
+                      <div>
+                        <button onClick={() => { promoteCapture(item.id); setCaptureStatus("Capture shaped on your Idea Board."); }} type="button">Shape capture</button>
+                        <button aria-label={`Dismiss capture: ${item.text}`} onClick={() => dismissCapture(item.id)} type="button"><Trash aria-hidden="true" size={16} /></button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className={styles.emptyCaptures}>Saved sparks will stay visible here.</p>}
+            </section>
+
             <section className={styles.collaborators}>
               <p className={styles.eyebrow}>Collaborators</p>
               <div className={styles.collaborator}>
@@ -502,6 +511,7 @@ export function TodayWorkspace() {
               ? `${activeLearning.metricDefinition} · ${activeLearning.sampleSize} samples · ${activeLearning.confidence} confidence`
               : "0 measured posts · confidence unavailable · no result has been inferred"}
           </small>
+          {activeLearning ? <Link className={styles.learningAction} href={`/app/learn?learningId=${encodeURIComponent(activeLearning.id)}`}>Use this in next post <span aria-hidden="true">→</span></Link> : <Link className={styles.learningAction} href="/app/learn">Bring results back <span aria-hidden="true">→</span></Link>}
         </div>
       </section>
     </div>

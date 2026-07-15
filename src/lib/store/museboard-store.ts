@@ -15,6 +15,17 @@ import {
   type DuplicatePolicy,
 } from "@/domain/analytics";
 import {
+  contentHypothesisSchema,
+  contentSeriesSchema,
+  creatorMemorySchema,
+  createSeriesFromContent,
+  offlineCaptureSchema,
+  opportunityFeedbackSchema,
+  workspaceRecoveryNoticeSchema,
+  type CreatorMemory,
+  type OpportunityFeedback,
+} from "@/domain/creator-intelligence";
+import {
   approvalEventSchema,
   approvalHref,
   activeActor,
@@ -85,9 +96,14 @@ import {
   validateVisionReference,
   type VisionReferenceInput,
 } from "@/lib/providers/opportunities";
+import {
+  inspectPersistedWorkspaceEnvelope,
+  MUSEBOARD_RECOVERY_BACKUP_KEY,
+} from "@/lib/store/recovery";
 
 export const MUSEBOARD_STORAGE_KEY = "museboard-demo-v1";
 const fallbackStorage = new Map<string, string>();
+let pendingRecoveryNotice: DemoMuseboardData["recoveryNotice"];
 const creatorOutcomeSchema = z.enum(CREATOR_OUTCOMES);
 
 const safeStateStorage: StateStorage = {
@@ -99,8 +115,32 @@ const safeStateStorage: StateStorage = {
       } else {
         fallbackStorage.set(name, value);
       }
-      return value;
+      if (name !== MUSEBOARD_STORAGE_KEY || value === null) return value;
+      const inspection = inspectPersistedWorkspaceEnvelope(
+        value,
+        (payload) => validatePersistedMuseboardData(payload).success,
+      );
+      if (inspection.ok) return value;
+      fallbackStorage.set(MUSEBOARD_RECOVERY_BACKUP_KEY, inspection.rawBackup);
+      try {
+        window.localStorage.setItem(
+          MUSEBOARD_RECOVERY_BACKUP_KEY,
+          inspection.rawBackup,
+        );
+      } catch {
+        // The in-memory quarantine remains downloadable for this tab.
+      }
+      pendingRecoveryNotice = inspection.notice;
+      return null;
     } catch {
+      pendingRecoveryNotice = {
+        id: `recovery-${new Date().toISOString()}`,
+        kind: "storage_unavailable",
+        title: "Local saving is unavailable",
+        detail:
+          "Museboard will keep this workspace usable in the current tab, but your browser is blocking persistent storage.",
+        detectedAt: new Date().toISOString(),
+      };
       return fallbackStorage.get(name) ?? null;
     }
   },
@@ -262,6 +302,19 @@ const persistedMuseboardSchema: z.ZodType<DemoMuseboardData> = z.object({
   publishReceipts: z.array(publishReceiptSchema),
   metrics: metricSamplesSchema,
   learnings: z.array(learningSchema),
+  hypotheses: z.array(contentHypothesisSchema).default([]),
+  series: z.array(contentSeriesSchema).default([]),
+  creatorMemory: creatorMemorySchema.default({
+    version: 1,
+    preferredPhrases: [],
+    avoidPhrases: [],
+    preferredStructures: [],
+    notes: [],
+    updatedAt: "2026-07-13T09:00:00.000Z",
+  }),
+  opportunityFeedback: z.array(opportunityFeedbackSchema).default([]),
+  offlineCaptures: z.array(offlineCaptureSchema).default([]),
+  recoveryNotice: workspaceRecoveryNoticeSchema.optional(),
   entitlementUsage: entitlementUsageSchema,
   memberships: z.array(membershipSchema).default([]),
   currentActorMembershipId: z.string().min(1).default("member-owner"),
@@ -352,6 +405,23 @@ export function upgradePersistedMuseboardData(payload: unknown): unknown {
     commentEvents: Array.isArray(state.commentEvents) ? state.commentEvents : [],
     approvals: Array.isArray(state.approvals) ? state.approvals : [],
     notifications: Array.isArray(state.notifications) ? state.notifications : [],
+    hypotheses: Array.isArray(state.hypotheses) ? state.hypotheses : [],
+    series: Array.isArray(state.series) ? state.series : [],
+    creatorMemory: recordValue(state.creatorMemory) ?? {
+      version: 1,
+      preferredPhrases: [],
+      avoidPhrases: [],
+      preferredStructures: [],
+      notes: [],
+      updatedAt: "2026-07-13T09:00:00.000Z",
+    },
+    opportunityFeedback: Array.isArray(state.opportunityFeedback)
+      ? state.opportunityFeedback
+      : [],
+    offlineCaptures: Array.isArray(state.offlineCaptures)
+      ? state.offlineCaptures
+      : [],
+    recoveryNotice: recordValue(state.recoveryNotice),
     exports: Array.isArray(state.exports)
       ? state.exports.filter((value) => recordValue(value)?.status === "complete")
       : [],
@@ -463,6 +533,33 @@ interface MuseboardActions {
   deleteMetricImport: (importId: string, at?: string) => boolean;
   dismissLearning: (learningId: string, at?: string) => void;
   restoreLearning: (learningId: string) => void;
+  createSeries: (input: {
+    contentId: string;
+    title: string;
+    goal: string;
+    at?: string;
+  }) => string | undefined;
+  addContentToSeries: (seriesId: string, contentId: string, at?: string) => boolean;
+  setContentHypothesis: (input: {
+    contentId: string;
+    statement: string;
+    expectedOutcome?: string;
+    learningId?: string;
+    at?: string;
+  }) => string | undefined;
+  recordOpportunityFeedback: (
+    opportunityId: string,
+    signal: OpportunityFeedback["signal"],
+    at?: string,
+  ) => boolean;
+  updateCreatorMemory: (
+    patch: Partial<Pick<CreatorMemory, "preferredPhrases" | "avoidPhrases" | "preferredStructures" | "notes">>,
+    at?: string,
+  ) => boolean;
+  captureIdea: (text: string, at?: string) => string | undefined;
+  dismissCapture: (captureId: string) => boolean;
+  promoteCapture: (captureId: string, at?: string) => string | undefined;
+  clearRecoveryNotice: () => void;
 }
 
 export type MuseboardState = DemoMuseboardData & MuseboardActions;
@@ -514,6 +611,12 @@ function persistedState(state: MuseboardState): DemoMuseboardData {
     publishReceipts: state.publishReceipts,
     metrics: state.metrics,
     learnings: state.learnings,
+    hypotheses: state.hypotheses,
+    series: state.series,
+    creatorMemory: state.creatorMemory,
+    opportunityFeedback: state.opportunityFeedback,
+    offlineCaptures: state.offlineCaptures,
+    recoveryNotice: state.recoveryNotice,
     entitlementUsage: state.entitlementUsage,
     memberships: state.memberships,
     currentActorMembershipId: state.currentActorMembershipId,
@@ -570,6 +673,19 @@ export const useMuseboardStore = create<MuseboardState>()(
           plannerTasks: parsed.plannerTasks,
           plannerUndo: undefined,
           comments: [],
+          hypotheses: [],
+          series: [],
+          creatorMemory: {
+            version: 1,
+            preferredPhrases: [],
+            avoidPhrases: parsed.creator.boundaries,
+            preferredStructures: [],
+            notes: parsed.creator.voiceTraits,
+            updatedAt: onboardingAt,
+          },
+          opportunityFeedback: [],
+          offlineCaptures: [],
+          recoveryNotice: undefined,
           memberships: [ownerMembership(parsed.creator.name, onboardingAt)],
           currentActorMembershipId: "member-owner",
           assignments: [],
@@ -1418,6 +1534,192 @@ export const useMuseboardStore = create<MuseboardState>()(
           learnings: state.learnings.map((learning) => learning.id === learningId ? { ...learning, dismissedAt: undefined } : learning),
         }));
       },
+
+      createSeries: ({ contentId, title, goal, at = now() }) => {
+        const state = get();
+        if (!state.content.some(({ id }) => id === contentId)) return undefined;
+        const existing = state.series.find((candidate) => candidate.contentIds.includes(contentId));
+        if (existing) return existing.id;
+        const parsed = contentSeriesSchema.safeParse(
+          createSeriesFromContent({ contentId, title, goal, at }),
+        );
+        if (!parsed.success) return undefined;
+        set((current) => ({ series: [...current.series, parsed.data] }));
+        return parsed.data.id;
+      },
+
+      addContentToSeries: (seriesId, contentId, at = now()) => {
+        const state = get();
+        const target = state.series.find(({ id }) => id === seriesId);
+        if (!target || !state.content.some(({ id }) => id === contentId)) return false;
+        if (target.contentIds.includes(contentId)) return true;
+        set((current) => ({
+          series: current.series.map((series) =>
+            series.id === seriesId
+              ? { ...series, contentIds: [...series.contentIds, contentId], updatedAt: at }
+              : series,
+          ),
+        }));
+        return true;
+      },
+
+      setContentHypothesis: ({
+        contentId,
+        statement,
+        expectedOutcome,
+        learningId,
+        at = now(),
+      }) => {
+        const state = get();
+        const content = state.content.find(({ id }) => id === contentId);
+        if (!content || (learningId && !state.learnings.some(({ id }) => id === learningId))) {
+          return undefined;
+        }
+        const sequence = state.hypotheses.filter(
+          ({ contentId: candidateId }) => candidateId === contentId,
+        ).length + 1;
+        const parsed = contentHypothesisSchema.safeParse({
+          id: `hypothesis-${contentId}-${sequence}`,
+          contentId,
+          opportunityId: content.opportunityId,
+          learningId,
+          statement,
+          expectedOutcome,
+          status: "planned",
+          createdAt: at,
+        });
+        if (!parsed.success) return undefined;
+        set((current) => ({ hypotheses: [...current.hypotheses, parsed.data] }));
+        return parsed.data.id;
+      },
+
+      recordOpportunityFeedback: (opportunityId, signal, at = now()) => {
+        const state = get();
+        const opportunity = state.opportunities.find(({ id }) => id === opportunityId);
+        if (!opportunity) return false;
+        const prior = state.opportunityFeedback.find(
+          (feedback) => feedback.opportunityId === opportunityId && feedback.signal === signal,
+        );
+        if (prior) return true;
+        const parsed = opportunityFeedbackSchema.safeParse({
+          id: `feedback-${state.opportunityFeedback.length + 1}`,
+          opportunityId,
+          signal,
+          pillar: opportunity.pillar,
+          format: opportunity.format,
+          createdAt: at,
+        });
+        if (!parsed.success) return false;
+        set((current) => ({
+          opportunityFeedback: [
+            ...current.opportunityFeedback.filter(
+              (feedback) => feedback.opportunityId !== opportunityId,
+            ),
+            parsed.data,
+          ],
+          opportunityDecisions:
+            signal === "not_for_me"
+              ? { ...current.opportunityDecisions, [opportunityId]: "dismissed" }
+              : current.opportunityDecisions,
+        }));
+        return true;
+      },
+
+      updateCreatorMemory: (patch, at = now()) => {
+        const current = get().creatorMemory;
+        const parsed = creatorMemorySchema.safeParse({
+          ...current,
+          ...patch,
+          version: current.version + 1,
+          updatedAt: at,
+        });
+        if (!parsed.success) return false;
+        set({ creatorMemory: parsed.data });
+        return true;
+      },
+
+      captureIdea: (text, at = now()) => {
+        const trimmed = text.trim();
+        if (!trimmed) return undefined;
+        const state = get();
+        const parsed = offlineCaptureSchema.safeParse({
+          id: `capture-${state.offlineCaptures.length + 1}`,
+          text: trimmed,
+          status: "queued",
+          createdAt: at,
+        });
+        if (!parsed.success) return undefined;
+        set((current) => ({ offlineCaptures: [...current.offlineCaptures, parsed.data] }));
+        return parsed.data.id;
+      },
+
+      dismissCapture: (captureId) => {
+        if (!get().offlineCaptures.some(({ id }) => id === captureId)) return false;
+        set((state) => ({
+          offlineCaptures: state.offlineCaptures.map((capture) =>
+            capture.id === captureId ? { ...capture, status: "dismissed" } : capture,
+          ),
+        }));
+        return true;
+      },
+
+      promoteCapture: (captureId, at = now()) => {
+        const state = get();
+        const capture = state.offlineCaptures.find(({ id }) => id === captureId);
+        if (!capture || capture.status === "dismissed") return undefined;
+        const opportunityId = capture.promotedOpportunityId ?? `capture-opportunity-${capture.id}`;
+        const existingIdea = state.ideas.find(({ opportunityId: candidate }) => candidate === opportunityId);
+        if (existingIdea) return existingIdea.id;
+        const expiresAt = new Date(at);
+        expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + 1);
+        const opportunity = opportunitySchema.parse({
+          id: opportunityId,
+          title: capture.text,
+          summary: "A creator-owned quick capture ready to shape into a concrete post.",
+          platform: state.creator?.platforms[0] ?? "instagram_reels",
+          archetypes: state.creator?.archetypes ?? ["tech_education"],
+          format: "story",
+          pillar: state.creator?.contentPillars[0] ?? "Creator practice",
+          readiness: "spark",
+          goal: "community",
+          geography: "Global",
+          signals: { relevance: 95, momentum: 50, originality: 90, creatorFit: 98 },
+          evidence: [
+            {
+              summary: "Captured directly by the creator in this workspace.",
+              sourceLabel: "Creator quick capture",
+            },
+          ],
+          provenance: {
+            provider: "museboard-quick-capture",
+            mode: "sample",
+            fetchedAt: at,
+            sourceClass: "creator_submission",
+            sourceLabel: "Creator quick capture",
+            observedAt: capture.createdAt,
+            expiresAt: expiresAt.toISOString(),
+          },
+        });
+        const idea = createIdeaFromOpportunity(opportunity, at);
+        set((current) => ({
+          opportunities: current.opportunities.some(({ id }) => id === opportunity.id)
+            ? current.opportunities
+            : [...current.opportunities, opportunity],
+          ideas: [...current.ideas, idea],
+          offlineCaptures: current.offlineCaptures.map((candidate) =>
+            candidate.id === captureId
+              ? {
+                  ...candidate,
+                  status: "promoted",
+                  promotedOpportunityId: opportunityId,
+                }
+              : candidate,
+          ),
+        }));
+        return idea.id;
+      },
+
+      clearRecoveryNotice: () => set({ recoveryNotice: undefined }),
     }),
     {
       name: MUSEBOARD_STORAGE_KEY,
@@ -1427,6 +1729,12 @@ export const useMuseboardStore = create<MuseboardState>()(
       merge: (persisted, current) => {
         const parsed = validatePersistedMuseboardData(persisted);
         return parsed.success ? { ...current, ...parsed.data } : current;
+      },
+      onRehydrateStorage: () => () => {
+        if (!pendingRecoveryNotice) return;
+        const notice = pendingRecoveryNotice;
+        pendingRecoveryNotice = undefined;
+        queueMicrotask(() => useMuseboardStore.setState({ recoveryNotice: notice }));
       },
     },
   ),

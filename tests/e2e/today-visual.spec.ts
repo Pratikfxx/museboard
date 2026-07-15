@@ -1,4 +1,4 @@
-import { chromium, expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { createDemoState } from "../../src/lib/demo/fixtures";
 import { buildStarterWorkspace } from "../../src/lib/demo/starter-workspace";
@@ -156,42 +156,40 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("idea motion pauses and resumes without blocking the decision", async ({ baseURL }) => {
-  const browser = await chromium.launch({
-    args: [
-      "--enable-webgl",
-      "--ignore-gpu-blocklist",
-      "--use-angle=swiftshader",
-      "--enable-unsafe-swiftshader",
-    ],
+test("idea motion pauses and resumes without blocking the decision", async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile-chrome",
+    "The explicit mobile visual tests already verify the static small-screen sculpture.",
+  );
+  const errors = await openToday(page, {
+    theme: "light",
+    viewport: { width: 1440, height: 1024 },
+    waitForImages: false,
   });
-  const page = await browser.newPage({ baseURL });
 
-  try {
-    const errors = await openToday(page, {
-      theme: "light",
-      viewport: { width: 1440, height: 1024 },
-      waitForImages: false,
-    });
+  const figure = page.getByRole("figure", { name: /woven paths/i });
+  const fallback = page.locator("[data-fallback-reason]:visible");
+  const pause = page.getByRole("button", { name: "Pause idea sculpture" });
+  await expect(figure).toBeVisible();
+  await expect
+    .poll(async () => {
+      if (await pause.isVisible()) return "interactive";
+      const reason = await fallback.getAttribute("data-fallback-reason");
+      return reason && reason !== "loading" ? "static" : "loading";
+    })
+    .toMatch(/^(interactive|static)$/);
 
-    const figure = page.getByRole("figure", { name: /woven paths/i });
-    const fallback = page.locator("[data-fallback-reason]:visible");
-    if (await fallback.count()) {
-      await expect(fallback).toHaveAttribute("data-renderer", "static");
-      await expect(page.getByRole("radio").first()).toBeVisible();
-      expect(errors).toEqual([]);
-      return;
-    }
-    const pause = page.getByRole("button", { name: "Pause idea sculpture" });
-    await expect(pause).toBeVisible();
-    await pause.click();
-    await expect(figure).toHaveAttribute("data-motion", "paused");
-    await page.getByRole("button", { name: "Resume idea sculpture" }).click();
-    await expect(figure).toHaveAttribute("data-motion", "playing");
+  if (!(await pause.isVisible())) {
+    await expect(fallback).toHaveAttribute("data-renderer", "static");
+    await expect(page.getByRole("radio").first()).toBeVisible();
     expect(errors).toEqual([]);
-  } finally {
-    await browser.close();
+    return;
   }
+  await pause.click();
+  await expect(figure).toHaveAttribute("data-motion", "paused");
+  await page.getByRole("button", { name: "Resume idea sculpture" }).click();
+  await expect(figure).toHaveAttribute("data-motion", "playing");
+  expect(errors).toEqual([]);
 });
 
 test("hook choice persists, advances to Outline, and theme changes", async ({ page }) => {

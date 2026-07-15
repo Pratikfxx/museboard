@@ -32,10 +32,12 @@ export function LearnWorkspace() {
   const metrics = useMuseboardStore((state) => state.metrics);
   const learnings = useMuseboardStore((state) => state.learnings);
   const creator = useMuseboardStore((state) => state.creator);
+  const content = useMuseboardStore((state) => state.content);
   const importMetrics = useMuseboardStore((state) => state.importMetrics);
   const deleteMetricImport = useMuseboardStore((state) => state.deleteMetricImport);
   const dismissLearning = useMuseboardStore((state) => state.dismissLearning);
   const restoreLearning = useMuseboardStore((state) => state.restoreLearning);
+  const setContentHypothesis = useMuseboardStore((state) => state.setContentHypothesis);
   const [csv, setCsv] = useState("");
   const [mapping, setMapping] = useState<AnalyticsMapping>(initialMapping);
   const [preview, setPreview] = useState<AnalyticsImportPreview>();
@@ -45,6 +47,16 @@ export function LearnWorkspace() {
   const timezone = creator?.timezone ?? "America/New_York";
   const importIds = useMemo(() => [...new Set(metrics.map(({ importId }) => importId).filter((id): id is string => Boolean(id)))], [metrics]);
   const sourceHeaders = useMemo(() => csv.split(/\r?\n/u)[0]?.split(",").map((header) => header.trim()).filter(Boolean) ?? [], [csv]);
+  const nextContent = content.find(({ stage }) => !["published", "measured", "archived"].includes(stage));
+
+  function applyLearning(learning: (typeof learnings)[number]) {
+    if (!nextContent) {
+      setMessage("Create or reopen a draft before applying this learning.");
+      return;
+    }
+    const id = setContentHypothesis({ contentId: nextContent.id, learningId: learning.id, statement: learning.statement, expectedOutcome: learning.metricDefinition });
+    setMessage(id ? `Saved as a hypothesis for ${nextContent.title}. Measure it after publishing.` : "This learning could not be attached to the next post.");
+  }
 
   function buildPreview() {
     const next = parseAnalyticsCsv(csv, { mapping, existing: metrics, importedAt: new Date().toISOString(), timezone, importId: `metric-import-${Date.now()}` });
@@ -65,9 +77,9 @@ export function LearnWorkspace() {
       <header className={styles.header}><div><p>Evidence, not guesses</p><h1>Learn from your own work.</h1><span>Comparable posts only. Directional associations, never claims of causation.</span></div><div className={styles.metric}><strong>{metrics.length}</strong><span>metric facts</span></div></header>
       <p className={styles.status} role="status"><Info aria-hidden="true" size={19} />{message}</p>
       <div className={styles.layout}>
-        <main className={styles.main}>
+        <div className={styles.main}>
           <section className={styles.importer} aria-labelledby="import-heading">
-            <div className={styles.sectionHead}><div><p>01 · Bring results back</p><h2 id="import-heading">Preview a CSV before anything changes.</h2></div><FileCsv aria-hidden="true" size={34} /></div>
+            <div className={styles.sectionHead}><div><p>02 · Bring results back</p><h2 id="import-heading">Preview a CSV before anything changes.</h2></div><FileCsv aria-hidden="true" size={34} /></div>
             <div className={styles.importActions}><label className={styles.fileButton}>Choose CSV<input accept=".csv,text/csv" onChange={async (event) => { const file = event.target.files?.[0]; if (file) setCsv(await file.text()); }} type="file" /></label><button onClick={() => setCsv(starterCsv)} type="button">Load safe sample</button></div>
             <label className={styles.csvField}>CSV contents<textarea aria-label="CSV contents" onChange={(event) => setCsv(event.target.value)} placeholder="Paste CSV rows here…" rows={8} value={csv} /></label>
             {csv ? <div className={styles.mapping}><strong>Column mapping</strong><p>Map each meaning to a source column. Unknown columns remain visible in preview.</p><div>{requiredColumns.map(({ key, label }) => <label key={key}>{label}<select aria-label={`Map ${label}`} onChange={(event) => setMapping((current) => ({ ...current, [key]: event.target.value }))} value={mapping[key]}><option value={key}>{key}</option>{sourceHeaders.filter((header) => header !== key).map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}</div></div> : null}
@@ -82,15 +94,15 @@ export function LearnWorkspace() {
             </div> : null}
           </section>
 
-          <section className={styles.learnings} aria-labelledby="learning-heading"><div className={styles.sectionHead}><div><p>02 · Inspect the pattern</p><h2 id="learning-heading">Your current learnings</h2></div><TrendUp aria-hidden="true" size={34} /></div>
+          <section className={styles.learnings} style={{ order: -1 }} aria-labelledby="learning-heading"><div className={styles.sectionHead}><div><p>01 · Choose what to test next</p><h2 id="learning-heading">Your current learnings</h2></div><TrendUp aria-hidden="true" size={34} /></div>
             {!learnings.length ? <div className={styles.empty}><h3>No defensible pattern yet.</h3><p>Use at least three comparable posts in each group. Five per group plus a 10% effect can reach medium confidence.</p><button onClick={() => setCsv(starterCsv)} type="button">Load a 10-post sample</button></div> : learnings.map((learning) => <article className={styles.learning} data-dismissed={Boolean(learning.dismissedAt)} key={learning.id}>
               <div><span className={styles.confidence}>{learning.confidence} confidence</span><h3>{learning.statement}</h3><p>{learning.metricDefinition}</p></div>
               <dl><div><dt>Sample</dt><dd>{learning.sampleSize} posts</dd></div><div><dt>Comparison</dt><dd>{learning.comparison ?? "Comparable posts"}</dd></div><div><dt>Rule</dt><dd>{learning.confidenceRule ?? "Descriptive aggregate"}</dd></div></dl>
               <details><summary>Inspect included and excluded posts</summary><p><strong>Included:</strong> {learning.includedContentIds.join(", ")}</p><p><strong>Excluded:</strong> {learning.excludedContentIds?.join(", ") || "None"}</p><p>Last recomputed: {learning.lastRecomputedAt ? new Date(learning.lastRecomputedAt).toLocaleString() : "Legacy sample"}</p></details>
-              <button onClick={() => learning.dismissedAt ? restoreLearning(learning.id) : dismissLearning(learning.id)} type="button">{learning.dismissedAt ? <><ArrowCounterClockwise aria-hidden="true" size={18} />Restore learning</> : "Dismiss from recommendations"}</button>
+              <button disabled={Boolean(learning.dismissedAt)} onClick={() => applyLearning(learning)} type="button"><CheckCircle aria-hidden="true" size={18} />Use in next post</button><button onClick={() => learning.dismissedAt ? restoreLearning(learning.id) : dismissLearning(learning.id)} type="button">{learning.dismissedAt ? <><ArrowCounterClockwise aria-hidden="true" size={18} />Restore learning</> : "Dismiss from recommendations"}</button>
             </article>)}
           </section>
-        </main>
+        </div>
         <aside className={styles.aside}><p>Metric discipline</p><h2>Native names stay native.</h2><ul><li>Views, plays, reach, and impressions remain separate facts.</li><li>Comparisons never cross platform, format, metric, unit, or reporting window.</li><li>Deleting an import removes its facts and recomputes the pattern.</li></ul>{importIds.length ? <div className={styles.imports}><strong>Saved imports</strong>{importIds.map((id) => <button key={id} onClick={() => deleteMetricImport(id)} type="button"><span>{id}</span><Trash aria-label={`Delete ${id}`} size={17} /></button>)}</div> : <p className={styles.noImports}>No CSV imports saved in this browser.</p>}</aside>
       </div>
     </div>
