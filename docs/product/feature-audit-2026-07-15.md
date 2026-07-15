@@ -2,7 +2,7 @@
 
 Date: 2026-07-15  
 Branch: `codex/museboard-creator-loop`  
-Status: the credential-free local product is a coherent, tested demo; it is not yet a production-paid collaboration product.
+Status: the credential-free product remains a coherent demo. Production account identity, atomic workspace bootstrap, billing ownership, and plan projection foundations now exist; creator content and collaboration are not yet cloud-durable.
 
 ## Executive decision
 
@@ -31,12 +31,12 @@ The current UI already communicates the product well enough to support this work
 | Creator Memory | Editable, versioned local profile | Not consumed by workshop or strategist generation |
 | Team | Local invitations, actor simulation, comments, approvals, notifications | No email invite, invite acceptance, external review token, or live persistence |
 | Export/publish | Validated ZIP, manifest, platform handoff, manual receipt | Export endpoint trusts client state; history cannot redownload exact bytes |
-| Billing | Stripe checkout/portal/webhook and Supabase projection scaffolding | No usable auth path; duplicate-subscription and entitlement-truth risks |
+| Billing | Authenticated, organization-scoped Checkout/Portal, idempotent retries, existing-subscription protection, webhook projection | Needs real Stripe/Supabase environment validation and server enforcement across every paid mutation |
 | Account/data | Honest local JSON export and destructive clear | No import/restore; live export/delete APIs intentionally return 409 |
 
 ## P0 — must fix before charging users
 
-### 1. Production identity and workspace activation do not exist
+### 1. Production identity and workspace activation — foundation implemented
 
 Evidence:
 
@@ -55,7 +55,7 @@ Acceptance criteria:
 - Returning users resume their active workspace; re-onboarding cannot orphan prior records.
 - Live account export and deletion are authenticated jobs with status and audit history.
 
-### 2. Billing can create duplicate subscriptions
+### 2. Duplicate billing risk — primary paths hardened
 
 Evidence:
 
@@ -72,7 +72,7 @@ Acceptance criteria:
 - All mutation calls are idempotent and scoped to an explicit active organization.
 - Upgrade, downgrade, cancellation, resume, retry, and concurrency are integration-tested.
 
-### 3. Stripe entitlement truth never becomes product truth
+### 3. Stripe entitlement truth — shell and billing implemented, product-wide enforcement pending
 
 Evidence:
 
@@ -221,12 +221,19 @@ Build: schema-validated import preview, backup-before-replace, merge/replace cho
 - Corrected the obsolete fallback test to validate the new semantic visualization.
 - Froze the curated-preview contract test clock and changed the product’s default observed/expiry timestamps to remain valid relative to the current time.
 - Regenerated and visually reviewed the approved desktop light/dark Today snapshots.
+- Added real sign-up, sign-in, callback, sign-out, live-route protection, and a fail-closed partial-configuration state while preserving explicit local sample access.
+- Added a transaction-safe `ensure_user_workspace` database function that serializes first-login creation and derives authorization only from `auth.uid()`.
+- Added durable active-organization selection and server-loaded identity, role, plan, Stripe status, grace/period access, and subscription identity.
+- Scoped Checkout and Customer Portal to an explicitly verified owner organization, reused Customer Portal for existing subscriptions, and added Stripe idempotency keys.
+- Closed the callback open-redirect edge case for protocol-relative, backslash, encoded-backslash, malformed, and external destinations.
+- Added an honest live-workspace boundary: account and plan are synced, while creator drafts remain labeled as device-local until repository sync ships.
+- Reordered production authentication on mobile so the form appears before promotional content, made footer account state truthful, and added an application icon.
 
 ## Recommended build sequence
 
 ### Sprint 1 — activation and creator truth
 
-- Production auth, organization bootstrap, repository split, returning-user routing.
+- Production auth, organization bootstrap, and returning-user routing are implemented; cloud creator-data repositories remain next.
 - Wire Creator Memory into a real rewrite preview and version save.
 - Fix workshop stage/deep-link routing and evidence attachment.
 
@@ -251,12 +258,16 @@ Build: schema-validated import preview, backup-before-replace, merge/replace cho
 
 - Lint and TypeScript checks pass.
 - Production build completes all 27 routes.
-- Vitest: 36 files, 154 tests pass.
-- Playwright Chromium: 23/23 end-to-end tests pass, including activation, mobile navigation, accessibility gates, creator workflow, export-learning demo, team review, recovery, and visual regression.
+- Vitest: 37 files, 160 tests pass.
+- Playwright desktop/mobile: 41 tests pass and 5 intentionally skip, including activation, mobile navigation, accessibility gates, creator workflow, export-learning demo, team review, recovery, and visual regression.
 - Today visual suite: 6/6 passes across light/dark desktop/mobile plus motion and workflow behavior.
+- Configured-auth visual acceptance passes at 1200×951 and 390×844; the mobile form is above the fold. Screenshots are in `output/playwright/`.
+- A real Supabase migration and Stripe test-mode transaction could not run locally because Docker/Postgres and production credentials are absent; static SQL/security contracts and pure billing contracts pass.
 
 ## Release assessment
 
-**Local sample product:** review-ready and coherent.  
-**Paid beta:** blocked by production auth/workspace persistence, server entitlement truth, duplicate-subscription protection, and live invitation/review.  
+**Local sample product:** review-ready and coherent.
+
+**Paid beta:** still blocked by cloud persistence for creator content, server entitlement/quota enforcement across all paid actions, real invitation/review, and credentialed Supabase/Stripe integration verification.
+
 **Broad sellable release:** additionally blocked by genuine memory-powered generation, evidence resolution, receipt-bound learning, recovery-aware planning, authoritative export history, and operational observability.

@@ -33,6 +33,27 @@ export function priceIdForPlan(plan: Exclude<Plan, "free">): string {
   return requireLiveBillingConfig().stripe.priceIds[plan];
 }
 
+export function checkoutIdempotencyKey(
+  organizationId: string,
+  requestKey: string,
+): string {
+  return `museboard:checkout:${organizationId}:${requestKey}`;
+}
+
+export function hasManageableSubscription(input: {
+  stripeSubscriptionId?: string;
+  stripeStatus?: string;
+  activeUntil?: string;
+}, now = new Date()): boolean {
+  if (!input.stripeSubscriptionId) return false;
+  if (!["canceled", "incomplete_expired"].includes(input.stripeStatus ?? "")) {
+    return true;
+  }
+  return input.activeUntil
+    ? new Date(input.activeUntil).getTime() > now.getTime()
+    : false;
+}
+
 export function assertRequestOrigin(request: Request, appUrl: string): void {
   const expected = new URL(appUrl).origin;
   const actual = request.headers.get("origin");

@@ -9,6 +9,10 @@ import {
   type BillingEventRepository,
   type StripeSubscriptionSnapshot,
 } from "@/lib/stripe/webhook";
+import {
+  checkoutIdempotencyKey,
+  hasManageableSubscription,
+} from "@/lib/stripe/server";
 
 const active: StripeSubscriptionSnapshot = {
   id: "sub_123",
@@ -21,6 +25,27 @@ const active: StripeSubscriptionSnapshot = {
 };
 
 describe("Stripe webhook projection", () => {
+  it("scopes checkout retries to one organization and blocks duplicate subscriptions", () => {
+    expect(checkoutIdempotencyKey("org_a", "request_1")).toBe(
+      checkoutIdempotencyKey("org_a", "request_1"),
+    );
+    expect(checkoutIdempotencyKey("org_a", "request_1")).not.toBe(
+      checkoutIdempotencyKey("org_b", "request_1"),
+    );
+    expect(hasManageableSubscription({ stripeSubscriptionId: "sub_1", stripeStatus: "active" })).toBe(true);
+    expect(hasManageableSubscription({ stripeSubscriptionId: "sub_1", stripeStatus: "past_due" })).toBe(true);
+    expect(hasManageableSubscription({
+      stripeSubscriptionId: "sub_1",
+      stripeStatus: "canceled",
+      activeUntil: "2026-07-20T00:00:00.000Z",
+    }, new Date("2026-07-15T00:00:00.000Z"))).toBe(true);
+    expect(hasManageableSubscription({
+      stripeSubscriptionId: "sub_1",
+      stripeStatus: "canceled",
+      activeUntil: "2026-07-14T00:00:00.000Z",
+    }, new Date("2026-07-15T00:00:00.000Z"))).toBe(false);
+  });
+
   it("retains access until period end for cancel-at-period-end subscriptions", () => {
     expect(
       projectStripeEntitlements(active, {

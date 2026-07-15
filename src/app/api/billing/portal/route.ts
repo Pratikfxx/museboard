@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { BillingAuthorizationError, requireBillingOwner } from "@/lib/auth/session";
 import { requireLiveBillingConfig } from "@/lib/config/features";
 import { assertRequestOrigin, getStripe } from "@/lib/stripe/server";
 
+const portalRequest = z.object({ organizationId: z.uuid() });
+
 export async function POST(request: Request) {
   try {
     const config = requireLiveBillingConfig();
     assertRequestOrigin(request, config.appUrl);
-    const owner = await requireBillingOwner();
+    const input = portalRequest.parse(await request.json());
+    const owner = await requireBillingOwner(input.organizationId);
     if (!owner.stripeCustomerId) {
       return NextResponse.json(
         { error: "No Stripe billing account exists for this workspace" },
@@ -23,6 +27,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof BillingAuthorizationError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Choose a valid workspace" }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : "Billing portal unavailable";
     const status = message.includes("origin") ? 403 : message.includes("unavailable") ? 503 : 500;

@@ -21,6 +21,8 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 
 import { RecoveryCenter } from "@/components/recovery/recovery-center";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { signOutAction } from "@/app/auth/actions";
+import type { Plan } from "@/domain/entitlements";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 
 import styles from "./app-shell.module.css";
@@ -56,7 +58,17 @@ function NavigationLinks() {
   });
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  liveWorkspace,
+}: {
+  children: ReactNode;
+  liveWorkspace?: {
+    displayName: string;
+    organizationName: string;
+    plan: Plan;
+  };
+}) {
   const pathname = usePathname();
   const creator = useMuseboardStore((state) => state.creator);
   const queuedCaptureCount = useMuseboardStore(
@@ -65,8 +77,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const moreSheetRef = useRef<HTMLElement>(null);
-  const creatorName = creator?.name ?? "Sample creator";
-  const creatorLane = creator?.contentPillars[0] ?? "Creator workspace";
+  const creatorName = liveWorkspace?.displayName ?? creator?.name ?? "Sample creator";
+  const creatorLane = liveWorkspace
+    ? `${liveWorkspace.organizationName} · ${liveWorkspace.plan}`
+    : creator?.contentPillars[0] ?? "Creator workspace";
+  const liveInitials = creatorName
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toLocaleUpperCase();
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -132,14 +153,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
         <div className={styles.profile}>
-          <Image
-            alt=""
-            className={styles.avatar}
-            height={48}
-            priority
-            src="/assets/avatar-maya.png"
-            width={48}
-          />
+          {liveWorkspace ? (
+            <span aria-hidden="true" className={styles.liveAvatar}>{liveInitials}</span>
+          ) : (
+            <Image
+              alt=""
+              className={styles.avatar}
+              height={48}
+              priority
+              src="/assets/avatar-maya.png"
+              width={48}
+            />
+          )}
           <span className={styles.profileCopy}>
             <strong>{creatorName}</strong>
             <small>{creatorLane}</small>
@@ -149,6 +174,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Brain aria-hidden="true" size={18} />
           Creator memory
         </Link>
+        {liveWorkspace ? (
+          <form action={signOutAction} className={styles.signOutForm}>
+            <button type="submit">Sign out</button>
+          </form>
+        ) : null}
       </aside>
 
       <header className={styles.mobileHeader}>
@@ -156,12 +186,22 @@ export function AppShell({ children }: { children: ReactNode }) {
           Museboard
         </Link>
         <Link aria-label="Team and profile" className={styles.mobileAvatarLink} href="/app/team">
-          <Image alt="" height={36} src="/assets/avatar-maya.png" width={36} />
+          {liveWorkspace ? (
+            <span aria-hidden="true" className={styles.liveAvatar}>{liveInitials}</span>
+          ) : (
+            <Image alt="" height={36} src="/assets/avatar-maya.png" width={36} />
+          )}
         </Link>
       </header>
 
       <main className={styles.main} id="workspace-main" tabIndex={-1}>
         <RecoveryCenter />
+        {liveWorkspace ? (
+          <aside className={styles.syncBoundary} role="note">
+            <ShieldCheck aria-hidden="true" size={18} weight="duotone" />
+            <span><strong>Account synced.</strong> Creator drafts and plans still remain on this device in this build.</span>
+          </aside>
+        ) : null}
         {children}
       </main>
 

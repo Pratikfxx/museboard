@@ -33,6 +33,24 @@ describe("billing settings", () => {
     expect(screen.getAllByRole("button").every((button) => button.hasAttribute("disabled"))).toBe(true);
   });
 
+  it("renders server-confirmed live plan state and routes subscribers to management", () => {
+    render(
+      <BillingWorkspace
+        authoritativePlan="pro"
+        hasSubscription
+        mode="live"
+        organizationId="6d9bb4d1-2276-46d0-9a0b-c5286198c23f"
+        stripeStatus="active"
+      />,
+    );
+
+    expect(screen.getByText("Pro", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText(/stripe status: active/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /current plan/i })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: /manage plan/i })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /manage billing on stripe/i })).toBeEnabled();
+  });
+
   it("does not enable live billing from a partial environment", () => {
     const config = getFeatureConfig({
       NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",

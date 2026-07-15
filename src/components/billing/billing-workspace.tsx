@@ -2,7 +2,7 @@
 
 import { ArrowSquareOut, CheckCircle, CreditCard, ShieldCheck } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { PLAN_CATALOG, type Plan } from "@/domain/entitlements";
 import type { BillingMode } from "@/lib/config/features";
@@ -15,27 +15,40 @@ const paidPlans = ["creator", "pro", "studio"] as const;
 interface BillingWorkspaceProps {
   mode: BillingMode;
   unavailableReason?: string;
+  organizationId?: string;
+  authoritativePlan?: Plan;
+  hasSubscription?: boolean;
+  stripeStatus?: string;
 }
 
 async function openBillingEndpoint(
   endpoint: "/api/billing/checkout" | "/api/billing/portal",
-  body?: object,
+  body: object,
 ): Promise<void> {
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
   const result = (await response.json()) as { url?: string; error?: string };
   if (!response.ok || !result.url) throw new Error(result.error ?? "Billing is unavailable");
   window.location.assign(result.url);
 }
 
-export function BillingWorkspace({ mode, unavailableReason }: BillingWorkspaceProps) {
-  const currentPlan = useMuseboardStore((state) => state.entitlementUsage.plan);
+export function BillingWorkspace({
+  mode,
+  unavailableReason,
+  organizationId,
+  authoritativePlan,
+  hasSubscription = false,
+  stripeStatus,
+}: BillingWorkspaceProps) {
+  const demoPlan = useMuseboardStore((state) => state.entitlementUsage.plan);
   const setDemoPlan = useMuseboardStore((state) => state.setDemoPlan);
   const [status, setStatus] = useState<string>();
   const [pending, setPending] = useState<string>();
+  const checkoutKeys = useRef<Partial<Record<Exclude<Plan, "free">, string>>>({});
+  const currentPlan = mode === "live" ? authoritativePlan ?? "free" : demoPlan;
 
   const choosePlan = async (plan: Exclude<Plan, "free">) => {
     if (mode === "demo") {
@@ -44,10 +57,23 @@ export function BillingWorkspace({ mode, unavailableReason }: BillingWorkspacePr
       return;
     }
     if (mode !== "live") return;
+    if (!organizationId) {
+      setStatus("Your workspace could not be verified. Refresh and sign in again.");
+      return;
+    }
+    if (hasSubscription) {
+      await manageBilling();
+      return;
+    }
     setPending(plan);
     setStatus("Opening Stripe Checkout. Your plan changes only after Stripe confirms payment.");
     try {
-      await openBillingEndpoint("/api/billing/checkout", { plan });
+      checkoutKeys.current[plan] ??= window.crypto.randomUUID();
+      await openBillingEndpoint("/api/billing/checkout", {
+        plan,
+        organizationId,
+        idempotencyKey: checkoutKeys.current[plan],
+      });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Checkout is unavailable");
       setPending(undefined);
@@ -56,10 +82,14 @@ export function BillingWorkspace({ mode, unavailableReason }: BillingWorkspacePr
 
   const manageBilling = async () => {
     if (mode !== "live") return;
+    if (!organizationId) {
+      setStatus("Your workspace could not be verified. Refresh and sign in again.");
+      return;
+    }
     setPending("portal");
     setStatus("Opening the secure Stripe Customer Portal…");
     try {
-      await openBillingEndpoint("/api/billing/portal");
+      await openBillingEndpoint("/api/billing/portal", { organizationId });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Billing portal is unavailable");
       setPending(undefined);
@@ -96,7 +126,11 @@ export function BillingWorkspace({ mode, unavailableReason }: BillingWorkspacePr
         <span>Current workspace plan</span>
         <strong>{PLAN_CATALOG[currentPlan].name}</strong>
         <small>
-          {mode === "demo" ? "Local sample entitlement" : "Access is confirmed by the billing service"}
+          {mode === "demo"
+            ? "Local sample entitlement"
+            : stripeStatus
+              ? `Stripe status: ${stripeStatus.replaceAll("_", " ")}`
+              : "Access is confirmed by the billing service"}
         </small>
       </div>
 
@@ -124,7 +158,15 @@ export function BillingWorkspace({ mode, unavailableReason }: BillingWorkspacePr
                 onClick={() => void choosePlan(plan)}
                 type="button"
               >
-                {pending === plan ? "Opening checkout…" : mode === "demo" ? `Try ${details.name} in sample workspace` : selected ? "Current plan" : `Choose ${details.name}`}
+                {pending === plan
+                  ? "Opening checkout…"
+                  : mode === "demo"
+                    ? `Try ${details.name} in sample workspace`
+                    : selected
+                      ? "Current plan"
+                      : hasSubscription
+                        ? "Manage plan"
+                        : `Choose ${details.name}`}
                 <ArrowSquareOut aria-hidden="true" size={18} />
               </button>
             </article>
@@ -139,7 +181,7 @@ export function BillingWorkspace({ mode, unavailableReason }: BillingWorkspacePr
         </div>
         <div className={styles.footerActions}>
           <Link href="/app/settings/data">Data controls</Link>
-          <button disabled={mode !== "live" || pending !== undefined} onClick={() => void manageBilling()} type="button">
+          <button disabled={mode !== "live" || !hasSubscription || pending !== undefined} onClick={() => void manageBilling()} type="button">
             {pending === "portal" ? "Opening portal…" : "Manage billing on Stripe"}
           </button>
         </div>

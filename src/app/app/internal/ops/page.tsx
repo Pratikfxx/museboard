@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { requireBillingOwner } from "@/lib/auth/session";
+import { getAuthenticatedWorkspace } from "@/lib/auth/workspace";
 import { getFeatureConfig } from "@/lib/config/features";
 import { redactOperationalIdentifier } from "@/lib/operations/safe-operations";
 
@@ -20,7 +21,9 @@ export default async function OperationsPage() {
 
   let owner: Awaited<ReturnType<typeof requireBillingOwner>>;
   try {
-    owner = await requireBillingOwner();
+    const workspace = await getAuthenticatedWorkspace();
+    if (!workspace) notFound();
+    owner = await requireBillingOwner(workspace.organizationId);
   } catch {
     notFound();
   }

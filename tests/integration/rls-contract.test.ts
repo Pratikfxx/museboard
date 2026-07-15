@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/0001_museboard.sql"),
   "utf8",
 ).toLowerCase();
+const workspaceBootstrap = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260715095934_auth_workspace_bootstrap.sql"),
+  "utf8",
+).toLowerCase();
 
 describe("production database boundary", () => {
   it("makes Data API exposure explicit and enables RLS on every tenant table", () => {
@@ -49,5 +53,17 @@ describe("production database boundary", () => {
     expect(migration).toContain("private.is_organization_owner");
     expect(migration).not.toContain("user_metadata");
     expect(migration).toMatch(/for update\s+to authenticated\s+using[\s\S]+with check/u);
+  });
+
+  it("creates the first authenticated workspace atomically without trusting metadata", () => {
+    expect(workspaceBootstrap).toMatch(/security definer\s+set search_path = ''/u);
+    expect(workspaceBootstrap).toContain("select auth.uid()");
+    expect(workspaceBootstrap).toContain("pg_advisory_xact_lock");
+    expect(workspaceBootstrap).toContain("insert into public.organizations");
+    expect(workspaceBootstrap).toContain("insert into public.organization_memberships");
+    expect(workspaceBootstrap).toContain("insert into public.creator_profiles");
+    expect(workspaceBootstrap).toContain("revoke all on function public.ensure_user_workspace");
+    expect(workspaceBootstrap).toContain("grant execute on function public.ensure_user_workspace");
+    expect(workspaceBootstrap).not.toContain("raw_user_meta_data");
   });
 });

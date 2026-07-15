@@ -3,7 +3,13 @@ import Link from "next/link";
 
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 
-export function DemoAccess({ mode }: { mode: "login" | "signup" }) {
+export function DemoAccess({
+  mode,
+  configurationUnavailable = false,
+}: {
+  mode: "login" | "signup";
+  configurationUnavailable?: boolean;
+}) {
   const isLogin = mode === "login";
 
   return (
@@ -31,13 +37,15 @@ export function DemoAccess({ mode }: { mode: "login" | "signup" }) {
           <section className="p-7 sm:p-10 lg:p-12" aria-labelledby="access-heading">
             <div className="inline-flex items-center gap-2 rounded-full border border-warning/35 bg-butter/20 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-warning">
               <LockSimple aria-hidden="true" size={16} />
-              Demo access · not production authentication
+              {configurationUnavailable ? "Account access temporarily unavailable" : "Demo access · not production authentication"}
             </div>
             <h1 className="mt-6 font-display text-4xl sm:text-5xl" id="access-heading">
               {isLogin ? "Welcome back" : "Create your creator workspace"}
             </h1>
             <p className="mt-4 leading-7 text-muted">
-              {isLogin
+              {configurationUnavailable
+                ? "Production account settings are incomplete, so Museboard has disabled sign-in safely. The local sample remains available without credentials."
+                : isLogin
                 ? "Production sign-in is not enabled in this sample build. Continue to the local workspace already stored in this browser, or start fresh."
                 : "Account creation is not enabled in this sample build. Set up a local workspace without entering personal details, connecting a social account, or adding a card."}
             </p>

@@ -3,6 +3,7 @@ import { z } from "zod";
 const httpsUrl = z.url().refine((value) => new URL(value).protocol === "https:");
 
 export type BillingMode = "demo" | "live" | "unavailable";
+export type AuthMode = "demo" | "live" | "unavailable";
 
 export interface FeatureConfig {
   supabase: {
@@ -18,6 +19,7 @@ export interface FeatureConfig {
     priceIds: Partial<Record<"creator" | "pro" | "studio", string>>;
   };
   appUrl?: string;
+  authMode: AuthMode;
   billingMode: BillingMode;
   unavailableReason?: string;
   features: {
@@ -47,6 +49,12 @@ export function getFeatureConfig(
   const secretKey = env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY;
   const supabaseClientConfigured = present(url) && present(publishableKey);
   const supabaseServerConfigured = supabaseClientConfigured && present(secretKey);
+  const hasAnySupabaseSetting = [url, publishableKey, secretKey].some(present);
+  const authMode: AuthMode = supabaseClientConfigured
+    ? "live"
+    : hasAnySupabaseSetting
+      ? "unavailable"
+      : "demo";
 
   const priceIds = {
     creator: env.STRIPE_PRICE_CREATOR,
@@ -92,6 +100,7 @@ export function getFeatureConfig(
       priceIds,
     },
     appUrl: parsedAppUrl.success ? parsedAppUrl.data.replace(/\/$/u, "") : undefined,
+    authMode,
     billingMode,
     unavailableReason:
       billingMode === "unavailable"

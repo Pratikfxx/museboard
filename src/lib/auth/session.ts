@@ -14,10 +14,15 @@ export interface BillingOwnerContext {
   email?: string;
   organizationId: string;
   stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  stripeStatus?: string;
+  activeUntil?: string;
 }
 
 /** Uses an Auth server round trip for sensitive billing operations. */
-export async function requireBillingOwner(): Promise<BillingOwnerContext> {
+export async function requireBillingOwner(
+  organizationId: string,
+): Promise<BillingOwnerContext> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
@@ -27,10 +32,10 @@ export async function requireBillingOwner(): Promise<BillingOwnerContext> {
   const membership = await supabase
     .from("organization_memberships")
     .select("organization_id, role, status")
+    .eq("organization_id", organizationId)
     .eq("user_id", data.user.id)
     .eq("status", "active")
     .eq("role", "owner")
-    .limit(1)
     .maybeSingle();
   if (membership.error || !membership.data) {
     throw new BillingAuthorizationError("Only a workspace owner can manage billing", 403);
@@ -39,13 +44,27 @@ export async function requireBillingOwner(): Promise<BillingOwnerContext> {
   const billingAccount = await supabase
     .from("billing_accounts")
     .select("stripe_customer_id")
-    .eq("organization_id", membership.data.organization_id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
+
+  const entitlement = await supabase
+    .from("subscription_entitlements")
+    .select("stripe_subscription_id, stripe_status, active_until")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (billingAccount.error || entitlement.error) {
+    throw new Error("The workspace billing record could not be loaded");
+  }
 
   return {
     userId: data.user.id,
     email: data.user.email,
-    organizationId: membership.data.organization_id,
+    organizationId,
     stripeCustomerId: billingAccount.data?.stripe_customer_id ?? undefined,
+    stripeSubscriptionId:
+      entitlement.data?.stripe_subscription_id ?? undefined,
+    stripeStatus: entitlement.data?.stripe_status ?? undefined,
+    activeUntil: entitlement.data?.active_until ?? undefined,
   };
 }

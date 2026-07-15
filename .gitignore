@@ -7,6 +7,8 @@ node_modules/
 coverage/
 playwright-report/
 test-results/
+.playwright-cli/
+output/
 *.tsbuildinfo
 .vercel/
 .superpowers/
