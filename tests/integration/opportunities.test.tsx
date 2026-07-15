@@ -695,6 +695,10 @@ describe("Curated operator contract and craft guidance", () => {
     vi.setSystemTime(new Date("2026-07-16T09:00:00.000Z"));
     render(<OwnerOpportunityConsole />);
 
+    fireEvent.change(screen.getByLabelText(/expires at/i), {
+      target: { value: "2026-07-16T08:00" },
+    });
+
     fireEvent.click(
       screen.getByRole("button", { name: /preview exact opportunity/i }),
     );

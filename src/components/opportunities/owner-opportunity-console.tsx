@@ -9,15 +9,15 @@ import { previewCuratedOpportunity } from "@/lib/providers/opportunities";
 
 import styles from "./opportunities.module.css";
 
-const initialDraft = {
+const initialDraftTemplate = {
   title: "A public product note worth teaching",
   summary:
     "Turn one documented platform change into a practical short-form lesson.",
   sourceLabel: "YouTube Creators",
   sourceUrl: "https://support.google.com/youtube/",
   sourceClass: "official_platform",
-  observedAt: "2026-07-13T06:00",
-  expiresAt: "2026-07-15T06:00",
+  observedAt: "",
+  expiresAt: "",
   geography: "Global",
   platform: "youtube_shorts",
   format: "tutorial",
@@ -32,14 +32,26 @@ const initialDraft = {
   creatorFit: "91",
 } as const;
 
-type Draft = { [Key in keyof typeof initialDraft]: string };
+type Draft = { [Key in keyof typeof initialDraftTemplate]: string };
+
+function utcInputValue(date: Date): string {
+  return date.toISOString().slice(0, 16);
+}
+
+function createInitialDraft(now = new Date()): Draft {
+  return {
+    ...initialDraftTemplate,
+    observedAt: utcInputValue(new Date(now.getTime() - 3 * 60 * 60 * 1000)),
+    expiresAt: utcInputValue(new Date(now.getTime() + 48 * 60 * 60 * 1000)),
+  };
+}
 
 function isoFromLocal(value: string): string {
   return `${value}:00.000Z`;
 }
 
 export function OwnerOpportunityConsole() {
-  const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [draft, setDraft] = useState<Draft>(() => createInitialDraft());
   const [preview, setPreview] = useState<Opportunity>();
   const [error, setError] = useState("");
 
