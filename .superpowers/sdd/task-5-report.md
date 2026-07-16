@@ -1,87 +1,44 @@
-# Task 5 Report — Museboard Opportunities
+# Task 5 report — Guided Thinking Room decision canvas
 
-## Status
+## Delivered
 
-Complete and locally verified on `codex/museboard-app`. The public workspace is explicitly sample/browser-local, and the internal surface is explicitly preview-only; no cloud upload, live trend ingestion, or publish behavior is claimed.
+- Added the dynamic `/app/thinking/[roomId]` route with sample/live mode selection.
+- Built a warm editorial room workspace with a compact strategic-question header, quiet lifecycle state, participant attribution, and honest sample/live presence copy.
+- Added the four approved guided lenses in a comfortable desktop 2x2 canvas with muted coral, cobalt, ochre, and lavender accents.
+- Added a keyboard-operated mobile lens switcher. Narrow layouts show one lens at a time without horizontal scrolling; the synthesis rail becomes an inline bottom section.
+- Added focused contribution composing with author/time attribution, source markers, Agree/Concern/Needs evidence/Promising reactions, save feedback, and focus restoration after submission.
+- Added a sticky parchment synthesis rail with shared-belief editing, confidence selection, challenge resolution, unresolved-challenge carry-forward, revision display, and reopen/begin synthesis actions.
+- Added missing-room, live loading/failure, optimistic saving, saved, retry, offline, and revision-conflict states. A live conflict rolls back the optimistic aggregate while preserving the unsent composer draft.
+- Kept live mode request/response honest: it loads and saves through the normalized room endpoint and explicitly says realtime teammate presence is not enabled.
 
-## Files
+## RED evidence
 
-- Routes: `src/app/app/opportunities/page.tsx`, `src/app/app/opportunities/ideas/page.tsx`, `src/app/app/opportunities/vision/page.tsx`, `src/app/app/internal/opportunities/page.tsx`.
-- Opportunity UI: `src/components/opportunities/opportunities-workspace.tsx`, `opportunity-story.tsx`, `owner-opportunity-console.tsx`, `craft-guide-drawer.tsx`, and `opportunities.module.css`.
-- Domain/provider: `src/domain/opportunities.ts`, `src/lib/providers/opportunities.ts`.
-- Persisted demo state: `src/lib/store/museboard-store.ts`, `src/lib/demo/fixtures.ts`, `src/lib/demo/starter-workspace.ts`.
-- Tests: `tests/integration/opportunities.test.tsx`, `tests/e2e/opportunities.spec.ts`, plus compatibility/migration coverage in `tests/unit/planner.test.ts` and `tests/unit/store.test.ts`.
+`pnpm test tests/integration/thinking-room-workspace.test.tsx`
 
-## RED
+- Failed before implementation because `@/components/thinking-rooms/thinking-room-workspace` did not exist.
 
-- The initial focused command, `pnpm vitest run tests/integration/opportunities.test.tsx`, exited 1 because the opportunities workspace and owner console modules did not exist.
-- The legacy persistence regression exited 1 because `upgradePersistedMuseboardData` did not exist; the merge now upgrades pre-Task-5 opportunity metadata instead of discarding the saved creator workspace.
-- The unsafe duplicate regression exited 1 because a matching hash could bypass HTTPS validation; input now validates before duplicate reuse.
-- The rights regression exited 1 because an unknown runtime rights value was accepted by the provider boundary; rights and reference kind now validate at runtime.
-- The expiry regression exited 1 because an expired stored signal still appeared in For You; active recommendations now filter against the deterministic demo clock without deleting captured provenance.
-- Review regressions then captured lost trigger focus on Escape and a fixed operator clock; Escape now restores focus, while ingestion expiry uses the current clock.
+The focused suite covers:
 
-## GREEN
+- missing-room recovery;
+- wide and narrow lens behavior plus arrow-key tab navigation;
+- contribution creation, attribution, saved feedback, and composer focus restoration;
+- reaction toggling;
+- entering synthesis, editing belief/confidence, resolving one challenge, and carrying another forward;
+- live revision conflict messaging and unsaved draft preservation.
 
-- Focused opportunities integration: 11/11 passed.
-- Full Vitest: 10 files, 60/60 tests passed.
-- Typecheck: `tsc --noEmit` exited 0.
-- Lint: `eslint .` exited 0.
-- Production build: Next.js compiled, typechecked, and prerendered all four Task 5 routes; exit 0.
-- Task 5 browser smoke: 1/1 Chromium case passed, covering route tabs, persisted shaping, safe workshop promotion, Vision HTTPS failure/recovery, desktop/mobile overflow, mobile navigation, console/page errors on the public workflow, and denial of the owner route without credentials. The same Task 5 workflow also completed in the mobile-chrome project during the full run before an unrelated serialized Today baseline failure.
-- Visual QA: inspected full-page 1440 × 1000 For You and 390 × 844 Vision renders. The first mobile pass exposed a selection dock covering the composer; it was moved into non-overlapping sticky flow and the mobile render was re-inspected.
+## GREEN and verification evidence
 
-## Commit
+- `pnpm test tests/integration/thinking-room-workspace.test.tsx` — 1 file, 6 tests passed.
+- `pnpm test` — 48 files, 246 tests passed.
+- `pnpm exec eslint 'src/app/app/thinking/[roomId]/page.tsx' src/components/thinking-rooms/thinking-room-workspace.tsx src/components/thinking-rooms/thinking-contribution-composer.tsx src/components/thinking-rooms/thinking-synthesis-rail.tsx tests/integration/thinking-room-workspace.test.tsx` — passed.
+- `pnpm lint` — passed.
+- `pnpm typecheck` — passed.
+- `pnpm build` — passed; Next.js emitted `/app/thinking/[roomId]` as a dynamic route.
+- The local development server reached Ready at `http://localhost:3000` after moving aside duplicate generated `.next/dev` cache artifacts. Interactive screenshot QA was not completed before the requested commit cutoff.
 
-- Branch: `codex/museboard-app`.
-- Commit: `feat: add creator opportunity boards` (branch HEAD at handoff).
+## Boundaries and concerns
 
-## Self-review
-
-- For You exposes source class/URL, observed and expiry times, geography, platform, explicit sample state, deterministic factor contributions, evidence, and persisted save/dismiss/shape actions. Missing evidence caps ranking at 95.
-- Idea shaping is idempotent and provenance-bearing. Workshop promotion is also idempotent, starts at Angle, creates a valid content/version record, and never implies generation or publication.
-- Vision stores only URL/file metadata. It validates HTTPS, supported MIME, integer size, SHA-256, runtime rights, duplicate hash/canonical URL, and the local 2GB quota. Removal cleans selection; rights-unknown references cannot be selected for strategy.
-- The operator schema is strict, rejects copied article/media body fields and disallowed source classes, enforces future expiry, and reuses the exact public opportunity component for preview.
-- The operator route is denied server-side unless `MUSEBOARD_OWNER_PREVIEW_TOKEN` matches the `museboard-owner-preview` cookie; it is also unlinked and `noindex`.
-- Exactly 24 internally authored, provenance-bearing craft micro-guides are seeded. Context matching checks stage, platform, format, and creator stage and returns at most two.
-- Task 5 uses Phosphor icons, semantic theme tokens, native controls, route-level `aria-current`, live status/error text, 44px actions, keyboard-contained dialog behavior, and flat editorial rows instead of a repeated card grid.
-
-## Concerns
-
-- The full 20-case Playwright command is not green because the existing Today visual suite has no `mobile-chrome` snapshot baselines. The first failure was `[mobile-chrome] Today light desktop matches the approved hierarchy`; an isolated rerun reached screenshot comparison and reported missing `today-desktop-light-mobile-chrome-darwin.png`. The generated unapproved image was moved out of the worktree. No Task 5 browser case failed.
-- Deployments that need the internal preview must provision `MUSEBOARD_OWNER_PREVIEW_TOKEN` and the matching secure, HttpOnly `museboard-owner-preview` cookie through the future owner sign-in boundary. With no secret configured, the route fails closed as 404.
-- Local file hashing uses browser Web Crypto and intentionally retains no `File`, `Blob`, copied body, or blob URL. Very large local files remain constrained by browser memory even though aggregate demo quota semantics are 2GB.
-
-## Fix wave 1
-
-### Status
-
-All five Important and two Minor review findings are fixed with fresh regression coverage.
-
-### RED
-
-- The expanded focused suite initially reported 9 failures across 17 tests: factor rows exposed raw inputs instead of weighted contributions; source class was absent; craft context stayed on the first opportunity; uppercase padded hashes were not canonicalized; the Vision file component had no injectable lifecycle seam; all file preflight/race tests failed; and all 24 guides claimed every format and creator stage.
-- A final provider-boundary regression then failed because direct file metadata could bypass the new per-file 25MB image/PDF limit even though the picker rejected it.
-
-### GREEN
-
-- Focused opportunities integration: 20/20 passed.
-- Full Vitest: 10 files, 69/69 tests passed.
-- Typecheck: `tsc --noEmit` exited 0.
-- Lint: `eslint .` exited 0.
-- Production build: Next.js compiled, typechecked, and rendered all Task 5 routes; exit 0.
-- Task 5 browser smoke: 1/1 Chromium case passed across its desktop and 390 × 844 mobile phases without public-workflow console/page errors or horizontal overflow. Unrelated Today visual projects were not run.
-
-### Changes
-
-- File selection now invalidates the prior request immediately, clears prior hash/error/meta state, and owns async completion through a monotonically increasing request token. A stale digest or rejection cannot overwrite the current file.
-- MIME, integer size, the 25MB image/PDF ceiling, the 250MB MP4/MOV ceiling, and remaining 2GB quota are checked before `arrayBuffer()` or Web Crypto. The Add action stays disabled while hashing or without the current file digest.
-- SHA-256 values normalize with `trim().toLowerCase()` before validation, duplicate detection, schema parsing, IDs, and persistence. The store uses `safeParse` and returns a form-safe error instead of throwing.
-- Ranking rows now expose each factor's configured weight and weighted point contribution from `rankOpportunity`; the displayed contributions reconcile to the score. Source class appears beside the exact source label.
-- The 24 guides now have real, deterministic format and creator-stage scope rather than every/every tags. Shaping an opportunity or promoting an idea updates both the local craft context and persisted selected opportunity; idea-only work correctly maps to Angle instead of Ready.
-- RTL exercises real file input changes, rejected-file no-read behavior, prior-state clearing, A→B digest races resolved out of order, direct provider limits, canonical persistence, weighted factors, source class, and opportunity/Idea Board guide transitions.
-
-### Concerns
-
-- Web Crypto digest work itself cannot be cancelled once started; request ownership prevents stale state commits but does not reclaim browser CPU already spent on an obsolete digest.
-- Guide matching intentionally has no generic fallback. Unsupported exact stage/platform/format/creator-stage combinations show zero reviewed guides instead of presenting loosely related advice as contextual.
+- The current normalized domain/store does not include the approved `ContributionLink` entity. This task therefore persists challenge resolution through each synthesis revision's `openChallengeIds`: resolved challenges remain visible in the Challenges lens, while unresolved challenges are carried into the saved revision. It does not invent a parallel local-only relationship model.
+- Live writes use the existing room-wide compare-and-swap endpoint. A conflict preserves the composer draft and requires retry, but this slice does not implement a two-version merge UI or realtime subscriptions.
+- Sample participant avatars represent room participants, not fabricated live activity; the UI labels sample presence as non-live.
+- The generated `.next/dev` directory contained duplicate `* 3` artifacts from the host filesystem. It was moved to `/tmp` only for the local server check; no source or user files were removed.
