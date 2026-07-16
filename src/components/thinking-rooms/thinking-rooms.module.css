@@ -620,6 +620,9 @@
 
 .roomPeople > small { color: var(--muted); font-size: .7rem; }
 
+.presenceActivity { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: .68rem; }
+.presenceActivity span { max-width: 100%; overflow-wrap: anywhere; padding: 5px 8px; border-radius: 999px; background: color-mix(in srgb, var(--cobalt) 8%, transparent); }
+
 .lensTabs {
   display: none;
   max-width: 940px;
@@ -762,6 +765,15 @@
   font-size: 1.18rem;
   line-height: 1.38;
 }
+
+.noteEditor { display: grid; gap: 10px; margin: 14px 0; }
+.noteEditor label { display: grid; gap: 5px; color: var(--muted); font-size: .64rem; font-weight: 800; }
+.noteEditor textarea,
+.noteEditor input { width: 100%; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); padding: 10px; color: var(--ink); font: inherit; }
+.noteEditor textarea { min-height: 110px; resize: vertical; }
+.noteEditor > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.noteEditor button,
+.contributionNote > button { min-height: 36px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); padding: 0 12px; color: var(--ink); font-size: .66rem; font-weight: 800; }
 
 .reactions { display: flex; flex-wrap: wrap; gap: 3px; }
 

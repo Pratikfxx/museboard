@@ -27,6 +27,8 @@ interface ThinkingContributionComposerProps {
   onSourceReferenceChange: (value: string) => void;
   onRelationshipTargetChange: (value: string) => void;
   onRelationshipChange: (value: ContributionLink["relationship"]) => void;
+  onComposingChange?: (composing: boolean) => void;
+  onFocusChange?: (focused: boolean) => void;
   onSubmit: () => void | Promise<void>;
 }
 
@@ -34,7 +36,7 @@ export const ThinkingContributionComposer = forwardRef<
   HTMLTextAreaElement,
   ThinkingContributionComposerProps
 >(function ThinkingContributionComposer(
-  { lens, value, contributions, sourceReferenceId, relationshipTargetId, relationship, disabled = false, saving = false, onChange, onSourceReferenceChange, onRelationshipTargetChange, onRelationshipChange, onSubmit },
+  { lens, value, contributions, sourceReferenceId, relationshipTargetId, relationship, disabled = false, saving = false, onChange, onSourceReferenceChange, onRelationshipTargetChange, onRelationshipChange, onComposingChange, onFocusChange, onSubmit },
   ref,
 ) {
   const label = THINKING_LENS_LABELS[lens];
@@ -60,7 +62,9 @@ export const ThinkingContributionComposer = forwardRef<
           disabled={disabled}
           id="thinking-contribution-draft"
           maxLength={20000}
-          onChange={(event) => onChange(event.target.value)}
+          onBlur={() => { onComposingChange?.(false); onFocusChange?.(false); }}
+          onChange={(event) => { onChange(event.target.value); onComposingChange?.(Boolean(event.target.value.trim())); }}
+          onFocus={() => { onFocusChange?.(true); onComposingChange?.(Boolean(value.trim())); }}
           placeholder="Write the thought clearly enough for a teammate to respond to it."
           ref={ref}
           rows={3}
@@ -70,7 +74,10 @@ export const ThinkingContributionComposer = forwardRef<
           <label>Evidence source
             <input
               disabled={disabled}
+              maxLength={2000}
+              onBlur={() => onFocusChange?.(false)}
               onChange={(event) => onSourceReferenceChange(event.target.value)}
+              onFocus={() => { onFocusChange?.(true); onComposingChange?.(false); }}
               placeholder="Paste a URL or source reference"
               value={sourceReferenceId}
             />

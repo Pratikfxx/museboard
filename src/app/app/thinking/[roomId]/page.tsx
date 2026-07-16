@@ -18,6 +18,7 @@ export default async function ThinkingRoomPage({
         userId: workspace.userId,
         displayName: workspace.displayName,
         canEdit: workspace.role !== "viewer",
+        presenceEnabled: true,
       } : undefined}
       mode="live"
       roomId={roomId}

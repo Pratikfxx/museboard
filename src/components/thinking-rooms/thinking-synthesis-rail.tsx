@@ -36,6 +36,8 @@ interface ThinkingSynthesisRailProps {
   onBegin: () => void | Promise<void>;
   onConvert: () => void | Promise<void>;
   onSave: (draft: SynthesisDraft) => void | Promise<void>;
+  onComposingChange?: (composing: boolean) => void;
+  onFocusChange?: (focused: boolean) => void;
 }
 
 const confidenceLabels: Record<ThinkingSynthesisRevision["confidence"], string> = {
@@ -59,6 +61,8 @@ export function ThinkingSynthesisRail({
   onBegin,
   onConvert,
   onSave,
+  onComposingChange,
+  onFocusChange,
 }: ThinkingSynthesisRailProps) {
   const allChallengeIds = useMemo(() => challenges.map(({ id }) => id), [challenges]);
   const initialOpenChallengeIds = useMemo(() => {
@@ -151,7 +155,9 @@ export function ThinkingSynthesisRail({
             disabled={!canEdit}
             id="thinking-shared-belief"
             maxLength={20000}
-            onChange={(event) => setBelief(event.target.value)}
+            onBlur={() => { onComposingChange?.(false); onFocusChange?.(false); }}
+            onChange={(event) => { setBelief(event.target.value); onComposingChange?.(Boolean(event.target.value.trim())); }}
+            onFocus={() => { onFocusChange?.(true); onComposingChange?.(Boolean(belief.trim())); }}
             placeholder="What does the room believe now?"
             rows={5}
             value={belief}
@@ -209,7 +215,7 @@ export function ThinkingSynthesisRail({
                       {open ? (
                         <>
                           <label>Resolution note for {challenge.body}
-                            <textarea disabled={!canEdit || !openLink} onChange={(event) => setChallengeResolutionNotes((notes) => ({ ...notes, [challenge.id]: event.target.value }))} value={challengeResolutionNotes[challenge.id] ?? ""} />
+                            <textarea disabled={!canEdit || !openLink} onBlur={() => { onComposingChange?.(false); onFocusChange?.(false); }} onChange={(event) => { setChallengeResolutionNotes((notes) => ({ ...notes, [challenge.id]: event.target.value })); onComposingChange?.(Boolean(event.target.value.trim())); }} onFocus={(event) => { onFocusChange?.(true); onComposingChange?.(Boolean(event.currentTarget.value.trim())); }} value={challengeResolutionNotes[challenge.id] ?? ""} />
                           </label>
                           <button
                             disabled={!canEdit || !openLink || !challengeResolutionNotes[challenge.id]?.trim()}

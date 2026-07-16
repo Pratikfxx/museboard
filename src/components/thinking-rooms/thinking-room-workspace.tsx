@@ -45,12 +45,14 @@ import {
 import { useThinkingRoomStore } from "@/lib/store/thinking-room-store";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
 import type { ThinkingRoomAggregate } from "@/lib/thinking-rooms/repository";
+import type { ThinkingContributionEditClaim, ThinkingRoomPresenceArea } from "@/domain/thinking-room-presence";
 
 import {
   THINKING_LENS_LABELS,
   ThinkingContributionComposer,
 } from "./thinking-contribution-composer";
 import { ThinkingSynthesisRail } from "./thinking-synthesis-rail";
+import { useThinkingRoomPresence } from "./use-thinking-room-presence";
 import styles from "./thinking-rooms.module.css";
 
 const roomAggregateSchema: z.ZodType<ThinkingRoomAggregate> = z.object({
@@ -69,6 +71,10 @@ const conversionResponseSchema = z.object({
 const reactionMutationResponseSchema = z.object({
   roomRevision: z.number().int().positive(),
   reaction: contributionReactionSchema.nullable(),
+});
+const contributionEditResponseSchema = z.object({
+  roomRevision: z.number().int().positive(),
+  contribution: thinkingContributionSchema,
 });
 
 const LENSES: readonly ThinkingLens[] = [
@@ -123,6 +129,7 @@ export interface ThinkingRoomLiveContext {
   userId: string;
   displayName: string;
   canEdit: boolean;
+  presenceEnabled?: boolean;
 }
 
 function useNarrowRoomCanvas() {
@@ -176,13 +183,120 @@ interface ContributionNoteProps {
   reactions: ContributionReaction[];
   actorId?: string;
   canReact: boolean;
+  canEdit: boolean;
+  claim?: ThinkingContributionEditClaim;
+  mode: "sample" | "live";
+  roomId: string;
+  roomStatus: ThinkingRoom["status"];
+  sessionId: string;
+  onClaim: (contributionId: string, active: boolean) => Promise<Response>;
+  onEdited: (result: z.infer<typeof contributionEditResponseSchema>) => void;
+  onComposingChange: (composing: boolean) => void;
+  onEditingChange: (contributionId?: string) => void;
+  onFocusAreaChange: (area?: ThinkingLens) => void;
   onReact: (contribution: ThinkingContribution, kind: ContributionReaction["kind"], active: boolean) => void;
 }
 
-function ContributionNote({ contribution, contributions, links, reactions, actorId, canReact, onReact }: ContributionNoteProps) {
+function ContributionNote({
+  contribution, contributions, links, reactions, actorId, canReact, canEdit, claim,
+  mode, roomId, roomStatus, sessionId, onClaim, onEdited, onComposingChange, onEditingChange, onFocusAreaChange, onReact,
+}: ContributionNoteProps) {
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState(contribution.body);
+  const [sourceDraft, setSourceDraft] = useState(contribution.sourceReferenceId ?? "");
+  const [editState, setEditState] = useState<"idle" | "claiming" | "saving" | "conflict" | "permission" | "offline" | "error">("idle");
+  const [editExpectedRevision, setEditExpectedRevision] = useState(contribution.revision);
+  const [latest, setLatest] = useState<ThinkingContribution>();
+  const recoveryKey = `museboard-thinking-edit:${roomId}:${contribution.id}:${actorId ?? "anonymous"}`;
+  const otherClaim = claim && claim.actorUserId !== actorId ? claim : undefined;
+  const mayEdit = mode === "live" && canEdit && actorId === contribution.authorMembershipId &&
+    ["exploring", "synthesizing"].includes(roomStatus) && !otherClaim;
   const relatedLinks = links.filter(({ fromContributionId, toContributionId }) =>
     fromContributionId === contribution.id || toContributionId === contribution.id,
   );
+  const persistRecovery = (body: string, sourceReferenceId: string) => window.localStorage.setItem(recoveryKey, JSON.stringify({ body, sourceReferenceId }));
+  const copyDraft = () => navigator.clipboard.writeText(contribution.lens === "evidence"
+    ? `${editDraft}\n\nSource: ${sourceDraft}`
+    : editDraft);
+
+  async function beginEdit() {
+    setEditState("claiming");
+    const response = await onClaim(contribution.id, true);
+    if (response.status === 401 || response.status === 403) return setEditState("permission");
+    if (response.status === 409) return setEditState("conflict");
+    if (!response.ok) return setEditState("error");
+    const recovered = window.localStorage.getItem(recoveryKey);
+    let recoveredDraft: { body: string; sourceReferenceId: string } | undefined;
+    try {
+      const parsedRecovery = recovered
+        ? z.object({ body: z.string(), sourceReferenceId: z.string() }).safeParse(JSON.parse(recovered))
+        : undefined;
+      recoveredDraft = parsedRecovery?.success ? parsedRecovery.data : undefined;
+    } catch {
+      window.localStorage.removeItem(recoveryKey);
+    }
+    setEditDraft(recoveredDraft?.body ?? contribution.body);
+    setSourceDraft(recoveredDraft?.sourceReferenceId ?? contribution.sourceReferenceId ?? "");
+    setEditExpectedRevision(contribution.revision);
+    setEditing(true);
+    onEditingChange(contribution.id);
+    setEditState("idle");
+  }
+
+  async function cancelEdit() {
+    setEditing(false);
+    setLatest(undefined);
+    setEditState("idle");
+    onComposingChange(false);
+    onFocusAreaChange(undefined);
+    onEditingChange(undefined);
+    window.localStorage.removeItem(recoveryKey);
+    await onClaim(contribution.id, false);
+  }
+
+  async function saveEdit(expectedRevision = editExpectedRevision) {
+    setEditState("saving");
+    let response: Response;
+    try {
+      response = await fetch(`/api/thinking-rooms/${encodeURIComponent(roomId)}/contributions/${encodeURIComponent(contribution.id)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          expectedRevision,
+          body: editDraft,
+          ...(contribution.lens === "evidence" ? { sourceReferenceId: sourceDraft } : {}),
+        }),
+      });
+    } catch {
+      setEditState("offline");
+      return;
+    }
+    if (response.status === 401 || response.status === 403) {
+      setEditState("permission");
+      onEditingChange(undefined);
+      return;
+    }
+    if (response.status === 409) {
+      const payload = await response.json().catch(() => undefined) as { latestContribution?: unknown } | undefined;
+      const parsedLatest = thinkingContributionSchema.safeParse(payload?.latestContribution);
+      setLatest(parsedLatest.success ? parsedLatest.data : undefined);
+      setEditState("conflict");
+      return;
+    }
+    const parsed = response.ok ? contributionEditResponseSchema.safeParse(await response.json()) : undefined;
+    if (!parsed?.success) return setEditState("error");
+    window.localStorage.removeItem(recoveryKey);
+    setEditing(false);
+    setLatest(undefined);
+    setEditState("idle");
+    onComposingChange(false);
+    onFocusAreaChange(undefined);
+    onEditingChange(undefined);
+    onEdited(parsed.data);
+  }
+
   return (
     <article className={styles.contributionNote}>
       <header>
@@ -193,7 +307,46 @@ function ContributionNote({ contribution, contributions, links, reactions, actor
         </div>
         {contribution.sourceReferenceId ? <em><LinkSimple aria-hidden="true" size={14} /> Source noted</em> : null}
       </header>
-      <p>{contribution.body}</p>
+      {otherClaim ? <small>{otherClaim.displayName} is editing this note</small> : null}
+      {editing ? (
+        <div className={styles.noteEditor}>
+          <label>
+            <span>Edit contribution</span>
+            <textarea
+              aria-label="Edit contribution"
+              maxLength={20000}
+              onBlur={() => { onComposingChange(false); onFocusAreaChange(undefined); }}
+              onChange={(event) => {
+                setEditDraft(event.target.value);
+                persistRecovery(event.target.value, sourceDraft);
+                onComposingChange(Boolean(event.target.value.trim()));
+              }}
+              onFocus={() => { onFocusAreaChange(contribution.lens); onComposingChange(Boolean(editDraft.trim())); }}
+              value={editDraft}
+            />
+          </label>
+          {contribution.lens === "evidence" ? <label><span>Source reference</span><input maxLength={2000} onBlur={() => onFocusAreaChange(undefined)} onChange={(event) => { setSourceDraft(event.target.value); persistRecovery(editDraft, event.target.value); }} onFocus={() => { onFocusAreaChange(contribution.lens); onComposingChange(false); }} value={sourceDraft} /></label> : null}
+          {editState === "conflict" ? (
+            <div role="alert">
+              <strong>This note changed elsewhere. Your version is still safe.</strong>
+              {latest ? <p>Latest: {latest.body}</p> : null}
+              <button onClick={() => { if (latest) { setEditDraft(latest.body); setSourceDraft(latest.sourceReferenceId ?? ""); setEditExpectedRevision(latest.revision); window.localStorage.removeItem(recoveryKey); setEditState("idle"); } }} type="button">Use latest</button>
+              <button disabled={!latest} onClick={() => { if (latest) void saveEdit(latest.revision); }} type="button">Try my version</button>
+              <button onClick={() => void copyDraft()} type="button">Copy my draft</button>
+            </div>
+          ) : null}
+          {editState === "permission" ? <div role="alert"><strong>Your edit access changed. Your draft is still here.</strong><button onClick={() => void copyDraft()} type="button">Copy my draft</button></div> : null}
+          {editState === "offline" ? <div role="alert"><strong>You are offline. Your edit is still here.</strong><button onClick={() => void saveEdit()} type="button">Retry edit</button><button onClick={() => void copyDraft()} type="button">Copy my draft</button></div> : null}
+          {editState === "error" ? <p role="alert">This edit could not be saved. Your draft is still here.</p> : null}
+          <div>
+            <button disabled={!editDraft.trim() || editState === "saving"} onClick={() => void saveEdit()} type="button">Save edit</button>
+            <button disabled={editState === "saving"} onClick={() => void cancelEdit()} type="button">Cancel</button>
+          </div>
+        </div>
+      ) : <p>{contribution.body}</p>}
+      {!editing && mayEdit ? <button disabled={editState === "claiming"} onClick={() => void beginEdit()} type="button">Edit note</button> : null}
+      {!editing && editState === "conflict" ? <small role="alert">This note is being edited in another tab.</small> : null}
+      {!editing && editState === "permission" ? <small role="alert">You no longer have permission to edit this note.</small> : null}
       {relatedLinks.map((link) => {
         const targetId = link.fromContributionId === contribution.id
           ? link.toContributionId
@@ -287,6 +440,9 @@ export function ThinkingRoomWorkspace({
   const [activeLens, setActiveLens] = useState<ThinkingLens>("audience_tensions");
   const [composerLens, setComposerLens] = useState<ThinkingLens>("audience_tensions");
   const [draft, setDraft] = useState("");
+  const [inlineComposing, setInlineComposing] = useState(false);
+  const [focusedPresenceArea, setFocusedPresenceArea] = useState<ThinkingRoomPresenceArea>("room");
+  const [editingContributionId, setEditingContributionId] = useState<string>();
   const [sourceReferenceDraft, setSourceReferenceDraft] = useState("");
   const [relationshipTargetId, setRelationshipTargetId] = useState("");
   const [relationship, setRelationship] = useState<"supports" | "challenges" | "extends" | "combines">("supports");
@@ -332,9 +488,17 @@ export function ThinkingRoomWorkspace({
       role: liveContext.canEdit ? "editor" : "viewer",
       status: "active",
     } : undefined;
-  const canEdit = Boolean(saveState !== "permission" && actor && (mode === "sample" ? actor.role !== "viewer" : liveContext?.canEdit));
+  const presence = useThinkingRoomPresence({
+    enabled: mode === "live" && liveContext?.presenceEnabled === true && loadState === "ready" && Boolean(aggregate),
+    roomId,
+    area: focusedPresenceArea,
+    isComposing: inlineComposing,
+    editingContributionId,
+  });
+  const effectiveSaveState: SaveState = presence.revoked ? "permission" : saveState;
+  const canEdit = Boolean(effectiveSaveState !== "permission" && actor && (mode === "sample" ? actor.role !== "viewer" : liveContext?.canEdit));
   const canMutateContent = Boolean(canEdit && aggregate && ["exploring", "synthesizing"].includes(aggregate.room.status));
-  const canReact = Boolean(saveState !== "permission" && actor && aggregate && ["exploring", "synthesizing"].includes(aggregate.room.status));
+  const canReact = Boolean(effectiveSaveState !== "permission" && actor && aggregate && ["exploring", "synthesizing"].includes(aggregate.room.status));
   const currentSynthesis = aggregate?.synthesisRevisions.toSorted((left, right) => left.number - right.number).at(-1);
   const challenges = aggregate?.contributions.filter(({ lens }) => lens === "challenges") ?? [];
   const suggestedBelief = useMemo(() => {
@@ -789,26 +953,33 @@ export function ThinkingRoomWorkspace({
   if (mode === "live" && loadState !== "ready") return <RoomUnavailable />;
   if (!aggregate) return <RoomUnavailable missing />;
 
-  const participants = mode === "sample" ? memberships.filter(({ status }) => status === "active") : actor ? [actor] : [];
+  const participants = mode === "sample"
+    ? memberships.filter(({ status }) => status === "active").map(({ id, displayNameSnapshot }) => ({ actorUserId: id, displayName: displayNameSnapshot, area: "room" as const, isComposing: false }))
+    : presence.snapshot.presence;
+  const areaLabel = (area: string) => area === "synthesis"
+    ? "Synthesis"
+    : area === "room"
+      ? "Room overview"
+      : THINKING_LENS_LABELS[area as ThinkingLens];
 
   return (
     <main className={styles.roomWorkspace}>
       <Link className={styles.backLink} href="/app/thinking"><ArrowLeft aria-hidden="true" size={17} /> All rooms</Link>
 
-      {saveState === "conflict" ? (
+      {effectiveSaveState === "conflict" ? (
         <section className={styles.conflictBanner} role="alert">
           <WarningCircle aria-hidden="true" size={22} />
           <div><strong>This room changed elsewhere.</strong><p>Your draft is safe here. Review it, then retry after checking the latest room.</p></div>
           <button onClick={() => void retryAction?.()} type="button">Retry save</button>
         </section>
       ) : null}
-      {saveState === "error" ? (
+      {effectiveSaveState === "error" ? (
         <section className={styles.saveError} role="alert">
           <WarningCircle aria-hidden="true" size={20} /> <strong>Couldn’t save — retry</strong>
           <button onClick={() => void retryAction?.()} type="button">Retry save</button>
         </section>
       ) : null}
-      {saveState === "permission" ? (
+      {effectiveSaveState === "permission" ? (
         <section className={styles.saveError} role="alert">
           <WarningCircle aria-hidden="true" size={20} />
           <div><strong>Your access changed before this save.</strong><p>Your draft remains in this tab. Copy it before leaving or reloading.</p></div>
@@ -824,13 +995,21 @@ export function ThinkingRoomWorkspace({
         <h1>{aggregate.room.question}</h1>
         {aggregate.room.context ? <p>{aggregate.room.context}</p> : null}
         <div className={styles.roomPeople}>
-          <div aria-label={`${participants.length} room participant${participants.length === 1 ? "" : "s"}`} className={styles.avatars}>
+          <div aria-label={`${participants.length} ${mode === "sample" ? "preview" : "active room"} participant${participants.length === 1 ? "" : "s"}`} className={styles.avatars}>
             {participants.slice(0, 4).map((participant) => (
-              <span key={participant.id} title={participant.displayNameSnapshot}>{participant.displayNameSnapshot.slice(0, 1).toUpperCase()}</span>
+              <span key={participant.actorUserId} title={mode === "sample" ? participant.displayName : `${participant.displayName} · ${areaLabel(participant.area)}`}>{participant.displayName.slice(0, 1).toUpperCase()}</span>
             ))}
-            <strong><Users aria-hidden="true" size={16} /> {participants.length} participant{participants.length === 1 ? "" : "s"}</strong>
+            <strong><Users aria-hidden="true" size={16} /> {participants.length} {mode === "sample" ? "preview" : "live"}</strong>
           </div>
-          <small>{mode === "sample" ? "Presence is not live in sample mode." : "You are here. Realtime teammate presence is not enabled."}</small>
+          <small>{mode === "sample" ? "Preview only · no one is live" : "You are here. Live presence refreshes while this room is open."}</small>
+          {mode === "live" ? <Link href="/app/team">Invite a collaborator</Link> : null}
+          {mode === "live" ? (
+            <div aria-live="polite" className={styles.presenceActivity} role="status">
+              {participants.filter(({ isComposing }) => isComposing).map((participant) => (
+                <span key={participant.actorUserId}>{participant.displayName} is composing in {areaLabel(participant.area)}</span>
+              ))}
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -876,13 +1055,28 @@ export function ThinkingRoomWorkspace({
                     {contributions.length ? contributions.map((contribution) => (
                       <ContributionNote
                         actorId={actor?.id}
+                        canEdit={canEdit}
                         canReact={canReact}
+                        claim={presence.snapshot.claims.find(({ contributionId }) => contributionId === contribution.id)}
                         contribution={contribution}
                         contributions={aggregate.contributions}
                         key={contribution.id}
                         links={aggregate.links}
+                        mode={mode}
+                        onClaim={presence.changeClaim}
+                        onComposingChange={setInlineComposing}
+                        onEditingChange={setEditingContributionId}
+                        onEdited={(result) => setLiveAggregate((current) => current ? {
+                          ...current,
+                          room: { ...current.room, revision: result.roomRevision },
+                          contributions: current.contributions.map((item) => item.id === result.contribution.id ? result.contribution : item),
+                        } : current)}
                         onReact={(note, kind, active) => void react(note, kind, active)}
+                        onFocusAreaChange={(area) => setFocusedPresenceArea(area ?? "room")}
                         reactions={aggregate.reactions}
+                        roomId={aggregate.room.id}
+                        roomStatus={aggregate.room.status}
+                        sessionId={presence.sessionId}
                       />
                     )) : (
                       <p className={styles.lensEmpty}><ChatCircleDots aria-hidden="true" size={19} /> No notes yet. Start with one precise observation.</p>
@@ -901,12 +1095,14 @@ export function ThinkingRoomWorkspace({
             disabled={!canMutateContent}
             lens={composerLens}
             onChange={setDraft}
+            onComposingChange={setInlineComposing}
+            onFocusChange={(focused) => setFocusedPresenceArea(focused ? composerLens : "room")}
             onRelationshipChange={setRelationship}
             onRelationshipTargetChange={setRelationshipTargetId}
             onSourceReferenceChange={setSourceReferenceDraft}
             onSubmit={() => addContribution()}
             ref={composerRef}
-            saving={saveState === "saving"}
+            saving={effectiveSaveState === "saving"}
             relationship={relationship}
             relationshipTargetId={relationshipTargetId}
             sourceReferenceId={sourceReferenceDraft}
@@ -926,15 +1122,17 @@ export function ThinkingRoomWorkspace({
           key={`${aggregate.room.id}-${aggregate.room.status}-${currentSynthesis?.id ?? "new"}-${challenges.map(({ id }) => id).join("-")}`}
           onBegin={beginSynthesis}
           onConvert={convertToIdea}
+          onComposingChange={setInlineComposing}
+          onFocusChange={(focused) => setFocusedPresenceArea(focused ? "synthesis" : "room")}
           onSave={saveSynthesis}
           room={aggregate.room}
-          saving={saveState === "saving"}
+          saving={effectiveSaveState === "saving"}
           suggestedBelief={suggestedBelief}
         />
       </div>
 
-      <div aria-live="polite" className={styles.saveToast} data-state={saveState} role="status">
-        {saveState === "saving" ? "Saving…" : saveState === "saved" ? <><Check aria-hidden="true" size={16} /> Saved</> : null}
+      <div aria-live="polite" className={styles.saveToast} data-state={effectiveSaveState} role="status">
+        {effectiveSaveState === "saving" ? "Saving…" : effectiveSaveState === "saved" ? <><Check aria-hidden="true" size={16} /> Saved</> : null}
       </div>
     </main>
   );

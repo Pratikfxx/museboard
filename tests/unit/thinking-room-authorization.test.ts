@@ -122,6 +122,27 @@ describe("Thinking Room full-aggregate authorization", () => {
     }
   });
 
+  it("freezes every field of an existing contribution in aggregate saves", () => {
+    const current = aggregate();
+    const existing = current.contributions[0];
+    const actor = { userId: editorId, role: "editor" as const, displayName: "Editor" };
+    const rewrites = [
+      { ...existing, lens: "possibilities" as const },
+      { ...existing, body: "Bypassed dedicated edit history" },
+      { ...existing, sourceReferenceId: "https://example.com/changed" },
+      { ...existing, mentionedMembershipId: editorId },
+      { ...existing, relatedContributionId: "another-contribution" },
+      { ...existing, revision: existing.revision + 1 },
+      { ...existing, updatedAt: "2026-07-16T20:00:00.000Z" },
+      { ...existing, deletedAt: "2026-07-16T20:00:00.000Z" },
+    ];
+
+    for (const contribution of rewrites) {
+      expect(() => authorize(current, { ...current, contributions: [contribution] }, actor))
+        .toThrow(/immutable/i);
+    }
+  });
+
   it("rejects deletion or rewrite of immutable synthesis, links, and other actors' reactions", () => {
     const current = aggregate();
     const actor = { userId: editorId, role: "editor" as const, displayName: "Editor" };

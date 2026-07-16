@@ -78,12 +78,8 @@ export function assertAuthorizedThinkingRoomMutation(input: {
   for (const existing of current.contributions) {
     const candidate = nextContributions.get(existing.id);
     if (!candidate) deny("Contribution history cannot be deleted.");
-    if (
-      existing.authorMembershipId !== candidate.authorMembershipId ||
-      existing.authorDisplayNameSnapshot !== candidate.authorDisplayNameSnapshot ||
-      existing.createdAt !== candidate.createdAt
-    ) {
-      deny("Contribution attribution is immutable.");
+    if (!isDeepStrictEqual(existing, candidate)) {
+      deny("Existing contributions are immutable through aggregate saves; use the dedicated edit flow.");
     }
   }
   const currentContributions = byId(current.contributions);

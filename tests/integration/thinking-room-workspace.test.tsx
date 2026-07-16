@@ -110,6 +110,7 @@ describe("Thinking Room guided decision canvas", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     push.mockReset();
+    window.localStorage.clear();
     setNarrowViewport(false);
     useMuseboardStore.setState(createDemoState());
     useThinkingRoomStore.getState().resetSample(createDemoState().memberships);
@@ -120,6 +121,17 @@ describe("Thinking Room guided decision canvas", () => {
 
     expect(screen.getByRole("heading", { name: "This Thinking Room is not here." })).toBeVisible();
     expect(screen.getByRole("link", { name: "Back to Thinking Rooms" })).toHaveAttribute("href", "/app/thinking");
+  });
+
+  it("labels sample presence as preview-only without making presence calls", () => {
+    createExploringRoom();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ThinkingRoomWorkspace mode="sample" roomId={ROOM_ID} />);
+
+    expect(screen.getByText("Preview only · no one is live")).toBeVisible();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("resolves the active sample participant without relying on a browser status global", () => {
@@ -704,6 +716,188 @@ describe("Thinking Room guided decision canvas", () => {
 
     await screen.findByRole("heading", { name: aggregate.room.question });
     await waitFor(() => expect(useMuseboardStore.getState().ideas).toHaveLength(before));
+  });
+
+  it("shows authoritative live collaborators and sends presence without draft text", async () => {
+    const base = createLiveDecidedAggregate();
+    const samId = "f49d98d0-bf0d-433c-af39-7137e320cc20";
+    const aggregate = { ...base, room: { ...base.room, status: "exploring" as const }, contributions: base.contributions.map((item) => ({ ...item, authorMembershipId: samId, authorDisplayNameSnapshot: "Sam Rivera" })), synthesisRevisions: [], contentOrigins: [] };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ aggregate }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        presence: [
+          { actorUserId: aggregate.room.facilitatorMembershipId, displayName: "Maya Chen", area: "room", isComposing: false, expiresAt: "2026-07-16T20:00:30.000Z" },
+          { actorUserId: samId, displayName: "Sam Rivera", area: "evidence", isComposing: true, expiresAt: "2026-07-16T20:00:30.000Z" },
+        ],
+        claims: [{ contributionId: aggregate.contributions[0].id, actorUserId: samId, displayName: "Sam Rivera", expiresAt: "2026-07-16T20:00:45.000Z" }],
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ThinkingRoomWorkspace
+      liveContext={{ userId: aggregate.room.facilitatorMembershipId, displayName: "Maya Chen", canEdit: true, presenceEnabled: true }}
+      mode="live"
+      roomId={aggregate.room.id}
+    />);
+
+    expect(await screen.findByText("Sam Rivera is composing in Evidence")).toBeVisible();
+    expect(screen.getByText("Sam Rivera is editing this note")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Invite a collaborator" })).toHaveAttribute("href", "/app/team");
+    const presenceCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/presence"));
+    expect(presenceCall).toBeDefined();
+    const sent = JSON.parse(String(presenceCall?.[1]?.body));
+    expect(sent).toEqual({ sessionId: expect.any(String), area: "room", isComposing: false });
+    expect(JSON.stringify(sent)).not.toContain("body");
+    expect(JSON.stringify(sent)).not.toContain("draft");
+    const initialPresenceCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/presence")).length;
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Contribution to Audience tensions"), "A");
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/presence")).length).toBeGreaterThan(initialPresenceCalls));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/presence") && JSON.parse(String(init?.body)).area === "audience_tensions" && JSON.parse(String(init?.body)).isComposing === true)).toBe(true));
+    await user.tab();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/presence") && JSON.parse(String(init?.body)).area === "room" && JSON.parse(String(init?.body)).isComposing === false)).toBe(true));
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  });
+
+  it("claims and edits only the actor's own live note through the dedicated route", async () => {
+    const base = createLiveDecidedAggregate();
+    const actorId = base.room.facilitatorMembershipId;
+    const contribution = { ...base.contributions[0], authorMembershipId: actorId };
+    const aggregate = {
+      ...base,
+      room: { ...base.room, status: "exploring" as const },
+      contributions: [contribution],
+      synthesisRevisions: [],
+      contentOrigins: [],
+    };
+    const edited = { ...contribution, body: "A revised note with durable history.", revision: contribution.revision + 1, updatedAt: "2026-07-16T20:01:00.000Z" };
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/presence")) return new Response(JSON.stringify({ presence: [], claims: [] }), { status: 200 });
+      if (String(url).endsWith("/edit-claim")) return new Response(JSON.stringify({ claim: { contributionId: contribution.id, actorUserId: actorId, displayName: "Maya Chen", expiresAt: "2026-07-16T20:00:45.000Z" } }), { status: 200 });
+      if (String(url).includes("/contributions/") && init?.method === "PATCH") return new Response(JSON.stringify({ roomRevision: aggregate.room.revision + 1, contribution: edited }), { status: 200 });
+      return new Response(JSON.stringify({ aggregate }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<ThinkingRoomWorkspace
+      liveContext={{ userId: actorId, displayName: "Maya Chen", canEdit: true, presenceEnabled: true }}
+      mode="live"
+      roomId={aggregate.room.id}
+    />);
+
+    const note = (await screen.findByText(contribution.body)).closest("article")!;
+    await user.click(within(note).getByRole("button", { name: "Edit note" }));
+    const editor = within(note).getByRole("textbox", { name: "Edit contribution" });
+    await user.clear(editor);
+    await user.type(editor, edited.body);
+    await user.click(within(note).getByRole("button", { name: "Save edit" }));
+
+    expect(await screen.findByText(edited.body)).toBeVisible();
+    const claimCalls = fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/edit-claim") && init?.method === "PUT");
+    expect(claimCalls.length).toBeGreaterThanOrEqual(2);
+    const patchCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/contributions/") && init?.method === "PATCH");
+    expect(patchCall).toBeDefined();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toMatchObject({
+      expectedRevision: contribution.revision,
+      body: edited.body,
+      sessionId: expect.any(String),
+    });
+  });
+
+  it("preserves a stale local edit and retries it only after the actor chooses their version", async () => {
+    const base = createLiveDecidedAggregate();
+    const actorId = base.room.facilitatorMembershipId;
+    const contribution = { ...base.contributions[0], authorMembershipId: actorId };
+    const aggregate = { ...base, room: { ...base.room, status: "exploring" as const }, contributions: [contribution], synthesisRevisions: [], contentOrigins: [] };
+    const latest = { ...contribution, body: "A teammate's newer version.", revision: contribution.revision + 1, updatedAt: "2026-07-16T20:01:00.000Z" };
+    const mine = { ...latest, body: "My deliberately retried version.", revision: latest.revision + 1, updatedAt: "2026-07-16T20:02:00.000Z" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ aggregate }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ claim: {} }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: "edit_conflict", latestContribution: latest }), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ roomRevision: aggregate.room.revision + 2, contribution: mine }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<ThinkingRoomWorkspace liveContext={{ userId: actorId, displayName: "Maya Chen", canEdit: true }} mode="live" roomId={aggregate.room.id} />);
+
+    const note = (await screen.findByText(contribution.body)).closest("article")!;
+    await user.click(within(note).getByRole("button", { name: "Edit note" }));
+    const editor = within(note).getByRole("textbox", { name: "Edit contribution" });
+    await user.clear(editor);
+    await user.type(editor, mine.body);
+    await user.click(within(note).getByRole("button", { name: "Save edit" }));
+
+    expect(await within(note).findByText(/changed elsewhere/i)).toBeVisible();
+    expect(editor).toHaveValue(mine.body);
+    expect(within(note).getByText(`Latest: ${latest.body}`)).toBeVisible();
+    expect(within(note).getByRole("button", { name: "Use latest" })).toBeVisible();
+    expect(within(note).getByRole("button", { name: "Copy my draft" })).toBeVisible();
+    await user.click(within(note).getByRole("button", { name: "Try my version" }));
+
+    expect(await screen.findByText(mine.body)).toBeVisible();
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toMatchObject({ expectedRevision: latest.revision, body: mine.body });
+  });
+
+  it("uses a chosen latest version as the next explicit save baseline", async () => {
+    const base = createLiveDecidedAggregate();
+    const actorId = base.room.facilitatorMembershipId;
+    const contribution = { ...base.contributions[0], authorMembershipId: actorId };
+    const aggregate = { ...base, room: { ...base.room, status: "exploring" as const }, contributions: [contribution], synthesisRevisions: [], contentOrigins: [] };
+    const latest = { ...contribution, body: "The latest server version.", revision: contribution.revision + 1, updatedAt: "2026-07-16T20:01:00.000Z" };
+    const saved = { ...latest, revision: latest.revision + 1, updatedAt: "2026-07-16T20:02:00.000Z" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ aggregate }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ claim: {} }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: "edit_conflict", latestContribution: latest }), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ roomRevision: aggregate.room.revision + 2, contribution: saved }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<ThinkingRoomWorkspace liveContext={{ userId: actorId, displayName: "Maya Chen", canEdit: true }} mode="live" roomId={aggregate.room.id} />);
+
+    const note = (await screen.findByText(contribution.body)).closest("article")!;
+    await user.click(within(note).getByRole("button", { name: "Edit note" }));
+    const editor = within(note).getByRole("textbox", { name: "Edit contribution" });
+    await user.clear(editor);
+    await user.type(editor, "My stale text");
+    await user.click(within(note).getByRole("button", { name: "Save edit" }));
+    await user.click(await within(note).findByRole("button", { name: "Use latest" }));
+    expect(editor).toHaveValue(latest.body);
+    await user.click(within(note).getByRole("button", { name: "Save edit" }));
+
+    expect(await screen.findByText(saved.body)).toBeVisible();
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toMatchObject({ expectedRevision: latest.revision, body: latest.body });
+  });
+
+  it("keeps an offline edit copyable and retryable instead of staying in Saving", async () => {
+    const base = createLiveDecidedAggregate();
+    const actorId = base.room.facilitatorMembershipId;
+    const contribution = { ...base.contributions[0], authorMembershipId: actorId };
+    const aggregate = { ...base, room: { ...base.room, status: "exploring" as const }, contributions: [contribution], synthesisRevisions: [], contentOrigins: [] };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ aggregate }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ claim: {} }), { status: 200 }))
+      .mockRejectedValueOnce(new TypeError("offline"));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<ThinkingRoomWorkspace liveContext={{ userId: actorId, displayName: "Maya Chen", canEdit: true }} mode="live" roomId={aggregate.room.id} />);
+
+    const note = (await screen.findByText(contribution.body)).closest("article")!;
+    await user.click(within(note).getByRole("button", { name: "Edit note" }));
+    const editor = within(note).getByRole("textbox", { name: "Edit contribution" });
+    await user.clear(editor);
+    await user.type(editor, "My offline-safe draft.");
+    const source = within(note).getByDisplayValue("https://example.com/live-evidence");
+    await user.clear(source);
+    await user.type(source, "https://example.com/offline-source");
+    await user.click(within(note).getByRole("button", { name: "Save edit" }));
+
+    expect(await within(note).findByText("You are offline. Your edit is still here.")).toBeVisible();
+    expect(editor).toHaveValue("My offline-safe draft.");
+    expect(within(note).getByRole("button", { name: "Retry edit" })).toBeVisible();
+    expect(within(note).getByRole("button", { name: "Copy my draft" })).toBeVisible();
+    const recovery = window.localStorage.getItem(`museboard-thinking-edit:${aggregate.room.id}:${contribution.id}:${actorId}`);
+    expect(JSON.parse(String(recovery))).toEqual({ body: "My offline-safe draft.", sourceReferenceId: "https://example.com/offline-source" });
+    expect(within(note).queryByText("Saving…")).not.toBeInTheDocument();
   });
 
   it("treats a challenge added after the current synthesis as unresolved when reopening", async () => {

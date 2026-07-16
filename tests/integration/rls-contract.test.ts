@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -18,8 +18,60 @@ const thinkingRooms = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260716090000_thinking_rooms.sql"),
   "utf8",
 ).toLowerCase();
+const presenceEditsPath = resolve(
+  process.cwd(),
+  "supabase/migrations/20260716193000_thinking_room_presence_edits.sql",
+);
+const presenceEdits = existsSync(presenceEditsPath)
+  ? readFileSync(presenceEditsPath, "utf8").toLowerCase()
+  : "";
 
 describe("production database boundary", () => {
+  it("keeps live presence ephemeral and contribution editing behind authenticated RPCs", () => {
+    expect(existsSync(presenceEditsPath)).toBe(true);
+    expect(presenceEdits).toContain("create table private.thinking_room_presence");
+    expect(presenceEdits).toContain("create table private.thinking_contribution_edit_claims");
+    expect(presenceEdits).toContain("create table public.thinking_contribution_versions");
+    expect(presenceEdits).toContain("create function public.sync_thinking_room_presence");
+    expect(presenceEdits).toContain("create function public.set_thinking_contribution_edit_claim");
+    expect(presenceEdits).toContain("create function public.leave_thinking_room_presence");
+    expect(presenceEdits).toContain("create function public.edit_thinking_contribution");
+    expect(presenceEdits).toContain("select auth.uid()");
+    expect(presenceEdits).toContain("security definer");
+    expect(presenceEdits).toContain("set search_path = ''");
+    expect(presenceEdits).toContain("interval '30 seconds'");
+    expect(presenceEdits).toContain("interval '45 seconds'");
+    expect(presenceEdits).toContain("original author");
+    expect(presenceEdits).toContain("contribution revision conflict");
+    expect(presenceEdits).toContain("revoke all on table public.thinking_contribution_versions from public, anon, authenticated");
+    expect(presenceEdits).not.toContain("grant select on table private.thinking_room_presence");
+    expect(presenceEdits).toContain("existing contribution content is immutable through aggregate save");
+    expect(presenceEdits).toContain("pg_advisory_xact_lock");
+    expect(presenceEdits).toContain("thinking contribution versions are immutable");
+    expect(presenceEdits).toContain("before update or delete on public.thinking_contribution_versions");
+    expect(presenceEdits).toContain("deferrable initially deferred");
+    expect(presenceEdits).toContain("create trigger preserve_thinking_contributions_during_aggregate_save");
+    expect(presenceEdits).toContain("set_config('museboard.preserve_thinking_contributions', 'on', true)");
+    expect(presenceEdits).toContain("coalesce(current_setting('museboard.preserve_thinking_contributions', true), 'off') <> 'on'");
+    expect(presenceEdits).toContain("return null; -- keep the existing row and its edit claim/history in place");
+    expect(presenceEdits).toContain("create index thinking_room_presence_expiry");
+    expect(presenceEdits).toContain("create function private.cleanup_thinking_room_collaboration()");
+    expect(presenceEdits).toContain("alter table public.thinking_contribution_versions enable row level security");
+    expect(presenceEdits).toContain("alter table public.thinking_contribution_versions force row level security");
+    expect(presenceEdits).toContain("char_length(p_source_reference_id) > 2000");
+    expect(presenceEdits).not.toContain("references public.thinking_contributions(id, room_id, organization_id) on delete cascade");
+    expect(presenceEdits).not.toContain("split_part(coalesce(user_record.email");
+    for (const field of [
+      "row.lens is distinct from contribution.lens",
+      "row.body is distinct from contribution.body",
+      "row.source_reference_id is distinct from contribution.source_reference_id",
+      "row.mentioned_user_id is distinct from contribution.mentioned_user_id",
+      "row.related_contribution_id is distinct from contribution.related_contribution_id",
+      "row.revision is distinct from contribution.revision",
+      "row.updated_at is distinct from contribution.updated_at",
+      "row.deleted_at is distinct from contribution.deleted_at",
+    ]) expect(presenceEdits).toContain(field);
+  });
   it("makes Data API exposure explicit and enables RLS on every tenant table", () => {
     const tenantTables = [
       "organizations",
