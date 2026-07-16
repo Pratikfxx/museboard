@@ -37,3 +37,9 @@ Initial focused run failed because the library module and both `Think` navigatio
 - The room library intentionally uses request/response API behavior only; presence and realtime collaboration are not represented.
 - Room deep links target the planned Task 5 decision-canvas route. Until Task 5 lands, those destination pages are not part of this task.
 - Existing untracked `docs/business/` files were preserved and excluded from this task commit.
+
+## Review fix — live create permission denial
+
+- Added a regression test for a successful live room-list load followed by a create request returning `403`.
+- Split create mutation state from list loading state. A create-only denial now keeps the loaded library and unsent question visible, presents a clear creation-specific message, and disables further creation attempts for the current session.
+- The list-level retry UI is no longer shown for create-only permission failures, preventing the previous retry loop.

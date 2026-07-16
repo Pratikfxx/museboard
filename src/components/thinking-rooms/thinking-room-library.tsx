@@ -30,6 +30,7 @@ import styles from "./thinking-rooms.module.css";
 
 type LibraryFilter = "all" | "active" | "decided";
 type LoadState = "loading" | "ready" | "permission" | "offline" | "conflict" | "error";
+type CreateState = "idle" | "creating" | "permission" | "offline" | "conflict" | "error";
 
 export interface LiveThinkingRoomContext {
   organizationId: string;
@@ -50,6 +51,13 @@ const stateLabels: Record<ThinkingRoomState, string> = {
   converted: "Content direction created",
   archived: "Archived",
 };
+
+class ThinkingRoomCreateError extends Error {
+  constructor(readonly state: Exclude<CreateState, "idle" | "creating">) {
+    super("Thinking Room could not be created");
+    this.name = "ThinkingRoomCreateError";
+  }
+}
 
 function loadStateFromResponse(status: number): LoadState {
   if (status === 401 || status === 403) return "permission";
@@ -135,7 +143,7 @@ export function ThinkingRoomLibrary({
   const [context, setContext] = useState("");
   const [questionError, setQuestionError] = useState<string>();
   const [createError, setCreateError] = useState<string>();
-  const [creating, setCreating] = useState(false);
+  const [createState, setCreateState] = useState<CreateState>("idle");
   const [pendingFocusId, setPendingFocusId] = useState<string>();
   const questionRef = useRef<HTMLTextAreaElement>(null);
 
@@ -189,7 +197,9 @@ export function ThinkingRoomLibrary({
   const decidedRooms = rooms.filter(({ status }) => decidedStates.includes(status));
   const visibleActive = filter === "decided" ? [] : activeRooms;
   const visibleDecided = filter === "active" ? [] : decidedRooms;
-  const canCreate = mode === "sample" || liveContext?.canCreate === true;
+  const canCreate = mode === "sample" || (
+    liveContext?.canCreate === true && createState !== "permission"
+  );
 
   async function createLiveRoom(trimmedQuestion: string, trimmedContext: string) {
     if (!liveContext) throw new Error("Live workspace identity is unavailable");
@@ -217,8 +227,13 @@ export function ThinkingRoomLibrary({
       }),
     });
     if (!response.ok) {
-      setLoadState(loadStateFromResponse(response.status));
-      throw new Error("Thinking Room could not be created");
+      if (response.status === 401 || response.status === 403) {
+        throw new ThinkingRoomCreateError("permission");
+      }
+      if (response.status === 409) {
+        throw new ThinkingRoomCreateError("conflict");
+      }
+      throw new ThinkingRoomCreateError("error");
     }
     const payload = z.object({ aggregate: z.object({ room: thinkingRoomSchema }) }).safeParse(await response.json());
     if (!payload.success) throw new Error("Thinking Room response was invalid");
@@ -237,7 +252,7 @@ export function ThinkingRoomLibrary({
     }
     setQuestionError(undefined);
     setCreateError(undefined);
-    setCreating(true);
+    setCreateState("creating");
     try {
       let id: string | undefined;
       if (mode === "sample") {
@@ -262,15 +277,23 @@ export function ThinkingRoomLibrary({
       setQuestion("");
       setContext("");
       setPendingFocusId(id);
+      setCreateState("idle");
     } catch (error) {
-      if (mode === "live" && error instanceof TypeError) setLoadState("offline");
-      setCreateError(
-        mode === "live" && error instanceof TypeError
-          ? "You appear to be offline. Your question is still here — reconnect and try again."
-          : "Your room was not created. Your question is still here — try again.",
-      );
-    } finally {
-      setCreating(false);
+      const state = error instanceof ThinkingRoomCreateError
+        ? error.state
+        : mode === "live" && error instanceof TypeError
+          ? "offline"
+          : "error";
+      setCreateState(state);
+      if (state === "permission") {
+        setCreateError("You cannot create Thinking Rooms in this workspace.");
+      } else if (state === "conflict") {
+        setCreateError("This room changed elsewhere. Your question is still here — review it and try again.");
+      } else if (state === "offline") {
+        setCreateError("You appear to be offline. Your question is still here — reconnect and try again.");
+      } else {
+        setCreateError("Your room was not created. Your question is still here — try again.");
+      }
     }
   }
 
@@ -318,7 +341,13 @@ export function ThinkingRoomLibrary({
         >
           <Plus aria-hidden="true" size={19} weight="bold" /> New Thinking Room
         </button>
-        {!canCreate ? <small className={styles.permissionNote}>Viewers can read rooms but cannot create them.</small> : null}
+        {!canCreate ? (
+          <small className={styles.permissionNote}>
+            {createState === "permission"
+              ? "You can keep reading rooms, but creation is unavailable in this workspace."
+              : "Viewers can read rooms but cannot create them."}
+          </small>
+        ) : null}
       </header>
 
       {formOpen ? (
@@ -349,7 +378,9 @@ export function ThinkingRoomLibrary({
             {createError ? <p className={styles.createError} role="alert">{createError}</p> : null}
             <div className={styles.formActions}>
               <button onClick={() => setFormOpen(false)} type="button">Cancel</button>
-              <button disabled={creating} type="submit">{creating ? "Creating…" : "Create room"}</button>
+              <button disabled={createState === "creating" || createState === "permission"} type="submit">
+                {createState === "creating" ? "Creating…" : "Create room"}
+              </button>
             </div>
           </form>
         </section>

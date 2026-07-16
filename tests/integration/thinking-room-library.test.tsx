@@ -154,4 +154,43 @@ describe("Thinking Room library", () => {
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(/start with the decision your next content direction depends on/i)).toBeVisible();
   });
+
+  it("keeps the loaded library and draft visible when live creation permission is denied", async () => {
+    const user = userEvent.setup();
+    const liveRoom = {
+      ...useThinkingRoomStore.getState().rooms[0],
+      id: "live-room-readable",
+      question: "Which audience objection needs the clearest proof?",
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ rooms: [liveRoom] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "You cannot create Thinking Rooms" }), { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ThinkingRoomLibrary
+        liveContext={{
+          organizationId: "4f0b3ec4-d507-4726-974c-9b1ea51f73b9",
+          workspaceId: "maya-studio",
+          userId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+          displayName: "Maya Chen",
+          canCreate: true,
+        }}
+        mode="live"
+      />,
+    );
+
+    expect(await screen.findByRole("link", { name: /which audience objection/i })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "New Thinking Room" }));
+    const question = screen.getByLabelText("Strategic question");
+    await user.type(question, "What evidence would make this direction trustworthy?");
+    await user.click(screen.getByRole("button", { name: "Create room" }));
+
+    expect(await screen.findByText("You cannot create Thinking Rooms in this workspace.")).toBeVisible();
+    expect(screen.getByRole("link", { name: /which audience objection/i })).toBeVisible();
+    expect(question).toHaveValue("What evidence would make this direction trustworthy?");
+    expect(screen.getByRole("button", { name: "Create room" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "New Thinking Room" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
