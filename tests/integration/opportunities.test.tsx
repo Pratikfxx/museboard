@@ -31,6 +31,7 @@ import {
   MUSEBOARD_STORAGE_KEY,
   useMuseboardStore,
 } from "@/lib/store/museboard-store";
+import { useThinkingRoomStore } from "@/lib/store/thinking-room-store";
 
 const validHash = "a".repeat(64);
 
@@ -192,6 +193,25 @@ describe("Opportunity integrity", () => {
       "href",
       `/app/create/${promotedState.content.at(-1)?.id}?stage=angle`,
     );
+  });
+
+  it("shows Thinking Room provenance without exposing storage identifiers", () => {
+    const room = useThinkingRoomStore.getState().rooms.find(({ status }) => status === "decided")!;
+    const ideaId = useMuseboardStore.getState().createIdeaFromThinkingRoom(room.id);
+
+    expect(ideaId).toBeDefined();
+    renderWorkspace("ideas");
+    const ideaRecord = useMuseboardStore.getState().ideas.find(({ id }) => id === ideaId)!;
+    const idea = screen.getByRole("article", { name: ideaRecord.title });
+    expect(within(idea).getByText("From Thinking Room")).toBeVisible();
+    expect(within(idea).getByText(room.question)).toBeVisible();
+    expect(within(idea).getByText(/confidence/i)).toBeVisible();
+    expect(within(idea).getByRole("link", { name: "Open room" })).toHaveAttribute(
+      "href",
+      `/app/thinking/${room.id}`,
+    );
+    expect(idea).not.toHaveTextContent(room.id);
+    expect(idea).not.toHaveTextContent(ideaRecord.provenance.thinkingRoomOrigin!.synthesisRevisionId);
   });
 
   it("learns from explicit taste feedback and explains the adjusted fit", async () => {

@@ -2,10 +2,19 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { OpportunitiesWorkspace } from "@/components/opportunities/opportunities-workspace";
 import { ThinkingRoomWorkspace } from "@/components/thinking-rooms/thinking-room-workspace";
+import { ThemeProvider } from "@/components/ui/theme-provider";
+import { roomCanConvert } from "@/domain/thinking-rooms";
 import { createDemoState } from "@/lib/demo/fixtures";
 import { useThinkingRoomStore } from "@/lib/store/thinking-room-store";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
+
+const push = vi.hoisted(() => vi.fn());
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
 
 const ROOM_ID = "thinking-room-workspace-test";
 const AT = "2026-07-16T12:00:00.000Z";
@@ -55,6 +64,7 @@ describe("Thinking Room guided decision canvas", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    push.mockReset();
     setNarrowViewport(false);
     useMuseboardStore.setState(createDemoState());
     useThinkingRoomStore.getState().resetSample(createDemoState().memberships);
@@ -65,6 +75,14 @@ describe("Thinking Room guided decision canvas", () => {
 
     expect(screen.getByRole("heading", { name: "This Thinking Room is not here." })).toBeVisible();
     expect(screen.getByRole("link", { name: "Back to Thinking Rooms" })).toHaveAttribute("href", "/app/thinking");
+  });
+
+  it("resolves the active sample participant without relying on a browser status global", () => {
+    createExploringRoom();
+    Reflect.deleteProperty(globalThis, "status");
+
+    expect(() => render(<ThinkingRoomWorkspace mode="sample" roomId={ROOM_ID} />)).not.toThrow();
+    expect(screen.getByTitle("Maya Chen")).toBeVisible();
   });
 
   it("shows all four lenses wide and offers one-at-a-time keyboard lens navigation when narrow", async () => {
@@ -172,6 +190,78 @@ describe("Thinking Room guided decision canvas", () => {
     expect(revision.confidence).toBe("high");
     expect(revision.openChallengeIds).toHaveLength(1);
     expect(screen.getAllByText("A repeated structure could flatten the creator's voice.")[0]).toBeVisible();
+  });
+
+  it("suggests an editable belief and converts an accepted decision once with Thinking Room provenance", async () => {
+    createExploringRoom();
+    const user = userEvent.setup();
+    const view = render(<ThinkingRoomWorkspace mode="sample" roomId={ROOM_ID} />);
+
+    await user.click(screen.getByRole("button", { name: "Add evidence" }));
+    await user.type(
+      screen.getByLabelText("Contribution to Evidence"),
+      "Audience replies consistently save practical constraint-led examples.",
+    );
+    await user.click(screen.getByRole("button", { name: "Add contribution" }));
+    await user.click(screen.getByRole("button", { name: "Add challenges" }));
+    await user.type(
+      screen.getByLabelText("Contribution to Challenges"),
+      "The pattern may become repetitive without a fresh proof each week.",
+    );
+    await user.click(screen.getByRole("button", { name: "Add contribution" }));
+    await user.click(screen.getByRole("button", { name: "Begin synthesis" }));
+
+    const synthesis = screen.getByRole("complementary", { name: "Synthesis" });
+    expect(within(synthesis).getByText("Suggested")).toBeVisible();
+    expect(within(synthesis).getByText(/Audience replies consistently save practical constraint-led examples/)).toBeVisible();
+    expect(within(synthesis).getByText("The pattern may become repetitive without a fresh proof each week.")).toBeVisible();
+    expect(within(synthesis).getByLabelText("Current shared belief")).toHaveValue("");
+    await user.click(within(synthesis).getByRole("button", { name: "Use suggested belief" }));
+    const belief = within(synthesis).getByLabelText("Current shared belief");
+    expect(belief).toHaveValue("Audience replies consistently save practical constraint-led examples.");
+    await user.type(belief, " Build each installment around new proof.");
+    await user.click(within(synthesis).getByLabelText("High confidence"));
+    await user.click(within(synthesis).getByRole("button", { name: "Save synthesis" }));
+
+    const decidedSynthesis = await screen.findByRole("complementary", { name: "Synthesis" });
+    expect(within(decidedSynthesis).getByText(/1 open challenge remains/i)).toBeVisible();
+    const roomState = useThinkingRoomStore.getState();
+    const acceptedRoom = roomState.rooms.find(({ id }) => id === ROOM_ID)!;
+    const acceptedRevision = roomState.synthesisRevisions.filter(({ roomId }) => roomId === ROOM_ID).at(-1)!;
+    expect(acceptedRevision).toMatchObject({
+      status: "accepted",
+      acceptedByMembershipId: acceptedRoom.decisionOwnerMembershipId,
+      confidence: "high",
+    });
+    expect(acceptedRoom.status).toBe("decided");
+    expect(roomCanConvert(acceptedRoom, roomState.synthesisRevisions)).toBe(true);
+    const convert = within(decidedSynthesis).getByRole("button", { name: "Create Idea Board direction" });
+    expect(convert).toBeEnabled();
+    await user.click(convert);
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/app\/opportunities\/ideas/));
+    expect(screen.getByRole("button", { name: "Direction already created" })).toBeDisabled();
+    expect(
+      useMuseboardStore.getState().ideas.filter(
+        ({ provenance }) => provenance.thinkingRoomOrigin?.roomId === ROOM_ID,
+      ),
+    ).toHaveLength(1);
+
+    view.rerender(
+      <ThemeProvider>
+        <OpportunitiesWorkspace view="ideas" />
+      </ThemeProvider>,
+    );
+    const idea = screen.getByRole("article", {
+      name: /Audience replies consistently save practical constraint-led examples/i,
+    });
+    expect(within(idea).getByText("From Thinking Room")).toBeVisible();
+    expect(within(idea).getByText("Which audience truth should shape our next series?")).toBeVisible();
+    expect(within(idea).getByText("High confidence")).toBeVisible();
+    expect(within(idea).getByRole("link", { name: "Open room" })).toHaveAttribute(
+      "href",
+      `/app/thinking/${ROOM_ID}`,
+    );
+    expect(idea).not.toHaveTextContent(ROOM_ID);
   });
 
   it("reloads and rebases a preserved live draft after a revision conflict", async () => {

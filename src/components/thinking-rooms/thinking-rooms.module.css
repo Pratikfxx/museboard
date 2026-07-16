@@ -868,8 +868,16 @@
 .synthesisSummary p { margin: 0; font-family: var(--font-instrument-serif), serif; font-size: 1.35rem; line-height: 1.35; }
 .synthesisSummary > span { color: var(--cobalt); font-size: .67rem; font-weight: 850; text-transform: uppercase; }
 .synthesisSummary button { margin-top: 8px; }
+.synthesisSummary button:disabled { cursor: not-allowed; opacity: .45; }
+.conversionWarning { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 7px; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 7%, transparent); padding: 10px; }
+.conversionWarning > svg { margin-top: 2px; color: var(--warning); }
+.conversionWarning p { font-family: inherit; font-size: .68rem; line-height: 1.45; }
 
 .synthesisForm { display: grid; gap: 10px; }
+.synthesisSuggestion { display: grid; gap: 8px; margin-bottom: 4px; border-left: 3px solid var(--cobalt); background: color-mix(in srgb, var(--cobalt) 6%, transparent); padding: 12px; }
+.synthesisSuggestion > span { color: var(--cobalt); font-size: .62rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.synthesisSuggestion p { margin: 0; font-family: var(--font-instrument-serif), serif; font-size: 1rem; line-height: 1.4; }
+.synthesisSuggestion button { min-height: 44px; justify-self: start; border: 0; background: transparent; padding: 0; color: var(--cobalt); font-size: .66rem; font-weight: 850; }
 .synthesisForm fieldset { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 8px 0; border: 0; padding: 0; }
 .synthesisForm legend { margin-bottom: 8px; }
 .synthesisForm fieldset label { display: grid; min-height: 44px; place-items: center; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: .58rem; font-weight: 800; text-align: center; }

@@ -535,6 +535,43 @@
   font-size: 0.75rem;
 }
 
+.ideaOrigin {
+  display: flex;
+  max-width: 700px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 14px;
+  border-left: 3px solid var(--cobalt);
+  background: color-mix(in srgb, var(--cobalt) 5%, transparent);
+  padding: 11px 13px;
+}
+
+.ideaOrigin strong {
+  color: var(--cobalt);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ideaOrigin p {
+  flex-basis: 100%;
+  color: var(--ink);
+  font-family: var(--font-instrument-serif), serif;
+  font-size: 1rem;
+}
+
+.ideaOrigin span,
+.ideaOrigin a {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.ideaOrigin a {
+  color: var(--cobalt);
+  font-weight: 800;
+}
+
 .ideaActions {
   display: grid;
   align-content: center;

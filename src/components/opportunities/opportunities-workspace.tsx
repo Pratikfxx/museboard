@@ -39,6 +39,7 @@ import {
 } from "@/lib/providers/opportunities";
 import { DEMO_NOW } from "@/lib/demo/fixtures";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
+import { useThinkingRoomStore } from "@/lib/store/thinking-room-store";
 
 import styles from "./opportunities.module.css";
 
@@ -278,6 +279,7 @@ function IdeaBoardView({
   onActivateOpportunity: (opportunityId: string) => void;
 }) {
   const ideas = useMuseboardStore((state) => state.ideas);
+  const synthesisRevisions = useThinkingRoomStore((state) => state.synthesisRevisions);
   const promoteIdea = useMuseboardStore((state) => state.promoteIdea);
   const [grouping, setGrouping] = useState<IdeaGrouping>("pillar");
   const [status, setStatus] = useState("");
@@ -312,7 +314,7 @@ function IdeaBoardView({
                 <span>{groupIdeas.length} idea{groupIdeas.length === 1 ? "" : "s"}</span>
               </header>
               {groupIdeas.map((idea) => (
-                <article aria-labelledby={`${idea.id}-title`} key={idea.id}>
+                <article aria-labelledby={`${idea.id}-title`} id={`idea-${idea.id}`} key={idea.id}>
                   <div>
                     <p>
                       {formatLabel(idea.format)} · {formatLabel(idea.readiness)} ·{" "}
@@ -320,10 +322,25 @@ function IdeaBoardView({
                     </p>
                     <h3 id={`${idea.id}-title`}>{idea.title}</h3>
                     <p>{idea.summary}</p>
-                    <small>
-                      Source preserved from {idea.provenance.provider} ·{" "}
-                      {idea.provenance.mode}
-                    </small>
+                    {idea.provenance.thinkingRoomOrigin ? (() => {
+                      const origin = idea.provenance.thinkingRoomOrigin;
+                      const confidence = synthesisRevisions.find(
+                        ({ id, roomId }) => id === origin.synthesisRevisionId && roomId === origin.roomId,
+                      )?.confidence;
+                      return (
+                        <aside aria-label="Thinking Room source" className={styles.ideaOrigin}>
+                          <strong>From Thinking Room</strong>
+                          <p>{origin.question}</p>
+                          {confidence ? <span>{formatLabel(confidence)} confidence</span> : null}
+                          <Link href={`/app/thinking/${origin.roomId}`}>Open room</Link>
+                        </aside>
+                      );
+                    })() : (
+                      <small>
+                        Source preserved from {idea.provenance.provider} ·{" "}
+                        {idea.provenance.mode}
+                      </small>
+                    )}
                   </div>
                   <div className={styles.ideaActions}>
                     <button

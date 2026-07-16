@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Compass, Flag, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, Check, Compass, Flag, WarningCircle } from "@phosphor-icons/react";
 import { useMemo, useState } from "react";
 
 import type {
@@ -21,9 +21,13 @@ interface ThinkingSynthesisRailProps {
   room: ThinkingRoom;
   challenges: ThinkingContribution[];
   current?: ThinkingSynthesisRevision;
+  suggestedBelief?: string;
   canEdit: boolean;
+  canConvert: boolean;
+  converted: boolean;
   saving: boolean;
   onBegin: () => void | Promise<void>;
+  onConvert: () => void | Promise<void>;
   onSave: (draft: SynthesisDraft) => void | Promise<void>;
 }
 
@@ -37,9 +41,13 @@ export function ThinkingSynthesisRail({
   room,
   challenges,
   current,
+  suggestedBelief,
   canEdit,
+  canConvert,
+  converted,
   saving,
   onBegin,
+  onConvert,
   onSave,
 }: ThinkingSynthesisRailProps) {
   const allChallengeIds = useMemo(() => challenges.map(({ id }) => id), [challenges]);
@@ -71,6 +79,20 @@ export function ThinkingSynthesisRail({
               <small>Current shared belief</small>
               <p>{current.belief}</p>
               <span>{confidenceLabels[current.confidence]} confidence</span>
+              {current.openChallengeIds.length ? (
+                <div className={styles.conversionWarning} role="note">
+                  <WarningCircle aria-hidden="true" size={17} />
+                  <p>{current.openChallengeIds.length} open challenge{current.openChallengeIds.length === 1 ? " remains" : "s remain"}. You can still create the direction, with this uncertainty attached.</p>
+                </div>
+              ) : null}
+              <button
+                disabled={converted || !canConvert || saving}
+                onClick={() => void onConvert()}
+                type="button"
+              >
+                <ArrowRight aria-hidden="true" size={18} />
+                {converted ? "Direction already created" : "Create Idea Board direction"}
+              </button>
             </>
           ) : (
             <>
@@ -91,6 +113,19 @@ export function ThinkingSynthesisRail({
           void onSave({ belief: belief.trim(), confidence, openChallengeIds });
         }}>
           <label htmlFor="thinking-shared-belief">Current shared belief</label>
+          {suggestedBelief ? (
+            <section aria-label="Suggested belief" className={styles.synthesisSuggestion}>
+              <span>Suggested</span>
+              <p>{suggestedBelief}</p>
+              <button
+                disabled={!canEdit}
+                onClick={() => setBelief(suggestedBelief)}
+                type="button"
+              >
+                Use suggested belief
+              </button>
+            </section>
+          ) : null}
           <textarea
             disabled={!canEdit}
             id="thinking-shared-belief"
