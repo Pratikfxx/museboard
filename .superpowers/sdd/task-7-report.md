@@ -22,7 +22,7 @@
 
 ## Verification
 
-- Thinking Rooms workflow: 4 passed, 4 project-mismatch variants skipped.
+- Thinking Rooms workflow: 5 passed, 5 project-mismatch variants skipped, including the keyboard-only journey.
 - Accessibility suite: 7 passed, including the 2 new Thinking Room route scans.
 - `pnpm typecheck`: passed after removing duplicate ignored declarations generated in `.next/dev/types` and `.next/types`.
 - `pnpm lint`: passed.
@@ -39,3 +39,11 @@
 
 - Next had stale duplicate ignored cache artifacts (`CURRENT 3` and generated `* 2.ts` declarations under both dev and build types). They were removed from `.next`; no tracked source was changed. A fresh checkout/build is unaffected.
 - Playwright emits the existing Node `NO_COLOR`/`FORCE_COLOR` warning; it does not affect browser behavior or results.
+
+## P1 keyboard-only follow-up
+
+- Added a focused Chromium journey that uses only `Tab`, `Enter`, arrow keys, and typing for room creation, three contributions, synthesis start, suggested-belief adoption and editing, confidence selection, challenge resolution, decision save, Idea Board conversion, and provenance backlink navigation.
+- Every control transition asserts the browser's real active element. The focused journey does not use pointer clicks, programmatic focus, `.fill()`, or `.check()`.
+- RED: repeated `Tab` could not focus the unselected High-confidence radio because native radio groups expose only the checked option in the tab sequence.
+- GREEN: the journey tabs to checked Medium confidence, uses `ArrowRight`, and asserts that High confidence is both focused and checked before continuing.
+- Focused keyboard-only verification: 1 passed on Chromium.
