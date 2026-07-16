@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,13 +32,26 @@ describe("App shell navigation", () => {
     expect(mobileNav).toHaveTextContent("Create");
     expect(mobileNav).toHaveTextContent("Plan");
     expect(mobileNav).not.toHaveTextContent("Learn");
+    expect(mobileNav).not.toHaveTextContent("Think");
 
     await user.click(screen.getByRole("button", { name: "More" }));
     const sheet = screen.getByRole("dialog", { name: "More Museboard destinations" });
     expect(sheet).toBeVisible();
     expect(screen.getByRole("link", { name: "Learn" })).toHaveAttribute("href", "/app/learn");
+    expect(within(sheet).getByRole("link", { name: "Think" })).toHaveAttribute("href", "/app/thinking");
     expect(screen.getByRole("link", { name: "Team" })).toHaveAttribute("href", "/app/team");
     expect(screen.getByRole("link", { name: /data controls/i })).toHaveAttribute("href", "/app/settings/data");
+  });
+
+  it("adds Think to desktop navigation without changing the primary mobile destinations", () => {
+    renderShell();
+
+    const primary = screen.getByRole("complementary", { name: "Primary" });
+    expect(within(primary).getByRole("link", { name: "Think" })).toHaveAttribute(
+      "href",
+      "/app/thinking",
+    );
+    expect(screen.getAllByRole("navigation", { name: "Mobile primary" })).toHaveLength(1);
   });
 
   it("provides a skip link that targets the workspace main content", () => {

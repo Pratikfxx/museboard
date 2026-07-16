@@ -30,13 +30,16 @@ import styles from "./app-shell.module.css";
 const navigation = [
   { href: "/app/today", label: "Today", Icon: House },
   { href: "/app/opportunities", label: "Opportunities", Icon: Compass },
+  { href: "/app/thinking", label: "Think", Icon: Brain },
   { href: "/app/create/new", label: "Create", Icon: PencilSimple },
   { href: "/app/plan", label: "Plan", Icon: CalendarBlank },
   { href: "/app/learn", label: "Learn", Icon: BookOpen },
   { href: "/app/team", label: "Team", Icon: UsersThree },
 ] as const;
 
-const mobileNavigation = navigation.slice(0, 4);
+const mobileNavigation = navigation.filter(({ href }) =>
+  ["/app/today", "/app/opportunities", "/app/create/new", "/app/plan"].includes(href),
+);
 
 function NavigationLinks() {
   const pathname = usePathname();
@@ -123,7 +126,7 @@ export function AppShell({
     }
   }
 
-  const moreActive = ["/app/learn", "/app/team", "/app/settings"].some(
+  const moreActive = ["/app/thinking", "/app/learn", "/app/team", "/app/settings"].some(
     (href) => pathname.startsWith(href),
   );
 
@@ -256,6 +259,7 @@ export function AppShell({
             <nav aria-label="More destinations" className={styles.moreLinks}>
               <div className={styles.mobileTheme}><span><strong>Appearance</strong><small>Light, dark, or follow your device</small></span><ThemeToggle /></div>
               <Link href="/app/today#capture-inbox" onClick={() => setMoreOpen(false)}><Lightbulb aria-hidden="true" size={22} /><span><strong>Captures · {queuedCaptureCount}</strong><small>Ideas waiting to be shaped</small></span></Link>
+              <Link aria-label="Think" href="/app/thinking" onClick={() => setMoreOpen(false)}><Brain aria-hidden="true" size={22} /><span><strong>Think</strong><small>Resolve a strategic question together</small></span></Link>
               <Link href="/app/learn" onClick={() => setMoreOpen(false)}><BookOpen aria-hidden="true" size={22} /><span><strong>Learn</strong><small>Turn measured results into patterns</small></span></Link>
               <Link href="/app/team" onClick={() => setMoreOpen(false)}><UsersThree aria-hidden="true" size={22} /><span><strong>Team</strong><small>Assignments, reviews, and collaborators</small></span></Link>
               <Link href="/app/settings/memory" onClick={() => setMoreOpen(false)}><Brain aria-hidden="true" size={22} /><span><strong>Creator memory</strong><small>Versioned voice and language rules</small></span></Link>
