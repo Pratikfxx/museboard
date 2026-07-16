@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Membership } from "@/domain/collaboration";
 import { createDemoState } from "@/lib/demo/fixtures";
@@ -18,6 +18,10 @@ describe("Thinking Room sample store", () => {
   beforeEach(() => {
     localStorage.clear();
     useMuseboardStore.getState().resetDemo();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("hydrates a plainly labelled sample room using current member snapshots", () => {
@@ -92,6 +96,43 @@ describe("Thinking Room sample store", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("keeps a membership-aware reset usable in memory when storage is denied", () => {
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("Storage unavailable", "SecurityError");
+      });
+    const memberships: Membership[] = [
+      {
+        id: "offline-owner",
+        email: "offline@example.com",
+        displayNameSnapshot: "Offline Owner",
+        role: "owner",
+        status: "active",
+        invitedAt: CREATED_AT,
+        joinedAt: CREATED_AT,
+      },
+    ];
+
+    expect(() =>
+      useThinkingRoomStore.getState().resetSample(memberships),
+    ).not.toThrow();
+    expect(useThinkingRoomStore.getState().rooms[0]).toMatchObject({
+      facilitatorMembershipId: "offline-owner",
+      decisionOwnerMembershipId: "offline-owner",
+    });
+    expect(
+      useThinkingRoomStore
+        .getState()
+        .contributions.every(
+          ({ authorDisplayNameSnapshot }) =>
+            authorDisplayNameSnapshot === "Offline Owner",
+        ),
+    ).toBe(true);
+
+    setItem.mockRestore();
   });
 
   it("refreshes sample author snapshots when onboarding changes active members", () => {

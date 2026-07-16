@@ -2,7 +2,11 @@
 
 import { z } from "zod";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import {
+  createJSONStorage,
+  persist,
+  type StateStorage,
+} from "zustand/middleware";
 
 import type { Membership } from "@/domain/collaboration";
 import {
@@ -28,6 +32,39 @@ import {
 } from "@/lib/demo/fixtures";
 
 export const THINKING_ROOM_STORAGE_KEY = "museboard-thinking-rooms-v1";
+const fallbackStorage = new Map<string, string>();
+
+const safeThinkingRoomStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      const value = localStorage.getItem(name);
+      if (value === null) {
+        fallbackStorage.delete(name);
+      } else {
+        fallbackStorage.set(name, value);
+      }
+      return value;
+    } catch {
+      return fallbackStorage.get(name) ?? null;
+    }
+  },
+  setItem: (name, value) => {
+    fallbackStorage.set(name, value);
+    try {
+      localStorage.setItem(name, value);
+    } catch {
+      // The in-memory copy keeps Thinking Rooms usable in this tab.
+    }
+  },
+  removeItem: (name) => {
+    fallbackStorage.delete(name);
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      // The in-memory copy is already cleared.
+    }
+  },
+};
 
 export type ThinkingRoomSyncState = SampleThinkingRoomData["syncState"];
 
@@ -264,7 +301,7 @@ export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
     {
       name: THINKING_ROOM_STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeThinkingRoomStorage),
       partialize: dataFromState,
       merge: (persisted, current) => {
         const parsed = thinkingRoomDataSchema.safeParse(persisted);
