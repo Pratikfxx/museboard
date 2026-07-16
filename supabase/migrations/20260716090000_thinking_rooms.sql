@@ -135,8 +135,8 @@ create table public.thinking_synthesis_revisions (
   foreign key (organization_id, accepted_by_user_id)
     references public.organization_memberships(organization_id, user_id) on delete restrict,
   check (
-    (status = 'accepted' and accepted_at is not null and accepted_by_user_id is not null)
-    or (status <> 'accepted' and accepted_at is null and accepted_by_user_id is null)
+    (status in ('accepted', 'superseded') and accepted_at is not null and accepted_by_user_id is not null)
+    or (status not in ('accepted', 'superseded') and accepted_at is null and accepted_by_user_id is null)
   )
 );
 create index thinking_synthesis_by_room
@@ -290,11 +290,14 @@ begin
   end if;
 
   if p_expected_revision = 0 then
+    if p_room->>'status' <> 'exploring' or (p_room->>'archived_at')::timestamptz is not null then
+      raise exception 'initial Thinking Rooms must be exploring' using errcode = '23514';
+    end if;
     if (p_room->>'facilitator_user_id')::uuid <> v_user_id then
       raise exception 'thinking room facilitator attribution is invalid' using errcode = '42501';
     end if;
-    if (p_room->>'decision_owner_user_id')::uuid is not null and v_role <> 'owner' then
-      raise exception 'only workspace owners may assign an initial decision owner' using errcode = '42501';
+    if v_role = 'editor' and (p_room->>'decision_owner_user_id')::uuid is distinct from v_user_id then
+      raise exception 'editors must own their initial Thinking Room decision' using errcode = '42501';
     end if;
   else
     select room.* into v_room
@@ -462,8 +465,8 @@ begin
           and row.created_by_user_id = synthesis.created_by_user_id
           and row.generation_provenance is not distinct from synthesis.generation_provenance
           and row.created_at = synthesis.created_at
-          and row.accepted_at is null
-          and row.accepted_by_user_id is null
+          and row.accepted_at is not distinct from synthesis.accepted_at
+          and row.accepted_by_user_id is not distinct from synthesis.accepted_by_user_id
           and exists (
             select 1 from jsonb_to_recordset(p_synthesis_revisions) newer(number integer, status text)
             where newer.status = 'accepted' and newer.number > synthesis.number
@@ -707,6 +710,7 @@ as $$
 declare
   v_user_id uuid := (select auth.uid());
   v_revision bigint;
+  v_room_status text;
   v_reaction public.thinking_contribution_reactions%rowtype;
   v_changed bigint := 0;
 begin
@@ -722,7 +726,7 @@ begin
     raise exception 'invalid thinking room reaction' using errcode = '23514';
   end if;
 
-  select room.revision into v_revision
+  select room.revision, room.status into v_revision, v_room_status
   from public.thinking_rooms room
   where room.id = p_room_id and room.organization_id = p_organization_id
   for update;
@@ -734,6 +738,9 @@ begin
       and contribution.deleted_at is null
   ) then
     raise exception 'thinking room contribution not found' using errcode = '23503';
+  end if;
+  if v_room_status not in ('exploring', 'synthesizing') then
+    raise exception 'Thinking Room reactions require an active room' using errcode = '23514';
   end if;
 
   if p_active then

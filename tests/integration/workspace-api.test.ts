@@ -38,6 +38,7 @@ const owner = {
   currentActorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
   used: { strategist_pack: 3 },
   reserved: { strategist_pack: 1 },
+  resetAt: "2026-07-29T00:00:00.000Z",
 };
 
 function request(method: "GET" | "PUT", body?: unknown) {
@@ -97,6 +98,7 @@ describe("authenticated workspace snapshot API", () => {
 
     expect(response.status).toBe(200);
     expect(result).toMatchObject({ revision: 1, payload: { dataMode: "live" } });
+    expect(result.payload.entitlementUsage.resetAt).toBe("2026-07-29T00:00:00.000Z");
     expect(rpc).toHaveBeenCalledWith("save_workspace_snapshot", expect.objectContaining({
       p_organization_id: organizationId,
       p_expected_revision: 0,

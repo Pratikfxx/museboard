@@ -5,7 +5,6 @@ import { getAuthenticatedWorkspace } from "@/lib/auth/workspace";
 import { createClient } from "@/lib/supabase/server";
 import {
   createSupabaseWorkspaceSnapshotStore,
-  entitlementResetAt,
   loadCanonicalWorkspace,
   saveCanonicalWorkspace,
   WorkspaceRevisionConflictError,
@@ -26,7 +25,7 @@ function authority(workspace: NonNullable<Awaited<ReturnType<typeof getAuthentic
     plan: workspace.plan,
     used: workspace.used,
     reserved: workspace.reserved,
-    resetAt: entitlementResetAt(workspace.plan),
+    resetAt: workspace.resetAt,
   };
 }
 

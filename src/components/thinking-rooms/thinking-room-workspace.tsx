@@ -34,6 +34,7 @@ import {
   thinkingRoomContentOriginSchema,
   thinkingRoomSchema,
   thinkingSynthesisRevisionSchema,
+  type ContributionLink,
   type ContributionReaction,
   type ChosenContentDirection,
   type ThinkingContribution,
@@ -170,13 +171,18 @@ function RoomUnavailable({ missing = false }: { missing?: boolean }) {
 
 interface ContributionNoteProps {
   contribution: ThinkingContribution;
+  contributions: ThinkingContribution[];
+  links: ContributionLink[];
   reactions: ContributionReaction[];
   actorId?: string;
   canReact: boolean;
   onReact: (contribution: ThinkingContribution, kind: ContributionReaction["kind"], active: boolean) => void;
 }
 
-function ContributionNote({ contribution, reactions, actorId, canReact, onReact }: ContributionNoteProps) {
+function ContributionNote({ contribution, contributions, links, reactions, actorId, canReact, onReact }: ContributionNoteProps) {
+  const relatedLinks = links.filter(({ fromContributionId, toContributionId }) =>
+    fromContributionId === contribution.id || toContributionId === contribution.id,
+  );
   return (
     <article className={styles.contributionNote}>
       <header>
@@ -188,6 +194,28 @@ function ContributionNote({ contribution, reactions, actorId, canReact, onReact 
         {contribution.sourceReferenceId ? <em><LinkSimple aria-hidden="true" size={14} /> Source noted</em> : null}
       </header>
       <p>{contribution.body}</p>
+      {relatedLinks.map((link) => {
+        const targetId = link.fromContributionId === contribution.id
+          ? link.toContributionId
+          : link.fromContributionId;
+        const target = contributions.find(({ id }) => id === targetId);
+        const resolver = contributions.find(
+          ({ authorMembershipId }) => authorMembershipId === link.resolvedByMembershipId,
+        )?.authorDisplayNameSnapshot ?? link.resolvedByMembershipId;
+        return (
+          <div aria-label={`Relationships for ${contribution.body}`} className={styles.relationshipDetails} key={link.id} role="group">
+            <strong>{link.relationship.slice(0, 1).toUpperCase()}{link.relationship.slice(1)}</strong>
+            {target && target.id !== contribution.id ? <span>{target.body}</span> : null}
+            {link.resolutionStatus === "resolved" ? (
+              <>
+                <p>{link.resolutionNote}</p>
+                <small>Resolved by {resolver}</small>
+                <time dateTime={link.resolvedAt}>{link.resolvedAt ? timeLabel(link.resolvedAt) : null}</time>
+              </>
+            ) : <small>Open relationship</small>}
+          </div>
+        );
+      })}
       <div aria-label={`Reactions to note by ${contribution.authorDisplayNameSnapshot}`} className={styles.reactions} role="group">
         {REACTIONS.map(({ kind, label, icon: Icon }) => {
           const active = Boolean(actorId && reactions.some((reaction) =>
@@ -253,6 +281,7 @@ export function ThinkingRoomWorkspace({
   const [liveAggregate, setLiveAggregate] = useState<ThinkingRoomAggregate>();
   const [loadState, setLoadState] = useState<LoadState>(mode === "live" ? "loading" : "ready");
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [recoverableDraft, setRecoverableDraft] = useState("");
   const [retryAction, setRetryAction] = useState<(() => Promise<void>)>();
   const [conversionState, setConversionState] = useState<"idle" | "offline" | "permission" | "error">("idle");
   const [activeLens, setActiveLens] = useState<ThinkingLens>("audience_tensions");
@@ -344,16 +373,17 @@ export function ThinkingRoomWorkspace({
   ));
 
   useEffect(() => {
-    if (mode !== "live" || !aggregate || !currentSynthesis || !convertedOrigin || convertedIdea) return;
+    if (mode !== "live" || !canEdit || !aggregate || !currentSynthesis || !convertedOrigin || convertedIdea) return;
     createIdeaFromThinkingRoomOrigin({
       room: aggregate.room,
       synthesis: currentSynthesis,
       contributorCount: new Set(aggregate.contributions.map(({ authorMembershipId }) => authorMembershipId)).size,
       origin: convertedOrigin,
     });
-  }, [aggregate, convertedIdea, convertedOrigin, createIdeaFromThinkingRoomOrigin, currentSynthesis, mode]);
+  }, [aggregate, canEdit, convertedIdea, convertedOrigin, createIdeaFromThinkingRoomOrigin, currentSynthesis, mode]);
 
   function announceSaved() {
+    setRecoverableDraft("");
     setSaveState("saved");
     window.setTimeout(() => setSaveState((state) => state === "saved" ? "idle" : state), 2400);
   }
@@ -437,6 +467,7 @@ export function ThinkingRoomWorkspace({
     if (!aggregate || !actor || !body.trim()) return;
     const sourceReferenceId = sourceReferenceDraft.trim() || undefined;
     if (lens === "evidence" && !sourceReferenceId) return;
+    setRecoverableDraft(body.trim());
     if (mode === "sample") {
       setSaveState("saving");
       const contributionId = addSampleContribution({
@@ -452,7 +483,7 @@ export function ThinkingRoomWorkspace({
         roomId,
         fromContributionId: contributionId,
         toContributionId: targetId,
-        relationship: relationshipTargetId ? relationship : "challenges",
+        relationship: lens === "challenges" ? "challenges" : relationship,
         createdByMembershipId: actor.id,
       });
       await Promise.resolve();
@@ -477,7 +508,7 @@ export function ThinkingRoomWorkspace({
       roomId,
       fromContributionId: contribution.id,
       toContributionId: targetId,
-      relationship: relationshipTargetId ? relationship : "challenges",
+      relationship: lens === "challenges" ? "challenges" : relationship,
       createdByMembershipId: actor.id,
     }, { id: crypto.randomUUID(), at: now }) : undefined;
     const rebase = (latest: ThinkingRoomAggregate): ThinkingRoomAggregate => ({
@@ -564,6 +595,15 @@ export function ThinkingRoomWorkspace({
     basis: ChosenContentDirection["basis"];
   }) {
     if (!aggregate || !actor) return;
+    setRecoverableDraft(JSON.stringify({
+      kind: "thinking-room-synthesis-draft",
+      roomId,
+      belief: input.belief,
+      confidence: input.confidence,
+      basis: input.basis,
+      openChallengeIds: input.openChallengeIds,
+      challengeResolutionNotes: input.challengeResolutionNotes,
+    }, null, 2));
     const revisionInputFor = (base: ThinkingRoomAggregate) => {
       const current = base.synthesisRevisions.toSorted((left, right) => left.number - right.number).at(-1);
       const acceptedByDecisionOwner = actor.id === base.room.decisionOwnerMembershipId;
@@ -772,7 +812,7 @@ export function ThinkingRoomWorkspace({
         <section className={styles.saveError} role="alert">
           <WarningCircle aria-hidden="true" size={20} />
           <div><strong>Your access changed before this save.</strong><p>Your draft remains in this tab. Copy it before leaving or reloading.</p></div>
-          <button onClick={() => void navigator.clipboard.writeText(draft)} type="button">Copy draft</button>
+          <button onClick={() => void navigator.clipboard.writeText(recoverableDraft || draft)} type="button">Copy draft</button>
         </section>
       ) : null}
 
@@ -838,7 +878,9 @@ export function ThinkingRoomWorkspace({
                         actorId={actor?.id}
                         canReact={canReact}
                         contribution={contribution}
+                        contributions={aggregate.contributions}
                         key={contribution.id}
+                        links={aggregate.links}
                         onReact={(note, kind, active) => void react(note, kind, active)}
                         reactions={aggregate.reactions}
                       />

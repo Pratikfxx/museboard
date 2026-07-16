@@ -10,6 +10,7 @@ import {
 import {
   createSupabaseThinkingRoomRepository,
   parseThinkingRoomAggregate,
+  ThinkingRoomPermissionError,
   ThinkingRoomRevisionConflictError,
   ThinkingRoomValidationError,
   type SupabaseThinkingRoomClient,
@@ -122,6 +123,9 @@ export async function PUT(request: Request, routeContext: RoomRouteContext) {
       );
     }
     if (error instanceof ThinkingRoomAuthorizationError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof ThinkingRoomPermissionError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
     if (error instanceof z.ZodError || error instanceof ThinkingRoomValidationError) {

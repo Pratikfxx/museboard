@@ -213,9 +213,7 @@ export function ThinkingRoomLibrary({
       templateId: "content-direction",
       status: "exploring",
       facilitatorMembershipId: liveContext.userId,
-      ...(liveContext.canAssignDecisionOwner
-        ? { decisionOwnerMembershipId: liveContext.userId }
-        : {}),
+      decisionOwnerMembershipId: liveContext.userId,
       ...(trimmedContext ? { context: trimmedContext } : {}),
       revision: 1,
       createdAt,

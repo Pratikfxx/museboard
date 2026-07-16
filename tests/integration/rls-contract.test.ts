@@ -163,7 +163,7 @@ describe("production database boundary", () => {
     expect(thinkingRooms).toContain("user_record.email");
     expect(thinkingRooms).toContain("profile.display_name");
     expect(thinkingRooms).toContain("row.author_display_name_snapshot is distinct from v_author_display_name");
-    expect(thinkingRooms).toContain("only workspace owners may assign an initial decision owner");
+    expect(thinkingRooms).toContain("editors must own their initial thinking room decision");
     expect(thinkingRooms).toContain("synthesis history is append-only");
     expect(thinkingRooms).toContain("reaction attribution is immutable");
     expect(thinkingRooms).toContain("contribution link history is append-only");
@@ -183,6 +183,8 @@ describe("production database boundary", () => {
     expect(thinkingRooms).toContain("synthesis.status = 'accepted'");
     expect(thinkingRooms).toContain("row.status = 'superseded'");
     expect(thinkingRooms).toContain("newer.status = 'accepted' and newer.number > synthesis.number");
+    expect(thinkingRooms).not.toContain("row.accepted_at is null");
+    expect(thinkingRooms).toContain("initial thinking rooms must be exploring");
   });
 
   it("gives active viewers a narrow own-reaction RPC without reasoning-table writes", () => {
@@ -191,6 +193,7 @@ describe("production database boundary", () => {
     expect(thinkingRooms).toContain("actor_user_id = v_user_id");
     expect(thinkingRooms).toContain("status = 'active'");
     expect(thinkingRooms).toContain("revision = revision + 1");
+    expect(thinkingRooms).toContain("thinking room reactions require an active room");
     expect(thinkingRooms).toContain("grant execute on function public.set_thinking_room_reaction");
   });
 

@@ -193,6 +193,8 @@ describe("Thinking Room library", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const createPayload = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
-    expect(createPayload.aggregate.room).not.toHaveProperty("decisionOwnerMembershipId");
+    expect(createPayload.aggregate.room.decisionOwnerMembershipId).toBe(
+      "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+    );
   });
 });

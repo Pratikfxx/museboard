@@ -301,7 +301,12 @@ describe("Thinking Room integrity", () => {
     }, { id: "synthesis-accepted-2", at: UPDATED_AT });
 
     expect(next).toEqual([
-      expect.objectContaining({ id: accepted.id, status: "superseded", acceptedAt: undefined, acceptedByMembershipId: undefined }),
+      expect.objectContaining({
+        id: accepted.id,
+        status: "superseded",
+        acceptedAt: CREATED_AT,
+        acceptedByMembershipId: "member-1",
+      }),
       expect.objectContaining({ id: "synthesis-accepted-2", status: "accepted" }),
     ]);
   });

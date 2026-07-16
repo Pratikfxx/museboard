@@ -5,11 +5,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { AccountDataWorkspace } from "@/components/account/account-data-workspace";
 import { THEME_STORAGE_KEY } from "@/components/ui/theme-provider";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
+import { useThinkingRoomStore } from "@/lib/store/thinking-room-store";
 
 describe("account data settings", () => {
   beforeEach(() => {
     localStorage.clear();
     useMuseboardStore.getState().resetDemo();
+    useThinkingRoomStore.getState().resetSample(useMuseboardStore.getState().memberships);
   });
 
   it("requires the exact destructive phrase and preserves theme preference", async () => {
@@ -20,6 +22,7 @@ describe("account data settings", () => {
     const confirmation = screen.getByLabelText(/type delete sample workspace to confirm/i);
     const deleteButton = screen.getByRole("button", { name: /delete sample workspace from this device/i });
     expect(deleteButton).toBeDisabled();
+    expect(useThinkingRoomStore.getState().rooms.length).toBeGreaterThan(0);
 
     await user.type(confirmation, "delete sample workspace");
     expect(deleteButton).toBeDisabled();
@@ -31,6 +34,8 @@ describe("account data settings", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/no cloud account or provider data was deleted/i);
     expect(useMuseboardStore.getState().content).toEqual([]);
     expect(useMuseboardStore.getState().opportunities).toEqual([]);
+    expect(useThinkingRoomStore.getState().rooms).toEqual([]);
+    expect(useThinkingRoomStore.getState().links).toEqual([]);
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
   });
 

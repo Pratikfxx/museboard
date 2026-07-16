@@ -173,6 +173,43 @@ describe("Thinking Room guided decision canvas", () => {
     expect(composer).toHaveFocus();
   });
 
+  it("keeps a challenge linked to another note resolvable as a challenge", async () => {
+    createExploringRoom();
+    act(() => {
+      useThinkingRoomStore.getState().addContribution({
+        roomId: ROOM_ID,
+        lens: "possibilities",
+        body: "Build each episode around one new proof.",
+        authorMembershipId: "member-owner",
+        authorDisplayNameSnapshot: "Maya Chen",
+      }, AT);
+    });
+    const target = useThinkingRoomStore.getState().contributions.find(
+      ({ roomId, lens }) => roomId === ROOM_ID && lens === "possibilities",
+    )!;
+    const user = userEvent.setup();
+    render(<ThinkingRoomWorkspace mode="sample" roomId={ROOM_ID} />);
+
+    await user.click(screen.getByRole("button", { name: "Add challenges" }));
+    await user.type(
+      screen.getByLabelText("Contribution to Challenges"),
+      "The proof may become too expensive to refresh weekly.",
+    );
+    await user.selectOptions(screen.getByLabelText("Related note"), target.id);
+    expect(screen.getByLabelText("Relationship")).toHaveValue("challenges");
+    await user.click(screen.getByRole("button", { name: "Add contribution" }));
+
+    const challenge = useThinkingRoomStore.getState().contributions.find(
+      ({ roomId, body }) => roomId === ROOM_ID && body === "The proof may become too expensive to refresh weekly.",
+    )!;
+    expect(useThinkingRoomStore.getState().links).toContainEqual(expect.objectContaining({
+      fromContributionId: challenge.id,
+      toContributionId: target.id,
+      relationship: "challenges",
+      resolutionStatus: "open",
+    }));
+  });
+
   it("toggles a lightweight reaction without turning it into a vote", async () => {
     createExploringRoom();
     act(() => {
@@ -240,6 +277,11 @@ describe("Thinking Room guided decision canvas", () => {
     expect(revision.confidence).toBe("high");
     expect(revision.openChallengeIds).toHaveLength(1);
     expect(screen.getAllByText("A repeated structure could flatten the creator's voice.")[0]).toBeVisible();
+    const relationship = screen.getByRole("group", { name: /Relationships for A repeated structure/ });
+    expect(within(relationship).getByText("Challenges")).toBeVisible();
+    expect(within(relationship).getByText("A fresh proof each week addresses the concern.")).toBeVisible();
+    expect(within(relationship).getByText("Resolved by Maya Chen")).toBeVisible();
+    expect(within(relationship).getByRole("time")).toHaveAttribute("datetime");
   });
 
   it("does not treat a source reference on a non-evidence note as evidence support", async () => {
@@ -571,6 +613,97 @@ describe("Thinking Room guided decision canvas", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/access changed/i);
     expect(screen.getByRole("button", { name: "Copy draft" })).toBeVisible();
     expect(composer).toHaveValue("Keep this draft after my role changes.");
+  });
+
+  it("copies the synthesis belief and challenge resolution when save permission is revoked", async () => {
+    const roomId = "765ca2ea-d876-4bb2-95bd-5b64bc727770";
+    const challengeId = "5b5b7c4f-3f88-402f-8ebf-e81880d662d4";
+    const aggregate = {
+      room: {
+        ...useThinkingRoomStore.getState().rooms[0],
+        id: roomId,
+        organizationId: "4f0b3ec4-d507-4726-974c-9b1ea51f73b9",
+        status: "synthesizing" as const,
+        revision: 2,
+        facilitatorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+        decisionOwnerMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+      },
+      contributions: [{
+        id: challengeId,
+        roomId,
+        lens: "challenges" as const,
+        body: "The weekly proof may be too costly.",
+        authorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+        authorDisplayNameSnapshot: "Maya Chen",
+        revision: 1,
+        createdAt: AT,
+        updatedAt: AT,
+      }],
+      reactions: [],
+      links: [{
+        id: "a98138f4-3461-4ab2-bdec-b09d8769fbe2",
+        roomId,
+        fromContributionId: challengeId,
+        toContributionId: challengeId,
+        relationship: "challenges" as const,
+        createdByMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+        resolutionStatus: "open" as const,
+        createdAt: AT,
+      }],
+      synthesisRevisions: [],
+      contentOrigins: [],
+    };
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ aggregate }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "permission revoked" }), { status: 403 })));
+    const user = userEvent.setup();
+    const copy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    render(<ThinkingRoomWorkspace
+      liveContext={{ userId: aggregate.room.facilitatorMembershipId, displayName: "Maya Chen", canEdit: true }}
+      mode="live"
+      roomId={roomId}
+    />);
+
+    const synthesis = await screen.findByRole("complementary", { name: "Synthesis" });
+    await user.type(within(synthesis).getByLabelText("Current shared belief"), "Fresh proof must stay affordable.");
+    await user.click(within(synthesis).getByLabelText("Opinion"));
+    await user.type(within(synthesis).getByLabelText(/Resolution note/), "Use one reusable evidence capture ritual.");
+    await user.click(within(synthesis).getByRole("button", { name: "Resolve challenge" }));
+    await user.click(within(synthesis).getByRole("button", { name: "Save synthesis" }));
+    await user.click(await screen.findByRole("button", { name: "Copy draft" }));
+
+    expect(copy).toHaveBeenCalledOnce();
+    expect(copy.mock.calls[0][0]).toContain("Fresh proof must stay affordable.");
+    expect(copy.mock.calls[0][0]).toContain("Use one reusable evidence capture ritual.");
+  });
+
+  it("does not materialize a converted origin into the workspace store for a viewer", async () => {
+    const decided = createLiveDecidedAggregate();
+    const aggregate = {
+      ...decided,
+      room: { ...decided.room, status: "converted" as const },
+      contentOrigins: [{
+      organizationId: decided.room.organizationId,
+      roomId: decided.room.id,
+      synthesisRevisionId: decided.synthesisRevisions[0].id,
+      ideaId: "dc0164bd-0e71-4de4-988d-d821c7271540",
+      createdByMembershipId: decided.room.facilitatorMembershipId,
+      createdAt: AT,
+      }],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ aggregate }), { status: 200 }),
+    ));
+    const before = useMuseboardStore.getState().ideas.length;
+
+    render(<ThinkingRoomWorkspace
+      liveContext={{ userId: "viewer-user", displayName: "View Only", canEdit: false }}
+      mode="live"
+      roomId={aggregate.room.id}
+    />);
+
+    await screen.findByRole("heading", { name: aggregate.room.question });
+    await waitFor(() => expect(useMuseboardStore.getState().ideas).toHaveLength(before));
   });
 
   it("treats a challenge added after the current synthesis as unresolved when reopening", async () => {

@@ -676,6 +676,19 @@
 .lensSection[data-lens="audience_tensions"] { --lens-accent: var(--coral); }
 .lensSection[data-lens="evidence"] { --lens-accent: var(--cobalt); }
 .lensSection[data-lens="challenges"] { --lens-accent: var(--warning); }
+
+.relationshipDetails {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  padding: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--lens-accent) 30%, transparent);
+  border-radius: 0.75rem;
+  font-size: 0.78rem;
+}
+
+.relationshipDetails p,
+.relationshipDetails small { margin: 0; }
 .lensSection[data-lens="possibilities"] { --lens-accent: #78669a; }
 
 :global([data-theme="dark"]) .lensSection[data-lens="possibilities"] { --lens-accent: #c4aee8; }

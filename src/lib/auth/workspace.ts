@@ -5,6 +5,7 @@ import type { Plan } from "@/domain/entitlements";
 import type { Entitlement } from "@/domain/entitlements";
 import type { Membership } from "@/domain/collaboration";
 import { createClient } from "@/lib/supabase/server";
+import { entitlementResetAt } from "@/lib/workspace/repository";
 
 export const ACTIVE_WORKSPACE_COOKIE = "museboard-active-workspace";
 
@@ -27,6 +28,7 @@ const usageLedgerSchema = z.object({
   entitlement: z.enum(["manual_planning", "strategist_pack", "opportunity_refresh", "export_pack"]),
   operation: z.enum(["reserve", "commit", "release"]),
   amount: z.number().int().positive(),
+  period_ended_at: z.iso.datetime(),
 });
 
 const organizationSchema = z.object({
@@ -61,6 +63,7 @@ export interface AuthenticatedWorkspace {
   currentActorMembershipId: string;
   used: Partial<Record<Entitlement, number>>;
   reserved: Partial<Record<Entitlement, number>>;
+  resetAt: string;
 }
 
 export function effectivePlanFromEntitlement(
@@ -129,6 +132,7 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
   const membership =
     memberships.find(({ organization_id }) => organization_id === requestedOrganizationId) ??
     memberships[0];
+  const currentAt = new Date().toISOString();
 
   const [organizationResult, profileResult, entitlementResult, membersResult, usageResult] = await Promise.all([
     supabase
@@ -153,9 +157,10 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
       .order("created_at", { ascending: true }),
     supabase
       .from("usage_ledger")
-      .select("entitlement, operation, amount")
+      .select("entitlement, operation, amount, period_ended_at")
       .eq("organization_id", membership.organization_id)
-      .gt("period_ended_at", new Date().toISOString()),
+      .lte("period_started_at", currentAt)
+      .gt("period_ended_at", currentAt),
   ]);
   if (organizationResult.error) throw new Error(organizationResult.error.message);
   if (profileResult.error) throw new Error(profileResult.error.message);
@@ -190,16 +195,25 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
     ...(row.status === "active" ? { joinedAt: row.updated_at } : {}),
     ...(row.status === "removed" ? { removedAt: row.updated_at } : {}),
   }));
+  const usageEntries = z.array(usageLedgerSchema).parse(usageResult.data ?? []);
   const used: Partial<Record<Entitlement, number>> = {};
-  const reserved: Partial<Record<Entitlement, number>> = {};
-  for (const entry of z.array(usageLedgerSchema).parse(usageResult.data ?? [])) {
-    if (entry.operation === "reserve") reserved[entry.entitlement] = (reserved[entry.entitlement] ?? 0) + entry.amount;
+  const reservationBalance: Partial<Record<Entitlement, number>> = {};
+  for (const entry of usageEntries) {
+    if (entry.operation === "reserve") reservationBalance[entry.entitlement] = (reservationBalance[entry.entitlement] ?? 0) + entry.amount;
     if (entry.operation === "commit") {
-      reserved[entry.entitlement] = Math.max(0, (reserved[entry.entitlement] ?? 0) - entry.amount);
+      reservationBalance[entry.entitlement] = (reservationBalance[entry.entitlement] ?? 0) - entry.amount;
       used[entry.entitlement] = (used[entry.entitlement] ?? 0) + entry.amount;
     }
-    if (entry.operation === "release") reserved[entry.entitlement] = Math.max(0, (reserved[entry.entitlement] ?? 0) - entry.amount);
+    if (entry.operation === "release") reservationBalance[entry.entitlement] = (reservationBalance[entry.entitlement] ?? 0) - entry.amount;
   }
+  const reserved = Object.fromEntries(
+    Object.entries(reservationBalance).map(([entitlement, amount]) => [entitlement, Math.max(0, amount)]),
+  ) as Partial<Record<Entitlement, number>>;
+  const plan = effectivePlanFromEntitlement(entitlement);
+  const resetAt = usageEntries
+    .map(({ period_ended_at }) => period_ended_at)
+    .toSorted()
+    .at(0) ?? entitlementResetAt(plan);
 
   return {
     userId: userData.user.id,
@@ -211,7 +225,7 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
     displayName: membership.role === "owner"
       ? profile?.display_name ?? userData.user.email?.split("@")[0] ?? "Museboard creator"
       : userData.user.email?.split("@")[0] ?? "Museboard collaborator",
-    plan: effectivePlanFromEntitlement(entitlement),
+    plan,
     stripeStatus: entitlement?.stripe_status,
     stripeSubscriptionId: entitlement?.stripe_subscription_id,
     activeUntil: entitlement?.active_until ?? undefined,
@@ -219,5 +233,6 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
     currentActorMembershipId: userData.user.id,
     used,
     reserved,
+    resetAt,
   };
 }

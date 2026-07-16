@@ -8,6 +8,8 @@ const EVIDENCE = "Audience replies keep saving practical examples that name a re
 const CHALLENGE = "A repeated format could feel predictable unless every episode earns fresh proof.";
 const POSSIBILITY = "Build each episode around one recognizable constraint and one new piece of proof.";
 const DECISION = `${POSSIBILITY} Start with the audience's most costly weekly trade-off.`;
+const EVIDENCE_SOURCE = "https://example.com/audience-replies";
+const RESOLUTION = "Reuse one capture ritual so each episode can earn affordable fresh proof.";
 
 const variants = [
   { name: "desktop light", project: "chromium", width: 1440, height: 1000, theme: "light", synthesisPosition: "sticky" },
@@ -28,6 +30,7 @@ async function addContribution(page: Page, lens: "Evidence" | "Challenges" | "Po
   await page.getByRole("button", { name: `Add ${lens.toLocaleLowerCase()}` }).click();
   const composer = page.getByRole("region", { name: `Contribution composer for ${lens}` });
   await composer.getByRole("textbox", { name: `Contribution to ${lens}` }).fill(body);
+  if (lens === "Evidence") await composer.getByRole("textbox", { name: "Evidence source" }).fill(EVIDENCE_SOURCE);
   await composer.getByRole("button", { name: "Add contribution" }).press("Enter");
   await expect(page.getByText(body, { exact: true })).toBeVisible();
 }
@@ -60,6 +63,11 @@ async function keyboardAddContribution(
   const textbox = composer.getByRole("textbox", { name: `Contribution to ${lens}` });
   await expect(textbox).toBeFocused();
   await page.keyboard.type(body);
+  if (lens === "Evidence") {
+    const source = composer.getByRole("textbox", { name: "Evidence source" });
+    await tabTo(page, source);
+    await page.keyboard.type(EVIDENCE_SOURCE);
+  }
   await keyboardActivate(page, composer.getByRole("button", { name: "Add contribution" }));
   await expect(page.getByText(body, { exact: true })).toBeVisible();
 }
@@ -118,6 +126,8 @@ for (const variant of variants) {
     await expect(belief).toHaveValue(POSSIBILITY);
     await belief.fill(DECISION);
     await synthesis.getByRole("radio", { name: "High confidence" }).check();
+    await synthesis.getByRole("radio", { name: "Evidence" }).check();
+    await synthesis.getByRole("textbox", { name: new RegExp(`Resolution note for ${CHALLENGE}`) }).fill(RESOLUTION);
     await synthesis.getByRole("button", { name: "Resolve challenge" }).click();
     await synthesis.getByRole("button", { name: "Save synthesis" }).press("Enter");
 
@@ -200,6 +210,13 @@ test("keyboard-only users can synthesize, convert, and return through provenance
   await page.keyboard.press("ArrowRight");
   await expect(highConfidence).toBeFocused();
   await expect(highConfidence).toBeChecked();
+  const evidenceBasis = synthesis.getByRole("radio", { name: "Evidence" });
+  await tabTo(page, evidenceBasis);
+  await page.keyboard.press("Space");
+  await expect(evidenceBasis).toBeChecked();
+  const resolutionNote = synthesis.getByRole("textbox", { name: new RegExp(`Resolution note for ${CHALLENGE}`) });
+  await tabTo(page, resolutionNote);
+  await page.keyboard.type(RESOLUTION);
   const resolveChallenge = synthesis.getByRole("button", { name: "Resolve challenge" });
   await keyboardActivate(page, resolveChallenge);
   await expect(resolveChallenge).toHaveCount(0);

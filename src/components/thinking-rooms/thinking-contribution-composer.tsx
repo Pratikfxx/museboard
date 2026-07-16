@@ -86,7 +86,7 @@ export const ThinkingContributionComposer = forwardRef<
               </select>
             </label>
             <label>Relationship
-              <select disabled={disabled || !relationshipTargetId} onChange={(event) => onRelationshipChange(event.target.value as ContributionLink["relationship"])} value={relationship}>
+              <select disabled={disabled || !relationshipTargetId || lens === "challenges"} onChange={(event) => onRelationshipChange(event.target.value as ContributionLink["relationship"])} value={lens === "challenges" ? "challenges" : relationship}>
                 <option value="supports">Supports</option><option value="challenges">Challenges</option><option value="extends">Extends</option><option value="combines">Combines</option>
               </select>
             </label>

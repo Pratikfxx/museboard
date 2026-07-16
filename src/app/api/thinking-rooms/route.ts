@@ -33,7 +33,7 @@ function creationAttributionMatches(
   role: "owner" | "editor",
 ): boolean {
   return aggregate.room.facilitatorMembershipId === userId &&
-    (!aggregate.room.decisionOwnerMembershipId || role === "owner") &&
+    (role === "owner" || aggregate.room.decisionOwnerMembershipId === userId) &&
     aggregate.contributions.every(({ authorMembershipId, authorDisplayNameSnapshot }) =>
       authorMembershipId === userId && authorDisplayNameSnapshot === displayName) &&
     aggregate.reactions.every(({ membershipId }) => membershipId === userId) &&
@@ -90,6 +90,13 @@ export async function POST(request: Request) {
     }
     const body = z.object({ aggregate: z.unknown() }).parse(await request.json());
     const aggregate = parseThinkingRoomAggregate(body.aggregate);
+    if (
+      aggregate.room.status !== "exploring" ||
+      aggregate.room.revision !== 1 ||
+      aggregate.room.archivedAt
+    ) {
+      return NextResponse.json({ error: "A new Thinking Room must start exploring" }, { status: 400 });
+    }
     if (
       aggregate.room.organizationId !== context.workspace.organizationId ||
       !creationAttributionMatches(

@@ -241,6 +241,43 @@ describe("authenticated Thinking Room API", () => {
     }));
   });
 
+  it("creates an editor's room as exploring with the editor as decision owner", async () => {
+    const client = loadClient();
+    client.rpc.mockResolvedValue({ data: 1, error: null });
+    mocks.createClient.mockResolvedValue(client);
+    mocks.getAuthenticatedWorkspace.mockResolvedValue({
+      ...owner,
+      userId: viewerId,
+      role: "editor",
+      displayName: "Editor Snapshot",
+    });
+    const submitted = aggregate({ facilitatorId: viewerId });
+    submitted.room.decisionOwnerMembershipId = viewerId;
+
+    const response = await createRoom(request("/api/thinking-rooms", "POST", { aggregate: submitted }));
+
+    expect(response.status).toBe(201);
+    expect(client.rpc).toHaveBeenCalledWith("save_thinking_room", expect.objectContaining({
+      p_room: expect.objectContaining({
+        status: "exploring",
+        facilitator_user_id: viewerId,
+        decision_owner_user_id: viewerId,
+      }),
+    }));
+  });
+
+  it("rejects a non-exploring initial room before storage", async () => {
+    const rpc = vi.fn();
+    mocks.createClient.mockResolvedValue({ from: vi.fn(), rpc });
+    const submitted = aggregate();
+    submitted.room = { ...submitted.room, status: "archived", archivedAt: createdAt };
+
+    const response = await createRoom(request("/api/thinking-rooms", "POST", { aggregate: submitted }));
+
+    expect(response.status).toBe(400);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it("rejects forged author display names and editor-assigned initial decision owners", async () => {
     const rpc = vi.fn();
     mocks.createClient.mockResolvedValue({ from: vi.fn(), rpc });
@@ -268,7 +305,7 @@ describe("authenticated Thinking Room API", () => {
     }))).status).toBe(403);
 
     const assigned = aggregate({ facilitatorId: viewerId });
-    assigned.room.decisionOwnerMembershipId = viewerId;
+    assigned.room.decisionOwnerMembershipId = ownerId;
     expect((await createRoom(request("/api/thinking-rooms", "POST", {
       aggregate: assigned,
     }))).status).toBe(403);
@@ -487,7 +524,8 @@ describe("authenticated Thinking Room API", () => {
       role: "viewer",
       displayName: "Viewer",
     });
-    const rpc = vi.fn(async () => ({
+    const client = loadClient();
+    client.rpc.mockResolvedValue({
       data: {
         room_revision: 2,
         reaction: {
@@ -500,8 +538,8 @@ describe("authenticated Thinking Room API", () => {
         },
       },
       error: null,
-    }));
-    mocks.createClient.mockResolvedValue({ from: vi.fn(), rpc });
+    });
+    mocks.createClient.mockResolvedValue(client);
 
     const response = await setReaction(
       request(`/api/thinking-rooms/${roomId}/reactions`, "PUT", {
@@ -516,7 +554,7 @@ describe("authenticated Thinking Room API", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(rpc).toHaveBeenCalledWith("set_thinking_room_reaction", {
+    expect(client.rpc).toHaveBeenCalledWith("set_thinking_room_reaction", {
       p_organization_id: organizationId,
       p_room_id: roomId,
       p_contribution_id: contributionId,
@@ -530,15 +568,51 @@ describe("authenticated Thinking Room API", () => {
     });
   });
 
+  it("rejects reactions after the room has reached a terminal state", async () => {
+    const client = loadClient({ ...roomRow, status: "decided" });
+    mocks.createClient.mockResolvedValue(client);
+
+    const response = await setReaction(
+      request(`/api/thinking-rooms/${roomId}/reactions`, "PUT", {
+        contributionId,
+        kind: "agree",
+        active: true,
+        reactionId,
+      }),
+      { params: Promise.resolve({ roomId }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("maps a permission revoked during the room save to 403", async () => {
+    const client = loadClient();
+    client.rpc.mockResolvedValue({
+      data: null,
+      error: { code: "42501", message: "thinking room write permission denied" },
+    });
+    mocks.createClient.mockResolvedValue(client);
+
+    const response = await saveRoom(
+      request(`/api/thinking-rooms/${roomId}`, "PUT", {
+        expectedRevision: 1,
+        aggregate: aggregate(),
+      }),
+      { params: Promise.resolve({ roomId }) },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
   it.each([
     ["42501", 403],
     ["23503", 404],
     ["23514", 400],
   ])("maps reaction database error %s to HTTP %i", async (code, status) => {
-    mocks.createClient.mockResolvedValue({
-      from: vi.fn(),
-      rpc: vi.fn(async () => ({ data: null, error: { code, message: "denied" } })),
-    });
+    const client = loadClient();
+    client.rpc.mockResolvedValue({ data: null, error: { code, message: "denied" } });
+    mocks.createClient.mockResolvedValue(client);
     const response = await setReaction(
       request(`/api/thinking-rooms/${roomId}/reactions`, "PUT", {
         contributionId,

@@ -42,6 +42,16 @@ export async function PUT(request: Request, routeContext: RoomRouteContext) {
     const repository = createSupabaseThinkingRoomRepository(
       supabase as unknown as SupabaseThinkingRoomClient,
     );
+    const aggregate = await repository.load(workspace.organizationId, roomId);
+    if (!aggregate) {
+      return NextResponse.json({ error: "Thinking Room was not found" }, { status: 404 });
+    }
+    if (!["exploring", "synthesizing"].includes(aggregate.room.status)) {
+      return NextResponse.json(
+        { error: "Reopen this Thinking Room before changing reactions" },
+        { status: 409 },
+      );
+    }
     const result = await repository.setReaction({
       organizationId: workspace.organizationId,
       roomId,

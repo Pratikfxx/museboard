@@ -239,22 +239,22 @@ export const thinkingSynthesisRevisionSchema = z
   })
   .superRefine((revision, context) => {
     if (
-      revision.status === "accepted" &&
+      ["accepted", "superseded"].includes(revision.status) &&
       (!revision.acceptedAt || !revision.acceptedByMembershipId)
     ) {
       context.addIssue({
         code: "custom",
-        message: "Accepted synthesis revisions require acceptance attribution",
+        message: "Accepted synthesis history requires acceptance attribution",
         path: ["status"],
       });
     }
     if (
-      revision.status !== "accepted" &&
+      !["accepted", "superseded"].includes(revision.status) &&
       (revision.acceptedAt || revision.acceptedByMembershipId)
     ) {
       context.addIssue({
         code: "custom",
-        message: "Only accepted synthesis revisions may include acceptance attribution",
+        message: "Only accepted synthesis history may include acceptance attribution",
         path: ["status"],
       });
     }
@@ -405,8 +405,6 @@ export function appendSynthesisRevision(
       ? thinkingSynthesisRevisionSchema.parse({
           ...candidate,
           status: "superseded",
-          acceptedAt: undefined,
-          acceptedByMembershipId: undefined,
         })
       : candidate)
     : [...revisions];
