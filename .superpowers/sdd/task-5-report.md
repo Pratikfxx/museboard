@@ -42,3 +42,25 @@ The focused suite covers:
 - Live writes use the existing room-wide compare-and-swap endpoint. A conflict preserves the composer draft and requires retry, but this slice does not implement a two-version merge UI or realtime subscriptions.
 - Sample participant avatars represent room participants, not fabricated live activity; the UI labels sample presence as non-live.
 - The generated `.next/dev` directory contained duplicate `* 3` artifacts from the host filesystem. It was moved to `/tmp` only for the local server check; no source or user files were removed.
+
+## Review blocker fixes
+
+### RED
+
+The expanded focused suite reproduced all three blockers:
+
+- a live contribution retry sent the stale aggregate/revision again and lost the pending contribution after loading teammate work;
+- a challenge created after an accepted synthesis was incorrectly labeled resolved when that synthesis reopened;
+- live viewer reaction controls remained enabled even though the room PUT endpoint rejects viewers.
+
+### GREEN
+
+- Retry now preserves the semantic pending action with its stable client-generated ID. After a 409, `Retry save` performs `GET latest aggregate -> rebase pending action -> PUT with latest revision`; successful recovery clears the composer only after the server response.
+- Synthesis initialization unions existing `openChallengeIds` with challenge IDs absent from the current revision's `sourceContributionIds`. Previously resolved challenges remain resolved, while later challenges start open.
+- Live reaction affordances now use the same `canEdit` boundary as the PUT endpoint. Viewers can inspect existing reactions but cannot trigger writes.
+
+Fresh verification:
+
+- `pnpm test tests/integration/thinking-room-workspace.test.tsx` — 1 file, 8 tests passed.
+- Scoped ESLint for the changed Task 5 workspace, synthesis rail, and test — passed.
+- `pnpm typecheck` — passed after removing only duplicated generated `.next/types/* 2.ts` and `.next/dev/types/* 2.ts` declarations.

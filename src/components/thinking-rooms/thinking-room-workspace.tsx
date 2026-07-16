@@ -282,10 +282,12 @@ export function ThinkingRoomWorkspace({
     window.setTimeout(() => setSaveState((state) => state === "saved" ? "idle" : state), 2400);
   }
 
-  async function saveLive(next: ThinkingRoomAggregate, retry: () => Promise<void>) {
-    const previous = liveAggregate;
-    if (!previous) return false;
-    setRetryAction(() => retry);
+  async function writeLiveAgainst(
+    base: ThinkingRoomAggregate,
+    rebase: (latest: ThinkingRoomAggregate) => ThinkingRoomAggregate,
+    onSaved?: () => void,
+  ) {
+    const next = rebase(base);
     setSaveState("saving");
     setLiveAggregate(next);
     try {
@@ -293,28 +295,66 @@ export function ThinkingRoomWorkspace({
         method: "PUT",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expectedRevision: previous.room.revision, aggregate: next }),
+        body: JSON.stringify({ expectedRevision: base.room.revision, aggregate: next }),
       });
       if (!response.ok) {
-        setLiveAggregate(previous);
+        setLiveAggregate(base);
         setSaveState(response.status === 409 ? "conflict" : "error");
         return false;
       }
       const parsed = roomResponseSchema.safeParse(await response.json());
       if (!parsed.success) {
-        setLiveAggregate(previous);
+        setLiveAggregate(base);
         setSaveState("error");
         return false;
       }
       setLiveAggregate(parsed.data.aggregate);
       setRetryAction(undefined);
+      onSaved?.();
       announceSaved();
       return true;
     } catch {
-      setLiveAggregate(previous);
+      setLiveAggregate(base);
       setSaveState("error");
       return false;
     }
+  }
+
+  async function recoverLive(
+    rebase: (latest: ThinkingRoomAggregate) => ThinkingRoomAggregate,
+    onSaved?: () => void,
+  ) {
+    setSaveState("saving");
+    try {
+      const response = await fetch(`/api/thinking-rooms/${encodeURIComponent(roomId)}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      if (!response.ok) {
+        setSaveState("error");
+        return false;
+      }
+      const parsed = roomResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        setSaveState("error");
+        return false;
+      }
+      setLiveAggregate(parsed.data.aggregate);
+      return writeLiveAgainst(parsed.data.aggregate, rebase, onSaved);
+    } catch {
+      setSaveState("error");
+      return false;
+    }
+  }
+
+  async function saveLive(
+    rebase: (latest: ThinkingRoomAggregate) => ThinkingRoomAggregate,
+    onSaved?: () => void,
+  ) {
+    const base = liveAggregate;
+    if (!base) return false;
+    setRetryAction(() => () => recoverLive(rebase, onSaved).then(() => undefined));
+    return writeLiveAgainst(base, rebase, onSaved);
   }
 
   async function addContribution(body = draft, lens = composerLens) {
@@ -342,14 +382,20 @@ export function ThinkingRoomWorkspace({
       authorMembershipId: actor.id,
       authorDisplayNameSnapshot: actor.displayNameSnapshot,
     }, { id: crypto.randomUUID(), at: now });
-    const next = { ...aggregate, contributions: [...aggregate.contributions, contribution] };
-    const saved = await saveLive(next, () => addContribution(body, lens));
-    if (saved) setDraft("");
-    composerRef.current?.focus();
+    const rebase = (latest: ThinkingRoomAggregate): ThinkingRoomAggregate => ({
+      ...latest,
+      contributions: latest.contributions.some(({ id }) => id === contribution.id)
+        ? latest.contributions
+        : [...latest.contributions, contribution],
+    });
+    await saveLive(rebase, () => {
+      setDraft("");
+      composerRef.current?.focus();
+    });
   }
 
   async function react(contribution: ThinkingContribution, kind: ContributionReaction["kind"], active: boolean) {
-    if (!aggregate || !actor) return;
+    if (!aggregate || !actor || !canEdit) return;
     if (mode === "sample") {
       setSaveState("saving");
       toggleSampleReaction({ roomId, contributionId: contribution.id, membershipId: actor.id, kind, active });
@@ -357,14 +403,18 @@ export function ThinkingRoomWorkspace({
       announceSaved();
       return;
     }
-    const reactions = toggleContributionReaction(aggregate.reactions, {
-      roomId,
-      contributionId: contribution.id,
-      membershipId: actor.id,
-      kind,
-      active,
-    }, { id: crypto.randomUUID(), at: new Date().toISOString() });
-    await saveLive({ ...aggregate, reactions }, () => react(contribution, kind, active));
+    const reactionId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await saveLive((latest) => ({
+      ...latest,
+      reactions: toggleContributionReaction(latest.reactions, {
+        roomId,
+        contributionId: contribution.id,
+        membershipId: actor.id,
+        kind,
+        active,
+      }, { id: reactionId, at }),
+    }));
   }
 
   async function beginSynthesis() {
@@ -376,11 +426,11 @@ export function ThinkingRoomWorkspace({
       announceSaved();
       return;
     }
-    const next = {
-      ...aggregate,
-      room: { ...aggregate.room, status: "synthesizing" as const, updatedAt: new Date().toISOString() },
-    };
-    await saveLive(next, beginSynthesis);
+    const at = new Date().toISOString();
+    await saveLive((latest) => ({
+      ...latest,
+      room: { ...latest.room, status: "synthesizing" as const, updatedAt: at },
+    }));
   }
 
   async function saveSynthesis(input: {
@@ -389,41 +439,48 @@ export function ThinkingRoomWorkspace({
     openChallengeIds: string[];
   }) {
     if (!aggregate || !actor) return;
-    const current = aggregate.synthesisRevisions.toSorted((left, right) => left.number - right.number).at(-1);
-    const audienceTension = aggregate.contributions.find(({ lens }) => lens === "audience_tensions")?.body ?? aggregate.room.question;
-    const angle = aggregate.contributions.find(({ lens }) => lens === "possibilities")?.body ?? input.belief;
-    const keyChallenge = aggregate.contributions.find(({ lens }) => lens === "challenges")?.body;
-    const revisionInput = {
-      roomId,
-      belief: input.belief,
-      unknowns: current?.unknowns ?? [],
-      confidence: input.confidence,
-      chosenDirection: current?.chosenDirection ?? {
-        title: input.belief,
-        audienceTension,
-        angle,
-        ...(keyChallenge ? { keyChallenge } : {}),
-        evidenceReferenceIds: aggregate.contributions.flatMap(({ sourceReferenceId }) => sourceReferenceId ? [sourceReferenceId] : []),
-        basis: "creator_experience" as const,
-      },
-      openChallengeIds: input.openChallengeIds,
-      sourceContributionIds: aggregate.contributions.map(({ id }) => id),
-      createdByMembershipId: actor.id,
-      status: "draft" as const,
-      ...(current ? { baseRevisionId: current.id } : {}),
+    const revisionInputFor = (base: ThinkingRoomAggregate) => {
+      const current = base.synthesisRevisions.toSorted((left, right) => left.number - right.number).at(-1);
+      const audienceTension = base.contributions.find(({ lens }) => lens === "audience_tensions")?.body ?? base.room.question;
+      const angle = base.contributions.find(({ lens }) => lens === "possibilities")?.body ?? input.belief;
+      const keyChallenge = base.contributions.find(({ lens }) => lens === "challenges")?.body;
+      return {
+        roomId,
+        belief: input.belief,
+        unknowns: current?.unknowns ?? [],
+        confidence: input.confidence,
+        chosenDirection: current?.chosenDirection ?? {
+          title: input.belief,
+          audienceTension,
+          angle,
+          ...(keyChallenge ? { keyChallenge } : {}),
+          evidenceReferenceIds: base.contributions.flatMap(({ sourceReferenceId }) => sourceReferenceId ? [sourceReferenceId] : []),
+          basis: "creator_experience" as const,
+        },
+        openChallengeIds: input.openChallengeIds,
+        sourceContributionIds: base.contributions.map(({ id }) => id),
+        createdByMembershipId: actor.id,
+        status: "draft" as const,
+        ...(current ? { baseRevisionId: current.id } : {}),
+      };
     };
     if (mode === "sample") {
       setSaveState("saving");
-      addSampleSynthesis(revisionInput);
+      addSampleSynthesis(revisionInputFor(aggregate));
       await Promise.resolve();
       announceSaved();
       return;
     }
-    const revision = createSynthesisRevision(aggregate.synthesisRevisions, revisionInput, {
-      id: crypto.randomUUID(),
-      at: new Date().toISOString(),
+    const revisionId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await saveLive((latest) => {
+      if (latest.synthesisRevisions.some(({ id }) => id === revisionId)) return latest;
+      const revision = createSynthesisRevision(latest.synthesisRevisions, revisionInputFor(latest), {
+        id: revisionId,
+        at,
+      });
+      return { ...latest, synthesisRevisions: [...latest.synthesisRevisions, revision] };
     });
-    await saveLive({ ...aggregate, synthesisRevisions: [...aggregate.synthesisRevisions, revision] }, () => saveSynthesis(input));
   }
 
   function chooseComposer(lens: ThinkingLens) {
@@ -530,7 +587,7 @@ export function ThinkingRoomWorkspace({
                     {contributions.length ? contributions.map((contribution) => (
                       <ContributionNote
                         actorId={actor?.id}
-                        canReact={Boolean(actor)}
+                        canReact={canEdit}
                         contribution={contribution}
                         key={contribution.id}
                         onReact={(note, kind, active) => void react(note, kind, active)}

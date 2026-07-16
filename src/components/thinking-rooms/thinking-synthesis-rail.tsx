@@ -43,9 +43,16 @@ export function ThinkingSynthesisRail({
   onSave,
 }: ThinkingSynthesisRailProps) {
   const allChallengeIds = useMemo(() => challenges.map(({ id }) => id), [challenges]);
+  const initialOpenChallengeIds = useMemo(() => {
+    if (!current) return allChallengeIds;
+    const challengesAddedAfterRevision = allChallengeIds.filter(
+      (id) => !current.sourceContributionIds.includes(id),
+    );
+    return [...new Set([...current.openChallengeIds, ...challengesAddedAfterRevision])];
+  }, [allChallengeIds, current]);
   const [belief, setBelief] = useState(current?.belief ?? "");
   const [confidence, setConfidence] = useState<ThinkingSynthesisRevision["confidence"]>(current?.confidence ?? "medium");
-  const [openChallengeIds, setOpenChallengeIds] = useState<string[]>(current?.openChallengeIds ?? allChallengeIds);
+  const [openChallengeIds, setOpenChallengeIds] = useState<string[]>(initialOpenChallengeIds);
 
   const editing = room.status === "synthesizing";
 

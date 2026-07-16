@@ -174,7 +174,7 @@ describe("Thinking Room guided decision canvas", () => {
     expect(screen.getAllByText("A repeated structure could flatten the creator's voice.")[0]).toBeVisible();
   });
 
-  it("keeps a live contribution draft and explains a save conflict", async () => {
+  it("reloads and rebases a preserved live draft after a revision conflict", async () => {
     const aggregate = {
       room: {
         ...useThinkingRoomStore.getState().rooms[0],
@@ -188,9 +188,36 @@ describe("Thinking Room guided decision canvas", () => {
       reactions: [],
       synthesisRevisions: [],
     };
+    const latestAggregate = {
+      ...aggregate,
+      room: { ...aggregate.room, revision: 8 },
+      contributions: [{
+        id: "13b9c85c-fccd-450b-83dd-90745c564895",
+        roomId: aggregate.room.id,
+        lens: "audience_tensions" as const,
+        body: "A teammate added this while the draft was open.",
+        authorMembershipId: "2b289173-0535-49e0-b9ce-b5b29fb1c53c",
+        authorDisplayNameSnapshot: "Sam Rivera",
+        createdAt: AT,
+        updatedAt: AT,
+        revision: 1,
+      }],
+    };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ aggregate }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ code: "revision_conflict" }), { status: 409 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: "revision_conflict" }), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ aggregate: latestAggregate }), { status: 200 }))
+      .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { expectedRevision: number; aggregate: typeof aggregate };
+        expect(body.expectedRevision).toBe(8);
+        expect(body.aggregate.contributions).toEqual(expect.arrayContaining([
+          expect.objectContaining({ body: "A teammate added this while the draft was open." }),
+          expect.objectContaining({ body: "Keep this unsaved thought intact." }),
+        ]));
+        return new Response(JSON.stringify({
+          aggregate: { ...body.aggregate, room: { ...body.aggregate.room, revision: 9 } },
+        }), { status: 200 });
+      });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     render(
@@ -214,7 +241,73 @@ describe("Thinking Room guided decision canvas", () => {
     expect(await screen.findByText("This room changed elsewhere.")).toBeVisible();
     expect(screen.getByText(/your draft is safe/i)).toBeVisible();
     expect(composer).toHaveValue("Keep this unsaved thought intact.");
-    expect(screen.getByRole("button", { name: "Retry save" })).toBeVisible();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole("button", { name: "Retry save" }));
+
+    expect(await screen.findByText("A teammate added this while the draft was open.")).toBeVisible();
+    expect(screen.getByText("Keep this unsaved thought intact.")).toBeVisible();
+    expect(composer).toHaveValue("");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method ?? "GET"])).toEqual([
+      [`/api/thinking-rooms/${aggregate.room.id}`, "GET"],
+      [`/api/thinking-rooms/${aggregate.room.id}`, "PUT"],
+      [`/api/thinking-rooms/${aggregate.room.id}`, "GET"],
+      [`/api/thinking-rooms/${aggregate.room.id}`, "PUT"],
+    ]);
+  });
+
+  it("treats a challenge added after the current synthesis as unresolved when reopening", async () => {
+    const sampleRoom = useThinkingRoomStore.getState().rooms[0];
+    act(() => {
+      useThinkingRoomStore.getState().addContribution({
+        roomId: sampleRoom.id,
+        lens: "challenges",
+        body: "A new objection arrived after the team made its first decision.",
+        authorMembershipId: "member-sam",
+        authorDisplayNameSnapshot: "Sam Rivera",
+      }, AT);
+    });
+    const user = userEvent.setup();
+    render(<ThinkingRoomWorkspace mode="sample" roomId={sampleRoom.id} />);
+
+    await user.click(screen.getByRole("button", { name: "Reopen synthesis" }));
+    const synthesis = screen.getByRole("complementary", { name: "Synthesis" });
+    const newChallenge = within(synthesis)
+      .getByText("A new objection arrived after the team made its first decision.")
+      .closest("li")!;
+    expect(within(newChallenge).getByRole("button", { name: "Resolve challenge" })).toBeVisible();
+    expect(within(newChallenge).queryByText("Resolved in this synthesis")).not.toBeInTheDocument();
+  });
+
+  it("does not offer live reaction writes to viewers", async () => {
+    const aggregate = {
+      room: {
+        ...useThinkingRoomStore.getState().rooms[0],
+        id: "765ca2ea-d876-4bb2-95bd-5b64bc727770",
+        organizationId: "4f0b3ec4-d507-4726-974c-9b1ea51f73b9",
+        facilitatorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+        decisionOwnerMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+      },
+      contributions: useThinkingRoomStore.getState().contributions.map((contribution) => ({
+        ...contribution,
+        roomId: "765ca2ea-d876-4bb2-95bd-5b64bc727770",
+      })),
+      reactions: [],
+      synthesisRevisions: [],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ aggregate }), { status: 200 }),
+    ));
+    render(
+      <ThinkingRoomWorkspace
+        liveContext={{ userId: "viewer-user", displayName: "View Only", canEdit: false }}
+        mode="live"
+        roomId={aggregate.room.id}
+      />,
+    );
+
+    const note = await screen.findByText("Sample note: creators want consistency without sounding repetitive.");
+    const reaction = within(note.closest("article")!).getByRole("button", { name: /Agree/ });
+    expect(reaction).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add audience tensions" })).toBeDisabled();
   });
 });
