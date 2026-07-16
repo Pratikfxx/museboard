@@ -15,6 +15,7 @@ import {
   createSampleWorkspaceExport,
 } from "@/lib/account/sample-workspace";
 import { useMuseboardStore } from "@/lib/store/museboard-store";
+import { useThinkingRoomStore } from "@/lib/store/thinking-room-store";
 
 import styles from "./account-data.module.css";
 
@@ -44,6 +45,7 @@ export function AccountDataWorkspace() {
     const exportedAt = new Date().toISOString();
     const payload = createSampleWorkspaceExport(
       useMuseboardStore.getState(),
+      useThinkingRoomStore.getState(),
       exportedAt,
     );
     downloadJson(
@@ -59,6 +61,7 @@ export function AccountDataWorkspace() {
       setStatus("Deletion was not available for this workspace.");
       return;
     }
+    useThinkingRoomStore.getState().clearSample();
     setConfirmation("");
     setStatus(
       "Sample workspace deleted from this device. No cloud account or provider data was deleted.",

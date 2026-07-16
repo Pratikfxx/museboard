@@ -95,6 +95,100 @@ describe("promoted idea workshop", () => {
     ).toBe("converted");
   });
 
+  it("deduplicates conversion by accepted synthesis and allows a later accepted revision", () => {
+    const thinking = useThinkingRoomStore.getState();
+    const room = thinking.rooms.find(({ id }) => id === thinking.selectedRoomId)!;
+    const firstRevision = thinking.synthesisRevisions.find(
+      ({ roomId, status }) => roomId === room.id && status === "accepted",
+    )!;
+
+    const firstIdeaId = useMuseboardStore.getState().createIdeaFromThinkingRoom(
+      room.id,
+      "2026-07-16T12:30:00.000Z",
+    );
+    expect(useThinkingRoomStore.getState().updateRoomStatus(
+      room.id,
+      "synthesizing",
+      "2026-07-16T12:40:00.000Z",
+    )).toBe(true);
+    const secondRevisionId = useThinkingRoomStore.getState().addSynthesisRevision({
+      roomId: room.id,
+      belief: "The reopened room chose a materially different direction.",
+      unknowns: [],
+      confidence: "high",
+      chosenDirection: {
+        title: "A second defensible direction",
+        audienceTension: "Creators want a format that can evolve after learning.",
+        angle: "Show how a later decision changes the series without rewriting history.",
+        evidenceReferenceIds: [],
+        basis: "opinion",
+      },
+      openChallengeIds: [],
+      sourceContributionIds: [],
+      createdByMembershipId: room.decisionOwnerMembershipId!,
+      status: "accepted",
+      acceptedByMembershipId: room.decisionOwnerMembershipId!,
+      baseRevisionId: firstRevision.id,
+    }, "2026-07-16T12:45:00.000Z");
+    expect(useThinkingRoomStore.getState().updateRoomStatus(
+      room.id,
+      "decided",
+      "2026-07-16T12:46:00.000Z",
+    )).toBe(true);
+
+    const secondIdeaId = useMuseboardStore.getState().createIdeaFromThinkingRoom(
+      room.id,
+      "2026-07-16T12:50:00.000Z",
+    );
+    const retriedSecondIdeaId = useMuseboardStore.getState().createIdeaFromThinkingRoom(
+      room.id,
+      "2026-07-16T12:55:00.000Z",
+    );
+
+    expect(secondIdeaId).not.toBe(firstIdeaId);
+    expect(retriedSecondIdeaId).toBe(secondIdeaId);
+    expect(useMuseboardStore.getState().ideas.filter(
+      ({ provenance }) => provenance.thinkingRoomOrigin?.roomId === room.id,
+    ).map(({ provenance }) => provenance.thinkingRoomOrigin?.synthesisRevisionId)).toEqual([
+      firstRevision.id,
+      secondRevisionId,
+    ]);
+  });
+
+  it("materializes one live workspace idea from an authoritative conversion origin", () => {
+    useMuseboardStore.setState({ dataMode: "live" });
+    const room = useThinkingRoomStore.getState().rooms[0];
+    const synthesis = useThinkingRoomStore.getState().synthesisRevisions.find(
+      ({ roomId, status }) => roomId === room.id && status === "accepted",
+    )!;
+    const origin = {
+      roomId: room.id,
+      synthesisRevisionId: synthesis.id,
+      ideaId: "idea-live-conversion",
+      createdByMembershipId: room.decisionOwnerMembershipId!,
+      createdAt: "2026-07-16T13:00:00.000Z",
+    };
+
+    const first = useMuseboardStore.getState().createIdeaFromThinkingRoomOrigin({
+      room,
+      synthesis,
+      contributorCount: 2,
+      origin,
+    });
+    const retried = useMuseboardStore.getState().createIdeaFromThinkingRoomOrigin({
+      room,
+      synthesis,
+      contributorCount: 2,
+      origin,
+    });
+
+    expect(first).toBe(origin.ideaId);
+    expect(retried).toBe(origin.ideaId);
+    expect(useMuseboardStore.getState().ideas.filter(
+      ({ provenance }) => provenance.thinkingRoomOrigin?.synthesisRevisionId === synthesis.id,
+    )).toHaveLength(1);
+  });
+
   it("does not convert a room before it has an accepted decision", () => {
     const roomId = useThinkingRoomStore.getState().createRoom(
       {

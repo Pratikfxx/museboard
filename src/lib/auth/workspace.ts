@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 
 import type { Plan } from "@/domain/entitlements";
+import type { Entitlement } from "@/domain/entitlements";
+import type { Membership } from "@/domain/collaboration";
 import { createClient } from "@/lib/supabase/server";
 
 export const ACTIVE_WORKSPACE_COOKIE = "museboard-active-workspace";
@@ -10,6 +12,21 @@ const membershipSchema = z.object({
   organization_id: z.uuid(),
   role: z.enum(["owner", "editor", "viewer"]),
   status: z.literal("active"),
+});
+
+const organizationMembershipSchema = z.object({
+  user_id: z.uuid(),
+  role: z.enum(["owner", "editor", "viewer"]),
+  status: z.enum(["pending", "active", "removed"]),
+  email_snapshot: z.string().nullable(),
+  created_at: z.iso.datetime(),
+  updated_at: z.iso.datetime(),
+});
+
+const usageLedgerSchema = z.object({
+  entitlement: z.enum(["manual_planning", "strategist_pack", "opportunity_refresh", "export_pack"]),
+  operation: z.enum(["reserve", "commit", "release"]),
+  amount: z.number().int().positive(),
 });
 
 const organizationSchema = z.object({
@@ -40,6 +57,10 @@ export interface AuthenticatedWorkspace {
   stripeStatus?: string;
   stripeSubscriptionId?: string;
   activeUntil?: string;
+  memberships: Membership[];
+  currentActorMembershipId: string;
+  used: Partial<Record<Entitlement, number>>;
+  reserved: Partial<Record<Entitlement, number>>;
 }
 
 export function effectivePlanFromEntitlement(
@@ -109,7 +130,7 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
     memberships.find(({ organization_id }) => organization_id === requestedOrganizationId) ??
     memberships[0];
 
-  const [organizationResult, profileResult, entitlementResult] = await Promise.all([
+  const [organizationResult, profileResult, entitlementResult, membersResult, usageResult] = await Promise.all([
     supabase
       .from("organizations")
       .select("id, name, slug")
@@ -125,10 +146,22 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
       .select("plan, stripe_status, stripe_subscription_id, active_until, grace_ends_at")
       .eq("organization_id", membership.organization_id)
       .maybeSingle(),
+    supabase
+      .from("organization_memberships")
+      .select("user_id, role, status, email_snapshot, created_at, updated_at")
+      .eq("organization_id", membership.organization_id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("usage_ledger")
+      .select("entitlement, operation, amount")
+      .eq("organization_id", membership.organization_id)
+      .gt("period_ended_at", new Date().toISOString()),
   ]);
   if (organizationResult.error) throw new Error(organizationResult.error.message);
   if (profileResult.error) throw new Error(profileResult.error.message);
   if (entitlementResult.error) throw new Error(entitlementResult.error.message);
+  if (membersResult.error) throw new Error(membersResult.error.message);
+  if (usageResult.error) throw new Error(usageResult.error.message);
 
   const organization = organizationSchema.parse(organizationResult.data);
   const profile = profileResult.data
@@ -137,6 +170,36 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
   const entitlement = entitlementResult.data
     ? entitlementSchema.parse(entitlementResult.data)
     : undefined;
+  const serverMemberships = z.array(organizationMembershipSchema).parse(membersResult.data ?? []);
+  const displayNameFor = (row: z.infer<typeof organizationMembershipSchema>) => {
+    const email = row.user_id === userData.user.id
+      ? userData.user.email ?? row.email_snapshot
+      : row.email_snapshot;
+    return row.role === "owner"
+      ? profile?.display_name ?? email?.split("@")[0] ?? "Museboard creator"
+      : email?.split("@")[0] ?? "Museboard collaborator";
+  };
+  const authoritativeMemberships: Membership[] = serverMemberships.map((row) => ({
+    id: row.user_id,
+    email: (row.user_id === userData.user.id ? userData.user.email : row.email_snapshot)
+      ?? `${row.user_id}@members.museboard.invalid`,
+    displayNameSnapshot: displayNameFor(row),
+    role: row.role,
+    status: row.status,
+    invitedAt: row.created_at,
+    ...(row.status === "active" ? { joinedAt: row.updated_at } : {}),
+    ...(row.status === "removed" ? { removedAt: row.updated_at } : {}),
+  }));
+  const used: Partial<Record<Entitlement, number>> = {};
+  const reserved: Partial<Record<Entitlement, number>> = {};
+  for (const entry of z.array(usageLedgerSchema).parse(usageResult.data ?? [])) {
+    if (entry.operation === "reserve") reserved[entry.entitlement] = (reserved[entry.entitlement] ?? 0) + entry.amount;
+    if (entry.operation === "commit") {
+      reserved[entry.entitlement] = Math.max(0, (reserved[entry.entitlement] ?? 0) - entry.amount);
+      used[entry.entitlement] = (used[entry.entitlement] ?? 0) + entry.amount;
+    }
+    if (entry.operation === "release") reserved[entry.entitlement] = Math.max(0, (reserved[entry.entitlement] ?? 0) - entry.amount);
+  }
 
   return {
     userId: userData.user.id,
@@ -145,13 +208,16 @@ export async function getAuthenticatedWorkspace(): Promise<AuthenticatedWorkspac
     organizationName: organization.name,
     organizationSlug: organization.slug,
     role: membership.role,
-    displayName:
-      profile?.display_name ??
-      userData.user.email?.split("@")[0] ??
-      "Museboard creator",
+    displayName: membership.role === "owner"
+      ? profile?.display_name ?? userData.user.email?.split("@")[0] ?? "Museboard creator"
+      : userData.user.email?.split("@")[0] ?? "Museboard collaborator",
     plan: effectivePlanFromEntitlement(entitlement),
     stripeStatus: entitlement?.stripe_status,
     stripeSubscriptionId: entitlement?.stripe_subscription_id,
     activeUntil: entitlement?.active_until ?? undefined,
+    memberships: authoritativeMemberships,
+    currentActorMembershipId: userData.user.id,
+    used,
+    reserved,
   };
 }

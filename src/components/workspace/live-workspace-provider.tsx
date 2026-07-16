@@ -9,7 +9,7 @@ import {
   workspacePayloadFromState,
 } from "@/lib/store/museboard-store";
 
-type SyncState = "saved" | "saving" | "conflict" | "error";
+type SyncState = "saved" | "saving" | "conflict" | "revoked" | "error";
 
 export function LiveWorkspaceProvider({
   children,
@@ -54,6 +54,11 @@ export function LiveWorkspaceProvider({
           setSyncState("conflict");
           return;
         }
+        if (response.status === 401 || response.status === 403) {
+          blocked = true;
+          setSyncState("revoked");
+          return;
+        }
         const result = (await response.json()) as { revision?: number };
         if (!response.ok || !result.revision) throw new Error("Workspace save failed");
         revision = result.revision;
@@ -93,6 +98,14 @@ export function LiveWorkspaceProvider({
           <p className="mt-1 text-muted">Reload to use the newest version. Museboard stopped autosaving to avoid overwriting it.</p>
           <button className="mt-3 font-bold text-cobalt underline" onClick={() => window.location.reload()} type="button">Reload workspace</button>
         </div>
+      </div>
+    );
+  }
+  if (syncState === "revoked") {
+    return (
+      <div className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-warning/40 bg-butter/15 p-4 text-sm" role="alert">
+        <WarningCircle aria-hidden="true" className="mt-0.5 shrink-0 text-warning" size={20} />
+        <div><strong>Your workspace access was revoked before this save.</strong><p className="mt-1 text-muted">Your current tab is preserved. Copy the draft before leaving or reloading.</p><button className="mt-3 font-bold text-cobalt underline" onClick={() => void navigator.clipboard.writeText(JSON.stringify(workspacePayloadFromState(useMuseboardStore.getState()), null, 2))} type="button">Copy draft</button></div>
       </div>
     );
   }

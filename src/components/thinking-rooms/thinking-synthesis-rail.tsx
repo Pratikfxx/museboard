@@ -4,6 +4,8 @@ import { ArrowRight, Check, Compass, Flag, WarningCircle } from "@phosphor-icons
 import { useMemo, useState } from "react";
 
 import type {
+  ChosenContentDirection,
+  ContributionLink,
   ThinkingContribution,
   ThinkingRoom,
   ThinkingSynthesisRevision,
@@ -15,17 +17,22 @@ interface SynthesisDraft {
   belief: string;
   confidence: ThinkingSynthesisRevision["confidence"];
   openChallengeIds: string[];
+  challengeResolutionNotes: Record<string, string>;
+  basis: ChosenContentDirection["basis"];
 }
 
 interface ThinkingSynthesisRailProps {
   room: ThinkingRoom;
   challenges: ThinkingContribution[];
+  links: ContributionLink[];
   current?: ThinkingSynthesisRevision;
   suggestedBelief?: string;
   canEdit: boolean;
   canConvert: boolean;
   converted: boolean;
   saving: boolean;
+  hasEvidenceSupport: boolean;
+  conversionState: "idle" | "offline" | "permission" | "error";
   onBegin: () => void | Promise<void>;
   onConvert: () => void | Promise<void>;
   onSave: (draft: SynthesisDraft) => void | Promise<void>;
@@ -40,12 +47,15 @@ const confidenceLabels: Record<ThinkingSynthesisRevision["confidence"], string> 
 export function ThinkingSynthesisRail({
   room,
   challenges,
+  links,
   current,
   suggestedBelief,
   canEdit,
   canConvert,
   converted,
   saving,
+  hasEvidenceSupport,
+  conversionState,
   onBegin,
   onConvert,
   onSave,
@@ -61,6 +71,8 @@ export function ThinkingSynthesisRail({
   const [belief, setBelief] = useState(current?.belief ?? "");
   const [confidence, setConfidence] = useState<ThinkingSynthesisRevision["confidence"]>(current?.confidence ?? "medium");
   const [openChallengeIds, setOpenChallengeIds] = useState<string[]>(initialOpenChallengeIds);
+  const [basis, setBasis] = useState<ChosenContentDirection["basis"]>();
+  const [challengeResolutionNotes, setChallengeResolutionNotes] = useState<Record<string, string>>({});
 
   const editing = room.status === "synthesizing";
 
@@ -93,6 +105,15 @@ export function ThinkingSynthesisRail({
                 <ArrowRight aria-hidden="true" size={18} />
                 {converted ? "Direction already created" : "Create Idea Board direction"}
               </button>
+              {converted ? (
+                <p role="note">The source link is recorded. This Idea Board direction follows your current workspace sync status.</p>
+              ) : conversionState === "permission" ? (
+                <p role="alert">Your access changed before conversion. No Idea Board direction was created.</p>
+              ) : conversionState === "offline" ? (
+                <div role="alert"><p>You’re offline. The direction was not created.</p><button disabled={saving} onClick={() => void onConvert()} type="button">Retry conversion</button></div>
+              ) : conversionState === "error" ? (
+                <div role="alert"><p>The direction could not be created. The accepted synthesis is unchanged.</p><button disabled={saving} onClick={() => void onConvert()} type="button">Retry conversion</button></div>
+              ) : null}
             </>
           ) : (
             <>
@@ -109,8 +130,8 @@ export function ThinkingSynthesisRail({
       ) : (
         <form className={styles.synthesisForm} onSubmit={(event) => {
           event.preventDefault();
-          if (!belief.trim() || saving) return;
-          void onSave({ belief: belief.trim(), confidence, openChallengeIds });
+          if (!belief.trim() || !basis || (basis === "evidence" && !hasEvidenceSupport) || saving) return;
+          void onSave({ belief: belief.trim(), confidence, openChallengeIds, basis, challengeResolutionNotes });
         }}>
           <label htmlFor="thinking-shared-belief">Current shared belief</label>
           {suggestedBelief ? (
@@ -152,6 +173,21 @@ export function ThinkingSynthesisRail({
             ))}
           </fieldset>
 
+          <fieldset>
+            <legend>What is this direction based on?</legend>
+            {([
+              ["evidence", "Evidence"],
+              ["creator_experience", "Creator experience"],
+              ["opinion", "Opinion"],
+            ] as const).map(([value, label]) => (
+              <label key={value}>
+                <input checked={basis === value} disabled={!canEdit} name="synthesis-basis" onChange={() => setBasis(value)} type="radio" />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+          {basis === "evidence" && !hasEvidenceSupport ? <p role="alert">Add an Evidence note before using evidence as the basis.</p> : null}
+
           <section aria-labelledby="open-challenges-heading" className={styles.openChallenges}>
             <div>
               <WarningCircle aria-hidden="true" size={18} />
@@ -162,17 +198,27 @@ export function ThinkingSynthesisRail({
               <ul>
                 {challenges.map((challenge) => {
                   const open = openChallengeIds.includes(challenge.id);
+                  const openLink = links.find((link) =>
+                    link.relationship === "challenges" &&
+                    link.resolutionStatus === "open" &&
+                    (link.fromContributionId === challenge.id || link.toContributionId === challenge.id),
+                  );
                   return (
                     <li data-resolved={!open} key={challenge.id}>
                       <p>{challenge.body}</p>
                       {open ? (
-                        <button
-                          disabled={!canEdit}
-                          onClick={() => setOpenChallengeIds((ids) => ids.filter((id) => id !== challenge.id))}
-                          type="button"
-                        >
-                          <Check aria-hidden="true" size={15} /> Resolve challenge
-                        </button>
+                        <>
+                          <label>Resolution note for {challenge.body}
+                            <textarea disabled={!canEdit || !openLink} onChange={(event) => setChallengeResolutionNotes((notes) => ({ ...notes, [challenge.id]: event.target.value }))} value={challengeResolutionNotes[challenge.id] ?? ""} />
+                          </label>
+                          <button
+                            disabled={!canEdit || !openLink || !challengeResolutionNotes[challenge.id]?.trim()}
+                            onClick={() => setOpenChallengeIds((ids) => ids.filter((id) => id !== challenge.id))}
+                            type="button"
+                          >
+                            <Check aria-hidden="true" size={15} /> Resolve challenge
+                          </button>
+                        </>
                       ) : (
                         <span><Check aria-hidden="true" size={15} /> Resolved in this synthesis</span>
                       )}
@@ -183,7 +229,7 @@ export function ThinkingSynthesisRail({
             ) : <p className={styles.noChallenges}>No challenges have been added yet.</p>}
           </section>
 
-          <button className={styles.saveSynthesis} disabled={!canEdit || saving || !belief.trim()} type="submit">
+          <button className={styles.saveSynthesis} disabled={!canEdit || saving || !belief.trim() || !basis || (basis === "evidence" && !hasEvidenceSupport)} type="submit">
             {saving ? "Saving…" : "Save synthesis"}
           </button>
         </form>

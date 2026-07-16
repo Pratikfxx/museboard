@@ -26,6 +26,7 @@ import type {
 import type { PlannerTask } from "@/domain/planner";
 import type {
   ContributionReaction,
+  ContributionLink,
   ThinkingContribution,
   ThinkingRoom,
   ThinkingSynthesisRevision,
@@ -123,6 +124,7 @@ export interface SampleThinkingRoomData {
   rooms: ThinkingRoom[];
   contributions: ThinkingContribution[];
   reactions: ContributionReaction[];
+  links: ContributionLink[];
   synthesisRevisions: ThinkingSynthesisRevision[];
   selectedRoomId?: string;
   syncState: "idle" | "syncing" | "offline" | "error";
@@ -220,6 +222,7 @@ export function createSampleThinkingRoomData(
         createdAt: "2026-07-13T10:35:00.000Z",
       },
     ],
+    links: [],
     synthesisRevisions: [
       {
         id: "thinking-synthesis-sample-accepted",
@@ -234,6 +237,7 @@ export function createSampleThinkingRoomData(
           angle: "Keep one recognizable constraint and reveal a different proof each week.",
           keyChallenge: "The repeated structure must leave room for the creator's voice.",
           evidenceReferenceIds: ["sample-reference-audience-replies"],
+          evidenceContributionIds: ["thinking-contribution-sample-evidence"],
           basis: "evidence",
         },
         openChallengeIds: [],

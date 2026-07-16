@@ -38,6 +38,7 @@ export interface LiveThinkingRoomContext {
   userId: string;
   displayName: string;
   canCreate: boolean;
+  canAssignDecisionOwner?: boolean;
 }
 
 const roomListResponseSchema = z.object({ rooms: z.array(thinkingRoomSchema) });
@@ -212,7 +213,9 @@ export function ThinkingRoomLibrary({
       templateId: "content-direction",
       status: "exploring",
       facilitatorMembershipId: liveContext.userId,
-      decisionOwnerMembershipId: liveContext.userId,
+      ...(liveContext.canAssignDecisionOwner
+        ? { decisionOwnerMembershipId: liveContext.userId }
+        : {}),
       ...(trimmedContext ? { context: trimmedContext } : {}),
       revision: 1,
       createdAt,
@@ -223,7 +226,7 @@ export function ThinkingRoomLibrary({
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        aggregate: { room, contributions: [], reactions: [], synthesisRevisions: [] },
+        aggregate: { room, contributions: [], reactions: [], links: [], synthesisRevisions: [] },
       }),
     });
     if (!response.ok) {

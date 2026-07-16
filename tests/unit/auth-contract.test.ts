@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { safeInternalPath } from "@/lib/auth/redirect";
 import { effectivePlanFromEntitlement } from "@/lib/auth/workspace";
 import { getFeatureConfig } from "@/lib/config/features";
 
 describe("production authentication contract", () => {
+  it("describes current live workspace sync without promising a separate content cloud", () => {
+    const copy = readFileSync(
+      resolve(process.cwd(), "src/components/marketing/live-auth-access.tsx"),
+      "utf8",
+    );
+    expect(copy).not.toContain("Creator drafts remain on this device while cloud content sync is being enabled");
+    expect(copy).toContain("Creator drafts and Idea Board directions sync with your workspace");
+    expect(copy).toContain("Thinking Room reasoning and source links are stored as dedicated collaboration records");
+  });
   it("accepts only same-origin application return paths", () => {
     expect(safeInternalPath("/app/settings/billing?checkout=return#plan")).toBe(
       "/app/settings/billing?checkout=return#plan",

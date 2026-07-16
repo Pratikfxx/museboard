@@ -1,12 +1,16 @@
 import { z } from "zod";
 
 import {
+  contributionLinkSchema,
   contributionReactionSchema,
   thinkingContributionSchema,
+  thinkingRoomContentOriginSchema,
   thinkingRoomSchema,
   thinkingSynthesisRevisionSchema,
+  type ContributionLink,
   type ContributionReaction,
   type ThinkingContribution,
+  type ThinkingRoomContentOrigin,
   type ThinkingRoom,
   type ThinkingSynthesisRevision,
 } from "@/domain/thinking-rooms";
@@ -61,7 +65,9 @@ export interface ThinkingRoomAggregate {
   room: ThinkingRoom;
   contributions: ThinkingContribution[];
   reactions: ContributionReaction[];
+  links: ContributionLink[];
   synthesisRevisions: ThinkingSynthesisRevision[];
+  contentOrigins?: ThinkingRoomContentOrigin[];
 }
 
 export interface ThinkingRoomRepository {
@@ -72,6 +78,21 @@ export interface ThinkingRoomRepository {
     expectedRevision: number;
     aggregate: ThinkingRoomAggregate;
   }): Promise<ThinkingRoomAggregate>;
+  setReaction(input: {
+    organizationId: string;
+    roomId: string;
+    contributionId: string;
+    kind: ContributionReaction["kind"];
+    active: boolean;
+    reactionId: string;
+  }): Promise<{ roomRevision: number; reaction: ContributionReaction | null }>;
+  convert(input: {
+    organizationId: string;
+    roomId: string;
+    synthesisRevisionId: string;
+    ideaId: string;
+    expectedRevision: number;
+  }): Promise<{ origin: ThinkingRoomContentOrigin; roomRevision: number }>;
 }
 
 export class ThinkingRoomRevisionConflictError extends Error {
@@ -85,6 +106,20 @@ export class ThinkingRoomValidationError extends Error {
   constructor() {
     super("Thinking Room data violates a persistence constraint.");
     this.name = "ThinkingRoomValidationError";
+  }
+}
+
+export class ThinkingRoomPermissionError extends Error {
+  constructor() {
+    super("You do not have permission to change this Thinking Room.");
+    this.name = "ThinkingRoomPermissionError";
+  }
+}
+
+export class ThinkingRoomNotFoundError extends Error {
+  constructor() {
+    super("The Thinking Room contribution was not found.");
+    this.name = "ThinkingRoomNotFoundError";
   }
 }
 
@@ -137,6 +172,21 @@ const reactionRowSchema = z.object({
   created_at: z.iso.datetime(),
 });
 
+const linkRowSchema = z.object({
+  id: z.uuid(),
+  organization_id: z.uuid(),
+  room_id: z.uuid(),
+  from_contribution_id: z.uuid(),
+  to_contribution_id: z.uuid(),
+  relationship: z.enum(["supports", "challenges", "extends", "combines"]),
+  created_by_user_id: z.uuid(),
+  resolution_status: z.enum(["open", "resolved"]),
+  resolution_note: nullableText,
+  resolved_by_user_id: nullableUuid,
+  created_at: z.iso.datetime(),
+  resolved_at: nullableDate,
+});
+
 const synthesisRowSchema = z.object({
   id: z.uuid(),
   organization_id: z.uuid(),
@@ -154,6 +204,15 @@ const synthesisRowSchema = z.object({
   created_at: z.iso.datetime(),
   accepted_at: nullableDate,
   accepted_by_user_id: nullableUuid,
+});
+
+const contentOriginRowSchema = z.object({
+  organization_id: z.uuid(),
+  room_id: z.uuid(),
+  synthesis_revision_id: z.uuid(),
+  idea_id: z.uuid(),
+  created_by_user_id: z.uuid(),
+  created_at: z.iso.datetime(),
 });
 
 function omitNullish<T extends Record<string, unknown>>(value: T): T {
@@ -213,6 +272,23 @@ function reactionFromRow(input: unknown): ContributionReaction {
   });
 }
 
+function linkFromRow(input: unknown): ContributionLink {
+  const row = linkRowSchema.parse(input);
+  return contributionLinkSchema.parse(omitNullish({
+    id: row.id,
+    roomId: row.room_id,
+    fromContributionId: row.from_contribution_id,
+    toContributionId: row.to_contribution_id,
+    relationship: row.relationship,
+    createdByMembershipId: row.created_by_user_id,
+    resolutionStatus: row.resolution_status,
+    resolutionNote: row.resolution_note,
+    resolvedByMembershipId: row.resolved_by_user_id,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at,
+  }));
+}
+
 function synthesisFromRow(input: unknown): ThinkingSynthesisRevision {
   const row = synthesisRowSchema.parse(input);
   return thinkingSynthesisRevisionSchema.parse(omitNullish({
@@ -234,12 +310,25 @@ function synthesisFromRow(input: unknown): ThinkingSynthesisRevision {
   }));
 }
 
+function contentOriginFromRow(input: unknown): ThinkingRoomContentOrigin {
+  const row = contentOriginRowSchema.parse(input);
+  return thinkingRoomContentOriginSchema.parse({
+    roomId: row.room_id,
+    synthesisRevisionId: row.synthesis_revision_id,
+    ideaId: row.idea_id,
+    createdByMembershipId: row.created_by_user_id,
+    createdAt: row.created_at,
+  });
+}
+
 export function parseThinkingRoomAggregate(input: unknown): ThinkingRoomAggregate {
   const aggregate = z.object({
     room: thinkingRoomSchema,
     contributions: z.array(thinkingContributionSchema),
     reactions: z.array(contributionReactionSchema),
+    links: z.array(contributionLinkSchema).default([]),
     synthesisRevisions: z.array(thinkingSynthesisRevisionSchema),
+    contentOrigins: z.array(thinkingRoomContentOriginSchema).default([]),
   }).parse(input);
 
   z.string().max(160).parse(aggregate.room.workspaceId);
@@ -284,6 +373,19 @@ export function parseThinkingRoomAggregate(input: unknown): ThinkingRoomAggregat
       throw new z.ZodError([]);
     }
   }
+  for (const link of aggregate.links) {
+    uuid.parse(link.id);
+    uuid.parse(link.createdByMembershipId);
+    if (link.resolvedByMembershipId) uuid.parse(link.resolvedByMembershipId);
+    z.string().max(20000).optional().parse(link.resolutionNote);
+    if (
+      link.roomId !== aggregate.room.id ||
+      !contributionIds.has(link.fromContributionId) ||
+      !contributionIds.has(link.toContributionId)
+    ) {
+      throw new z.ZodError([]);
+    }
+  }
   for (const revision of aggregate.synthesisRevisions) {
     uuid.parse(revision.id);
     uuid.parse(revision.createdByMembershipId);
@@ -294,6 +396,20 @@ export function parseThinkingRoomAggregate(input: unknown): ThinkingRoomAggregat
       [...revision.openChallengeIds, ...revision.sourceContributionIds].some(
         (id) => !contributionIds.has(id),
       )
+    ) {
+      throw new z.ZodError([]);
+    }
+  }
+  if (aggregate.synthesisRevisions.filter(({ status }) => status === "accepted").length > 1) {
+    throw new z.ZodError([]);
+  }
+  const synthesisIds = new Set(aggregate.synthesisRevisions.map(({ id }) => id));
+  for (const origin of aggregate.contentOrigins) {
+    uuid.parse(origin.ideaId);
+    uuid.parse(origin.createdByMembershipId);
+    if (
+      origin.roomId !== aggregate.room.id ||
+      !synthesisIds.has(origin.synthesisRevisionId)
     ) {
       throw new z.ZodError([]);
     }
@@ -344,6 +460,21 @@ function reactionRpcPayload(reaction: ContributionReaction) {
   };
 }
 
+function linkRpcPayload(link: ContributionLink) {
+  return {
+    id: link.id,
+    from_contribution_id: link.fromContributionId,
+    to_contribution_id: link.toContributionId,
+    relationship: link.relationship,
+    created_by_user_id: link.createdByMembershipId,
+    resolution_status: link.resolutionStatus,
+    resolution_note: link.resolutionNote ?? null,
+    resolved_by_user_id: link.resolvedByMembershipId ?? null,
+    created_at: link.createdAt,
+    resolved_at: link.resolvedAt ?? null,
+  };
+}
+
 function synthesisRpcPayload(revision: ThinkingSynthesisRevision) {
   return {
     id: revision.id,
@@ -366,6 +497,56 @@ function synthesisRpcPayload(revision: ThinkingSynthesisRevision) {
 export function createSupabaseThinkingRoomRepository(
   client: SupabaseThinkingRoomClient,
 ): ThinkingRoomRepository {
+  async function loadCanonical(organizationId: string, roomId: string) {
+    uuid.parse(organizationId);
+    uuid.parse(roomId);
+    const loadRoomRow = async () => {
+      const roomQuery = client.from("thinking_rooms") as RoomLoadQuery;
+      const roomResult = await roomQuery
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("id", roomId)
+        .maybeSingle();
+      if (roomResult.error) throw new Error(roomResult.error.message);
+      return roomResult.data ? roomRowSchema.parse(roomResult.data) : null;
+    };
+    const child = async (table: string, order: string) => {
+      const query = client.from(table) as ChildLoadQuery;
+      const result = await query
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("room_id", roomId)
+        .order(order, { ascending: true });
+      if (result.error) throw new Error(result.error.message);
+      return z.array(z.unknown()).parse(result.data);
+    };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const roomBefore = await loadRoomRow();
+      if (!roomBefore) return null;
+      const [contributionRows, reactionRows, linkRows, synthesisRows, contentOriginRows] = await Promise.all([
+        child("thinking_contributions", "created_at"),
+        child("thinking_contribution_reactions", "created_at"),
+        child("thinking_contribution_links", "created_at"),
+        child("thinking_synthesis_revisions", "number"),
+        child("thinking_room_content_origins", "created_at"),
+      ]);
+      const roomAfter = await loadRoomRow();
+      if (!roomAfter) return null;
+      if (roomBefore.revision === roomAfter.revision) {
+        return parseThinkingRoomAggregate({
+          room: roomFromRow(roomAfter),
+          contributions: contributionRows.map(contributionFromRow),
+          reactions: reactionRows.map(reactionFromRow),
+          links: linkRows.map(linkFromRow),
+          synthesisRevisions: synthesisRows.map(synthesisFromRow),
+          contentOrigins: contentOriginRows.map(contentOriginFromRow),
+        });
+      }
+    }
+    throw new ThinkingRoomRevisionConflictError();
+  }
+
   async function persist(expectedRevision: number, input: unknown) {
     const aggregate = parseThinkingRoomAggregate(input);
     const { data, error } = await client.rpc("save_thinking_room", {
@@ -375,6 +556,7 @@ export function createSupabaseThinkingRoomRepository(
       p_room: roomRpcPayload(aggregate.room),
       p_contributions: aggregate.contributions.map(contributionRpcPayload),
       p_reactions: aggregate.reactions.map(reactionRpcPayload),
+      p_links: aggregate.links.map(linkRpcPayload),
       p_synthesis_revisions: aggregate.synthesisRevisions.map(synthesisRpcPayload),
     });
     if (error?.code === "40001" || error?.message.includes("revision conflict")) {
@@ -383,9 +565,16 @@ export function createSupabaseThinkingRoomRepository(
     if (error?.code === "23514" || error?.code === "22001") {
       throw new ThinkingRoomValidationError();
     }
+    if (error?.code === "42501") throw new ThinkingRoomPermissionError();
+    if (error?.code === "23503") throw new ThinkingRoomNotFoundError();
     if (error) throw new Error(error.message);
-    const revision = z.number().int().positive().parse(data);
-    return { ...aggregate, room: { ...aggregate.room, revision } };
+    z.number().int().positive().parse(data);
+    const canonical = await loadCanonical(
+      aggregate.room.organizationId,
+      aggregate.room.id,
+    );
+    if (!canonical) throw new ThinkingRoomNotFoundError();
+    return canonical;
   }
 
   return {
@@ -396,54 +585,17 @@ export function createSupabaseThinkingRoomRepository(
         .select("*")
         .eq("organization_id", organizationId)
         .order("updated_at", { ascending: false });
+      if (error?.code === "42501") throw new ThinkingRoomPermissionError();
+      if (error?.code === "23503") throw new ThinkingRoomNotFoundError();
+      if (error?.code === "23514" || error?.code === "22001") {
+        throw new ThinkingRoomValidationError();
+      }
       if (error) throw new Error(error.message);
       return z.array(z.unknown()).parse(data).map(roomFromRow);
     },
 
-    async load(organizationId, roomId) {
-      uuid.parse(organizationId);
-      uuid.parse(roomId);
-      const loadRoomRow = async () => {
-        const roomQuery = client.from("thinking_rooms") as RoomLoadQuery;
-        const roomResult = await roomQuery
-          .select("*")
-          .eq("organization_id", organizationId)
-          .eq("id", roomId)
-          .maybeSingle();
-        if (roomResult.error) throw new Error(roomResult.error.message);
-        return roomResult.data ? roomRowSchema.parse(roomResult.data) : null;
-      };
-      const child = async (table: string, order: string) => {
-        const query = client.from(table) as ChildLoadQuery;
-        const result = await query
-          .select("*")
-          .eq("organization_id", organizationId)
-          .eq("room_id", roomId)
-          .order(order, { ascending: true });
-        if (result.error) throw new Error(result.error.message);
-        return z.array(z.unknown()).parse(result.data);
-      };
-
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const roomBefore = await loadRoomRow();
-        if (!roomBefore) return null;
-        const [contributionRows, reactionRows, synthesisRows] = await Promise.all([
-          child("thinking_contributions", "created_at"),
-          child("thinking_contribution_reactions", "created_at"),
-          child("thinking_synthesis_revisions", "number"),
-        ]);
-        const roomAfter = await loadRoomRow();
-        if (!roomAfter) return null;
-        if (roomBefore.revision === roomAfter.revision) {
-          return parseThinkingRoomAggregate({
-            room: roomFromRow(roomAfter),
-            contributions: contributionRows.map(contributionFromRow),
-            reactions: reactionRows.map(reactionFromRow),
-            synthesisRevisions: synthesisRows.map(synthesisFromRow),
-          });
-        }
-      }
-      throw new ThinkingRoomRevisionConflictError();
+    load(organizationId, roomId) {
+      return loadCanonical(organizationId, roomId);
     },
 
     create(aggregate) {
@@ -452,6 +604,91 @@ export function createSupabaseThinkingRoomRepository(
 
     save(input) {
       return persist(input.expectedRevision, input.aggregate);
+    },
+
+    async setReaction(input) {
+      uuid.parse(input.organizationId);
+      uuid.parse(input.roomId);
+      uuid.parse(input.contributionId);
+      uuid.parse(input.reactionId);
+      const kind = contributionReactionSchema.shape.kind.parse(input.kind);
+      const { data, error } = await client.rpc("set_thinking_room_reaction", {
+        p_organization_id: input.organizationId,
+        p_room_id: input.roomId,
+        p_contribution_id: input.contributionId,
+        p_kind: kind,
+        p_active: z.boolean().parse(input.active),
+        p_reaction_id: input.reactionId,
+      });
+      if (error?.code === "42501") throw new ThinkingRoomPermissionError();
+      if (error?.code === "23503") throw new ThinkingRoomNotFoundError();
+      if (error?.code === "23514" || error?.code === "22001") {
+        throw new ThinkingRoomValidationError();
+      }
+      if (error) throw new Error(error.message);
+      const result = z.object({
+        room_revision: z.number().int().positive(),
+        reaction: z.object({
+          id: z.uuid(),
+          room_id: z.uuid(),
+          contribution_id: z.uuid(),
+          actor_user_id: z.uuid(),
+          kind: contributionReactionSchema.shape.kind,
+          created_at: z.iso.datetime(),
+        }).nullable(),
+      }).parse(data);
+      return {
+        roomRevision: result.room_revision,
+        reaction: result.reaction ? contributionReactionSchema.parse({
+          id: result.reaction.id,
+          roomId: result.reaction.room_id,
+          contributionId: result.reaction.contribution_id,
+          membershipId: result.reaction.actor_user_id,
+          kind: result.reaction.kind,
+          createdAt: result.reaction.created_at,
+        }) : null,
+      };
+    },
+
+    async convert(input) {
+      uuid.parse(input.organizationId);
+      uuid.parse(input.roomId);
+      uuid.parse(input.synthesisRevisionId);
+      uuid.parse(input.ideaId);
+      const { data, error } = await client.rpc("convert_thinking_room", {
+        p_organization_id: input.organizationId,
+        p_room_id: input.roomId,
+        p_synthesis_revision_id: input.synthesisRevisionId,
+        p_idea_id: input.ideaId,
+        p_expected_revision: z.number().int().positive().parse(input.expectedRevision),
+      });
+      if (error?.code === "40001" || error?.message.includes("revision conflict")) {
+        throw new ThinkingRoomRevisionConflictError();
+      }
+      if (error?.code === "42501") throw new ThinkingRoomPermissionError();
+      if (error?.code === "23503") throw new ThinkingRoomNotFoundError();
+      if (error?.code === "23514" || error?.code === "22001") {
+        throw new ThinkingRoomValidationError();
+      }
+      if (error) throw new Error(error.message);
+      const result = z.object({
+        room_id: z.uuid(),
+        synthesis_revision_id: z.uuid(),
+        idea_id: z.uuid(),
+        created_by_user_id: z.uuid(),
+        created_at: z.iso.datetime(),
+        room_revision: z.number().int().positive(),
+      }).parse(data);
+      return {
+        origin: thinkingRoomContentOriginSchema.parse({
+          roomId: result.room_id,
+          synthesisRevisionId: result.synthesis_revision_id,
+          ideaId: result.idea_id,
+          createdByMembershipId: result.created_by_user_id,
+          createdAt: result.created_at,
+        }),
+        roomRevision: result.room_revision,
+      };
     },
   };
 }

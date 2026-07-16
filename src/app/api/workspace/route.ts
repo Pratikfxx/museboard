@@ -21,9 +21,11 @@ function sameOrigin(request: Request): boolean {
 function authority(workspace: NonNullable<Awaited<ReturnType<typeof getAuthenticatedWorkspace>>>) {
   return {
     userId: workspace.userId,
-    email: workspace.email,
-    displayName: workspace.displayName,
+    memberships: workspace.memberships,
+    currentActorMembershipId: workspace.currentActorMembershipId,
     plan: workspace.plan,
+    used: workspace.used,
+    reserved: workspace.reserved,
     resetAt: entitlementResetAt(workspace.plan),
   };
 }

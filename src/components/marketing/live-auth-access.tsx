@@ -39,7 +39,7 @@ export function LiveAuthAccess({
               Keep the thinking, not just the post.
             </h2>
             <p className="mt-5 max-w-md leading-7 text-muted">
-              Your organization, membership, and plan follow your account. Creator drafts remain on this device while cloud content sync is being enabled.
+              Your organization, membership, and plan follow your account. Creator drafts and Idea Board directions sync with your workspace. Thinking Room reasoning and source links are stored as dedicated collaboration records.
             </p>
             <ul className="mt-8 space-y-3 text-sm font-semibold">
               <li>Verified organization and owner access</li>

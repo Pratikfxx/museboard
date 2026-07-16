@@ -26,9 +26,19 @@ function livePayload() {
     creator,
   }, {
     userId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
-    email: "maya@example.com",
-    displayName: "Maya Chen",
+    memberships: [{
+      id: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+      email: "maya@example.com",
+      displayNameSnapshot: "Maya Chen",
+      role: "owner",
+      status: "active",
+      invitedAt: "2026-07-01T00:00:00.000Z",
+      joinedAt: "2026-07-01T00:00:00.000Z",
+    }],
+    currentActorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
     plan: "creator",
+    used: {},
+    reserved: {},
     resetAt: "2026-08-01T00:00:00.000Z",
   });
 }
@@ -112,5 +122,15 @@ describe("live workspace hydration and sync", () => {
     act(() => useMuseboardStore.getState().dismissOpportunity("opportunity-desk"));
     await new Promise((resolve) => setTimeout(resolve, 750));
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops autosaving and offers a copy when workspace permission is revoked", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "permission revoked" }), { status: 403 }),
+    );
+    render(<LiveWorkspaceProvider initialSnapshot={{ payload: livePayload(), revision: 2 }} organizationId={organizationId}><WorkspaceConsumer /></LiveWorkspaceProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Save opportunity" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/access was revoked/i);
+    expect(screen.getByRole("button", { name: "Copy draft" })).toBeVisible();
   });
 });

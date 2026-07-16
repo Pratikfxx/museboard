@@ -8,7 +8,7 @@ import {
 } from "@/lib/workspace/snapshot";
 
 describe("durable live workspace snapshots", () => {
-  it("replaces browser-controlled identity and entitlement state with server truth", () => {
+  it("preserves authoritative server memberships, current actor role, and usage", () => {
     const sample = createDemoState();
     sample.entitlementUsage.plan = "studio";
     sample.memberships = [];
@@ -21,27 +21,42 @@ describe("durable live workspace snapshots", () => {
 
     const result = normalizeLiveWorkspacePayload(sample, {
       userId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
-      email: "maya@example.com",
-      displayName: "Maya Chen",
+      memberships: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          email: "owner@example.com",
+          displayNameSnapshot: "Workspace Owner",
+          role: "owner",
+          status: "active",
+          invitedAt: "2026-06-01T00:00:00.000Z",
+          joinedAt: "2026-06-01T00:00:00.000Z",
+        },
+        {
+          id: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+          email: "maya@example.com",
+          displayNameSnapshot: "Maya Chen",
+          role: "editor",
+          status: "active",
+          invitedAt: "2026-07-01T00:00:00.000Z",
+          joinedAt: "2026-07-02T00:00:00.000Z",
+        },
+      ],
+      currentActorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
       plan: "creator",
+      used: { strategist_pack: 7 },
+      reserved: { strategist_pack: 2 },
       resetAt: "2026-08-01T00:00:00.000Z",
     });
 
     expect(result.dataMode).toBe("live");
     expect(result.entitlementUsage.plan).toBe("creator");
-    expect(result.entitlementUsage.used).toEqual({});
-    expect(result.memberships).toEqual([
-      expect.objectContaining({
-        id: "member-8fef70b0-c52b-4312-b6e7-8fac5ed73510",
-        email: "maya@example.com",
-        displayNameSnapshot: "Maya Chen",
-        role: "owner",
-        status: "active",
-      }),
-    ]);
-    expect(result.currentActorMembershipId).toBe(
-      "member-8fef70b0-c52b-4312-b6e7-8fac5ed73510",
-    );
+    expect(result.entitlementUsage.used).toEqual({ strategist_pack: 7 });
+    expect(result.entitlementUsage.reserved).toEqual({ strategist_pack: 2 });
+    expect(result.memberships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "11111111-1111-4111-8111-111111111111", role: "owner" }),
+      expect.objectContaining({ id: "8fef70b0-c52b-4312-b6e7-8fac5ed73510", role: "editor" }),
+    ]));
+    expect(result.currentActorMembershipId).toBe("8fef70b0-c52b-4312-b6e7-8fac5ed73510");
     expect(result.plannerUndo).toBeUndefined();
     expect(result.recoveryNotice).toBeUndefined();
   });

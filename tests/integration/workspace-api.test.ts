@@ -26,6 +26,18 @@ const owner = {
   role: "owner",
   displayName: "Maya Chen",
   plan: "creator",
+  memberships: [{
+    id: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+    email: "maya@example.com",
+    displayNameSnapshot: "Maya Chen",
+    role: "owner",
+    status: "active",
+    invitedAt: "2026-07-01T00:00:00.000Z",
+    joinedAt: "2026-07-01T00:00:00.000Z",
+  }],
+  currentActorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+  used: { strategist_pack: 3 },
+  reserved: { strategist_pack: 1 },
 };
 
 function request(method: "GET" | "PUT", body?: unknown) {

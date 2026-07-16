@@ -12,9 +12,19 @@ import {
 
 const authority = {
   userId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
-  email: "maya@example.com",
-  displayName: "Maya Chen",
+  memberships: [{
+    id: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
+    email: "maya@example.com",
+    displayNameSnapshot: "Maya Chen",
+    role: "owner" as const,
+    status: "active" as const,
+    invitedAt: "2026-07-01T00:00:00.000Z",
+    joinedAt: "2026-07-01T00:00:00.000Z",
+  }],
+  currentActorMembershipId: "8fef70b0-c52b-4312-b6e7-8fac5ed73510",
   plan: "pro" as const,
+  used: {},
+  reserved: {},
   resetAt: "2026-08-01T00:00:00.000Z",
 };
 

@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   addThinkingContribution,
+  createContributionLink,
+  appendSynthesisRevision,
   createSynthesisRevision,
   createThinkingRoom,
+  resolveContributionLink,
   roomCanConvert,
+  thinkingRoomContentOriginSchema,
   thinkingLensSchema,
   thinkingRoomStateSchema,
   toggleContributionReaction,
@@ -36,6 +40,7 @@ const chosenDirection = {
   angle: "Show how constraints can create a recognizable series.",
   keyChallenge: "The advice can sound too rigid.",
   evidenceReferenceIds: ["source-1"],
+  evidenceContributionIds: ["contribution-1"],
   basis: "evidence" as const,
 };
 
@@ -208,6 +213,97 @@ describe("toggleContributionReaction", () => {
     expect(removed).toEqual([]);
     expect(retriedRemove).toEqual([]);
     expect(added).toHaveLength(1);
+  });
+});
+
+describe("ContributionLink", () => {
+  it("records a durable attributed relationship between two contributions", () => {
+    const link = createContributionLink({
+      roomId: "room-1",
+      fromContributionId: "contribution-1",
+      toContributionId: "contribution-2",
+      relationship: "challenges",
+      createdByMembershipId: "member-2",
+    }, { id: "link-1", at: CREATED_AT });
+
+    expect(link).toEqual({
+      id: "link-1",
+      roomId: "room-1",
+      fromContributionId: "contribution-1",
+      toContributionId: "contribution-2",
+      relationship: "challenges",
+      createdByMembershipId: "member-2",
+      resolutionStatus: "open",
+      createdAt: CREATED_AT,
+    });
+  });
+
+  it("requires a durable note and resolver attribution when resolving a challenge", () => {
+    const link = createContributionLink({
+      roomId: "room-1",
+      fromContributionId: "contribution-1",
+      toContributionId: "contribution-2",
+      relationship: "challenges",
+      createdByMembershipId: "member-2",
+    }, { id: "link-1", at: CREATED_AT });
+
+    expect(() => resolveContributionLink(link, {
+      resolutionNote: "   ",
+      resolvedByMembershipId: "member-1",
+    }, { at: UPDATED_AT })).toThrow();
+
+    expect(resolveContributionLink(link, {
+      resolutionNote: "The evidence now covers the disputed assumption.",
+      resolvedByMembershipId: "member-1",
+    }, { at: UPDATED_AT })).toEqual({
+      ...link,
+      resolutionStatus: "resolved",
+      resolutionNote: "The evidence now covers the disputed assumption.",
+      resolvedByMembershipId: "member-1",
+      resolvedAt: UPDATED_AT,
+    });
+  });
+});
+
+describe("Thinking Room integrity", () => {
+  it("requires every Evidence note to identify its source", () => {
+    expect(() => addThinkingContribution({
+      roomId: "room-1",
+      lens: "evidence",
+      body: "Three replies repeated the same phrase.",
+      authorMembershipId: "member-1",
+      authorDisplayNameSnapshot: "Maya Chen",
+    }, { id: "evidence-1", at: CREATED_AT })).toThrow(/source/i);
+  });
+
+  it("atomically supersedes an earlier accepted synthesis when a later one is accepted", () => {
+    const synthesisInput = {
+      roomId: "room-1",
+      belief: "An accepted belief.",
+      unknowns: [],
+      confidence: "medium" as const,
+      chosenDirection,
+      openChallengeIds: [],
+      sourceContributionIds: ["contribution-1"],
+      createdByMembershipId: "member-1",
+    };
+    const accepted = createSynthesisRevision([], {
+      ...synthesisInput,
+      status: "accepted",
+      acceptedByMembershipId: "member-1",
+    }, { id: "synthesis-accepted-1", at: CREATED_AT });
+    const next = appendSynthesisRevision([accepted], {
+      ...synthesisInput,
+      belief: "A later accepted belief.",
+      status: "accepted",
+      acceptedByMembershipId: "member-1",
+      baseRevisionId: accepted.id,
+    }, { id: "synthesis-accepted-2", at: UPDATED_AT });
+
+    expect(next).toEqual([
+      expect.objectContaining({ id: accepted.id, status: "superseded", acceptedAt: undefined, acceptedByMembershipId: undefined }),
+      expect.objectContaining({ id: "synthesis-accepted-2", status: "accepted" }),
+    ]);
   });
 });
 
@@ -384,5 +480,68 @@ describe("roomCanConvert", () => {
         },
       ]),
     ).toBe(false);
+  });
+
+  it("requires an included evidence contribution even when a source reference is present", () => {
+    const room = {
+      ...createRoom(),
+      status: "decided" as const,
+    };
+    const accepted = createSynthesisRevision([], {
+      roomId: room.id,
+      belief: "The recurring audience question is strong enough to lead the series.",
+      unknowns: [],
+      confidence: "high",
+      chosenDirection: {
+        ...chosenDirection,
+        evidenceContributionIds: [],
+      },
+      openChallengeIds: [],
+      sourceContributionIds: ["contribution-1"],
+      createdByMembershipId: "member-1",
+      status: "accepted",
+      acceptedByMembershipId: "member-1",
+    }, { id: "synthesis-evidence", at: UPDATED_AT });
+
+    expect(roomCanConvert(room, [accepted])).toBe(false);
+    expect(roomCanConvert(room, [{
+      ...accepted,
+      chosenDirection: {
+        ...accepted.chosenDirection,
+        evidenceReferenceIds: ["source-only"],
+      },
+    }])).toBe(false);
+    expect(roomCanConvert(room, [{
+      ...accepted,
+      chosenDirection: {
+        ...accepted.chosenDirection,
+        evidenceContributionIds: ["contribution-1"],
+      },
+    }])).toBe(true);
+    expect(roomCanConvert(room, [{
+      ...accepted,
+      chosenDirection: {
+        ...accepted.chosenDirection,
+        basis: "creator_experience",
+      },
+    }])).toBe(true);
+  });
+});
+
+describe("Thinking Room content origin", () => {
+  it("normalizes the immutable conversion identity per accepted synthesis", () => {
+    expect(thinkingRoomContentOriginSchema.parse({
+      roomId: "room-1",
+      synthesisRevisionId: "synthesis-1",
+      ideaId: "idea-1",
+      createdByMembershipId: "member-1",
+      createdAt: UPDATED_AT,
+    })).toEqual({
+      roomId: "room-1",
+      synthesisRevisionId: "synthesis-1",
+      ideaId: "idea-1",
+      createdByMembershipId: "member-1",
+      createdAt: UPDATED_AT,
+    });
   });
 });

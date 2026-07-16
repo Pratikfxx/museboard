@@ -24,6 +24,12 @@ export const CONTRIBUTION_REACTION_KINDS = [
   "needs_evidence",
   "promising",
 ] as const;
+export const CONTRIBUTION_LINK_RELATIONSHIPS = [
+  "supports",
+  "challenges",
+  "extends",
+  "combines",
+] as const;
 export const SYNTHESIS_CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
 export const SYNTHESIS_REVISION_STATUSES = [
   "draft",
@@ -36,6 +42,9 @@ export const thinkingRoomStateSchema = z.enum(THINKING_ROOM_STATES);
 export const thinkingLensSchema = z.enum(THINKING_LENSES);
 export const thinkingRoomRoleSchema = z.enum(THINKING_ROOM_ROLES);
 export const contributionReactionKindSchema = z.enum(CONTRIBUTION_REACTION_KINDS);
+export const contributionLinkRelationshipSchema = z.enum(
+  CONTRIBUTION_LINK_RELATIONSHIPS,
+);
 
 export type ThinkingRoomState = z.infer<typeof thinkingRoomStateSchema>;
 export type ThinkingLens = z.infer<typeof thinkingLensSchema>;
@@ -53,6 +62,18 @@ export const thinkingRoomOriginSchema = z.object({
 });
 
 export type ThinkingRoomOrigin = z.infer<typeof thinkingRoomOriginSchema>;
+
+export const thinkingRoomContentOriginSchema = z.object({
+  roomId: identifier,
+  synthesisRevisionId: identifier,
+  ideaId: identifier,
+  createdByMembershipId: identifier,
+  createdAt: z.iso.datetime(),
+});
+
+export type ThinkingRoomContentOrigin = z.infer<
+  typeof thinkingRoomContentOriginSchema
+>;
 
 export const thinkingRoomSchema = z.object({
   id: identifier,
@@ -87,6 +108,14 @@ export const thinkingContributionSchema = z.object({
   updatedAt: z.iso.datetime(),
   deletedAt: z.iso.datetime().optional(),
   revision: z.number().int().positive(),
+}).superRefine((contribution, context) => {
+  if (contribution.lens === "evidence" && !contribution.sourceReferenceId) {
+    context.addIssue({
+      code: "custom",
+      message: "Evidence contributions require a source reference",
+      path: ["sourceReferenceId"],
+    });
+  }
 });
 
 export type ThinkingContribution = z.infer<typeof thinkingContributionSchema>;
@@ -102,12 +131,82 @@ export const contributionReactionSchema = z.object({
 
 export type ContributionReaction = z.infer<typeof contributionReactionSchema>;
 
+export const contributionLinkSchema = z
+  .object({
+    id: identifier,
+    roomId: identifier,
+    fromContributionId: identifier,
+    toContributionId: identifier,
+    relationship: contributionLinkRelationshipSchema,
+    createdByMembershipId: identifier,
+    resolutionStatus: z.enum(["open", "resolved"]),
+    resolutionNote: requiredText.optional(),
+    resolvedByMembershipId: identifier.optional(),
+    createdAt: z.iso.datetime(),
+    resolvedAt: z.iso.datetime().optional(),
+  })
+  .superRefine((link, context) => {
+    const resolutionFields = [
+      link.resolutionNote,
+      link.resolvedByMembershipId,
+      link.resolvedAt,
+    ];
+    if (
+      (link.resolutionStatus === "resolved" && resolutionFields.some((value) => !value)) ||
+      (link.resolutionStatus === "open" && resolutionFields.some(Boolean))
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Resolved contribution links require immutable resolution attribution",
+        path: ["resolutionStatus"],
+      });
+    }
+  });
+
+export type ContributionLink = z.infer<typeof contributionLinkSchema>;
+
+export interface CreateContributionLinkInput {
+  roomId: string;
+  fromContributionId: string;
+  toContributionId: string;
+  relationship: ContributionLink["relationship"];
+  createdByMembershipId: string;
+}
+
+export function createContributionLink(
+  input: CreateContributionLinkInput,
+  injected: DeterministicEntityInput,
+): ContributionLink {
+  return contributionLinkSchema.parse({
+    ...input,
+    id: injected.id,
+    resolutionStatus: "open",
+    createdAt: injected.at,
+  });
+}
+
+export function resolveContributionLink(
+  link: ContributionLink,
+  input: { resolutionNote: string; resolvedByMembershipId: string },
+  injected: { at: string },
+): ContributionLink {
+  if (link.resolutionStatus === "resolved") return link;
+  return contributionLinkSchema.parse({
+    ...link,
+    resolutionStatus: "resolved",
+    resolutionNote: input.resolutionNote,
+    resolvedByMembershipId: input.resolvedByMembershipId,
+    resolvedAt: injected.at,
+  });
+}
+
 export const chosenContentDirectionSchema = z.object({
   title: requiredText,
   audienceTension: requiredText,
   angle: requiredText,
   keyChallenge: requiredText.optional(),
   evidenceReferenceIds: z.array(identifier),
+  evidenceContributionIds: z.array(identifier).optional(),
   basis: z.enum(["evidence", "creator_experience", "opinion"]),
 });
 
@@ -295,6 +394,25 @@ export function createSynthesisRevision(
   });
 }
 
+export function appendSynthesisRevision(
+  revisions: readonly ThinkingSynthesisRevision[],
+  input: CreateSynthesisRevisionInput,
+  injected: DeterministicEntityInput,
+): ThinkingSynthesisRevision[] {
+  const revision = createSynthesisRevision(revisions, input, injected);
+  const prior = revision.status === "accepted"
+    ? revisions.map((candidate) => candidate.roomId === revision.roomId && candidate.status === "accepted"
+      ? thinkingSynthesisRevisionSchema.parse({
+          ...candidate,
+          status: "superseded",
+          acceptedAt: undefined,
+          acceptedByMembershipId: undefined,
+        })
+      : candidate)
+    : [...revisions];
+  return [...prior, revision];
+}
+
 const ALLOWED_STATE_TRANSITIONS: Readonly<
   Record<ThinkingRoomState, readonly ThinkingRoomState[]>
 > = {
@@ -305,6 +423,13 @@ const ALLOWED_STATE_TRANSITIONS: Readonly<
   archived: [],
 };
 
+export function isThinkingRoomStateTransitionAllowed(
+  from: ThinkingRoomState,
+  to: ThinkingRoomState,
+): boolean {
+  return from === to || ALLOWED_STATE_TRANSITIONS[from].includes(to);
+}
+
 export function updateThinkingRoomState(
   room: ThinkingRoom,
   status: ThinkingRoomState,
@@ -314,7 +439,7 @@ export function updateThinkingRoomState(
   if (room.revision !== injected.expectedRevision) {
     throw new Error("Thinking Room revision is stale");
   }
-  if (!ALLOWED_STATE_TRANSITIONS[room.status].includes(status)) {
+  if (!isThinkingRoomStateTransitionAllowed(room.status, status)) {
     throw new Error(`Cannot move a Thinking Room from ${room.status} to ${status}`);
   }
 
@@ -349,6 +474,9 @@ export function roomCanConvert(
   return (
     direction.audienceTension.length > 0 &&
     direction.angle.length > 0 &&
-    (direction.evidenceReferenceIds.length > 0 || direction.basis !== "evidence")
+    (
+      (direction.evidenceContributionIds?.length ?? 0) > 0 ||
+      direction.basis !== "evidence"
+    )
   );
 }

@@ -29,14 +29,34 @@ async function authenticatedContext() {
 function creationAttributionMatches(
   aggregate: ThinkingRoomAggregate,
   userId: string,
+  displayName: string,
+  role: "owner" | "editor",
 ): boolean {
   return aggregate.room.facilitatorMembershipId === userId &&
-    aggregate.contributions.every(({ authorMembershipId }) => authorMembershipId === userId) &&
+    (!aggregate.room.decisionOwnerMembershipId || role === "owner") &&
+    aggregate.contributions.every(({ authorMembershipId, authorDisplayNameSnapshot }) =>
+      authorMembershipId === userId && authorDisplayNameSnapshot === displayName) &&
     aggregate.reactions.every(({ membershipId }) => membershipId === userId) &&
+    aggregate.links.every(({
+      createdByMembershipId,
+      resolutionStatus,
+      resolutionNote,
+      resolvedByMembershipId,
+      resolvedAt,
+    }) =>
+      createdByMembershipId === userId &&
+      resolutionStatus === "open" &&
+      !resolutionNote &&
+      !resolvedByMembershipId &&
+      !resolvedAt) &&
     aggregate.synthesisRevisions.every(
-      ({ createdByMembershipId, acceptedByMembershipId }) =>
+      ({ createdByMembershipId, acceptedByMembershipId, status }) =>
         createdByMembershipId === userId &&
-        (!acceptedByMembershipId || acceptedByMembershipId === userId),
+        (!acceptedByMembershipId || (
+          acceptedByMembershipId === userId &&
+          status === "accepted" &&
+          aggregate.room.decisionOwnerMembershipId === userId
+        )),
     );
 }
 
@@ -72,7 +92,12 @@ export async function POST(request: Request) {
     const aggregate = parseThinkingRoomAggregate(body.aggregate);
     if (
       aggregate.room.organizationId !== context.workspace.organizationId ||
-      !creationAttributionMatches(aggregate, context.workspace.userId)
+      !creationAttributionMatches(
+        aggregate,
+        context.workspace.userId,
+        context.workspace.displayName,
+        context.workspace.role,
+      )
     ) {
       return NextResponse.json({ error: "You cannot create this Thinking Room" }, { status: 403 });
     }

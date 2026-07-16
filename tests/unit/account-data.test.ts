@@ -6,6 +6,7 @@ import {
   createSampleWorkspaceExport,
 } from "@/lib/account/sample-workspace";
 import { createDemoState } from "@/lib/demo/fixtures";
+import { createSampleThinkingRoomData } from "@/lib/demo/fixtures";
 
 describe("sample workspace account controls", () => {
   it("exports an inspectable data-only snapshot with an explicit local notice", () => {
@@ -14,10 +15,8 @@ describe("sample workspace account controls", () => {
       resetDemo: () => undefined,
     };
 
-    const exported = createSampleWorkspaceExport(
-      state,
-      "2026-07-13T14:00:00.000Z",
-    );
+    const thinkingRooms = createSampleThinkingRoomData(state.memberships);
+    const exported = createSampleWorkspaceExport(state, thinkingRooms, "2026-07-13T14:00:00.000Z");
     const serialized = JSON.stringify(exported);
 
     expect(exported).toMatchObject({
@@ -29,6 +28,11 @@ describe("sample workspace account controls", () => {
         dataMode: "sample",
         content: expect.any(Array),
         plannerTasks: expect.any(Array),
+      },
+      thinkingRooms: {
+        rooms: expect.any(Array),
+        contributions: expect.any(Array),
+        links: expect.any(Array),
       },
     });
     expect(serialized).not.toContain("resetDemo");

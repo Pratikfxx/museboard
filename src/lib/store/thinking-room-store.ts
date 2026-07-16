@@ -11,15 +11,19 @@ import {
 import type { Membership } from "@/domain/collaboration";
 import {
   addThinkingContribution,
+  appendSynthesisRevision,
+  contributionLinkSchema,
   contributionReactionSchema,
-  createSynthesisRevision,
+  createContributionLink,
   createThinkingRoom,
+  resolveContributionLink,
   thinkingContributionSchema,
   thinkingRoomSchema,
   thinkingSynthesisRevisionSchema,
   toggleContributionReaction,
   updateThinkingRoomState,
   type AddThinkingContributionInput,
+  type CreateContributionLinkInput,
   type CreateSynthesisRevisionInput,
   type CreateThinkingRoomInput,
   type ThinkingRoomState,
@@ -70,6 +74,7 @@ export type ThinkingRoomSyncState = SampleThinkingRoomData["syncState"];
 
 interface ThinkingRoomActions {
   resetSample: (memberships: readonly Membership[]) => void;
+  clearSample: () => void;
   selectRoom: (roomId?: string) => boolean;
   createRoom: (input: CreateThinkingRoomInput, at?: string) => string | undefined;
   updateRoomStatus: (
@@ -81,6 +86,8 @@ interface ThinkingRoomActions {
     input: AddThinkingContributionInput,
     at?: string,
   ) => string | undefined;
+  createLink: (input: CreateContributionLinkInput, at?: string) => string | undefined;
+  resolveLink: (linkId: string, resolutionNote: string, resolvedByMembershipId: string, at?: string) => boolean;
   updateContribution: (
     contributionId: string,
     body: string,
@@ -105,6 +112,7 @@ const thinkingRoomDataSchema: z.ZodType<SampleThinkingRoomData> = z.object({
   rooms: z.array(thinkingRoomSchema),
   contributions: z.array(thinkingContributionSchema),
   reactions: z.array(contributionReactionSchema),
+  links: z.array(contributionLinkSchema).default([]),
   synthesisRevisions: z.array(thinkingSynthesisRevisionSchema),
   selectedRoomId: z.string().min(1).optional(),
   syncState: z.enum(["idle", "syncing", "offline", "error"]),
@@ -133,6 +141,7 @@ function dataFromState(state: ThinkingRoomStoreState): SampleThinkingRoomData {
     rooms: state.rooms,
     contributions: state.contributions,
     reactions: state.reactions,
+    links: state.links,
     synthesisRevisions: state.synthesisRevisions,
     selectedRoomId: state.selectedRoomId,
     syncState: state.syncState,
@@ -145,6 +154,16 @@ export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
       ...sampleData(createDemoState().memberships),
 
       resetSample: (memberships) => set(sampleData(memberships)),
+
+      clearSample: () => set({
+        rooms: [],
+        contributions: [],
+        reactions: [],
+        links: [],
+        synthesisRevisions: [],
+        selectedRoomId: undefined,
+        syncState: "idle",
+      }),
 
       selectRoom: (roomId) => {
         if (roomId && !get().rooms.some(({ id }) => id === roomId)) return false;
@@ -181,7 +200,8 @@ export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
 
       addContribution: (input, at = now()) => {
         const state = get();
-        if (!state.rooms.some(({ id }) => id === input.roomId)) return undefined;
+        const room = state.rooms.find(({ id }) => id === input.roomId);
+        if (!room || !["exploring", "synthesizing"].includes(room.status)) return undefined;
         const id = nextId(
           "thinking-contribution",
           state.contributions.map(({ id: contributionId }) => contributionId),
@@ -193,12 +213,45 @@ export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
         return contribution.id;
       },
 
+      createLink: (input, at = now()) => {
+        const state = get();
+        const room = state.rooms.find(({ id }) => id === input.roomId);
+        if (!room || !["exploring", "synthesizing"].includes(room.status)) return undefined;
+        const roomContributions = state.contributions.filter(({ roomId, deletedAt }) =>
+          roomId === input.roomId && !deletedAt,
+        );
+        if (
+          !roomContributions.some(({ id }) => id === input.fromContributionId) ||
+          !roomContributions.some(({ id }) => id === input.toContributionId)
+        ) return undefined;
+        const id = nextId("thinking-link", state.links.map(({ id: linkId }) => linkId));
+        const link = createContributionLink(input, { id, at });
+        set((current) => ({ links: [...current.links, link] }));
+        return id;
+      },
+
+      resolveLink: (linkId, resolutionNote, resolvedByMembershipId, at = now()) => {
+        const state = get();
+        const link = state.links.find(({ id }) => id === linkId);
+        const room = link ? state.rooms.find(({ id }) => id === link.roomId) : undefined;
+        if (!link || !room || room.status !== "synthesizing" || link.resolutionStatus === "resolved" || !resolutionNote.trim()) return false;
+        const resolved = resolveContributionLink(link, {
+          resolutionNote,
+          resolvedByMembershipId,
+        }, { at });
+        set((current) => ({
+          links: current.links.map((candidate) => candidate.id === linkId ? resolved : candidate),
+        }));
+        return true;
+      },
+
       updateContribution: (contributionId, body, at = now()) => {
         const state = get();
         const contribution = state.contributions.find(
           ({ id }) => id === contributionId,
         );
-        if (!contribution || contribution.deletedAt) return false;
+        const room = contribution ? state.rooms.find(({ id }) => id === contribution.roomId) : undefined;
+        if (!contribution || !room || !["exploring", "synthesizing"].includes(room.status) || contribution.deletedAt) return false;
         const updated = thinkingContributionSchema.parse({
           ...contribution,
           body,
@@ -218,7 +271,8 @@ export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
         const contribution = state.contributions.find(
           ({ id }) => id === contributionId,
         );
-        if (!contribution || contribution.deletedAt) return false;
+        const room = contribution ? state.rooms.find(({ id }) => id === contribution.roomId) : undefined;
+        if (!contribution || !room || !["exploring", "synthesizing"].includes(room.status) || contribution.deletedAt) return false;
         const deleted = thinkingContributionSchema.parse({
           ...contribution,
           deletedAt: at,
@@ -243,6 +297,7 @@ export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
         );
         if (
           !contribution ||
+          !state.rooms.some(({ id, status }) => id === input.roomId && ["exploring", "synthesizing"].includes(status)) ||
           contribution.deletedAt ||
           contribution.roomId !== input.roomId
         ) {
@@ -262,20 +317,20 @@ export const useThinkingRoomStore = create<ThinkingRoomStoreState>()(
 
       addSynthesisRevision: (input, at = now()) => {
         const state = get();
-        if (!state.rooms.some(({ id }) => id === input.roomId)) return undefined;
+        if (!state.rooms.some(({ id, status }) => id === input.roomId && status === "synthesizing")) return undefined;
         const id = nextId(
           "thinking-synthesis",
           state.synthesisRevisions.map(({ id: revisionId }) => revisionId),
         );
-        const revision = createSynthesisRevision(
+        const revisions = appendSynthesisRevision(
           state.synthesisRevisions,
           input,
           { id, at },
         );
-        set((current) => ({
-          synthesisRevisions: [...current.synthesisRevisions, revision],
-        }));
-        return revision.id;
+        set({
+          synthesisRevisions: revisions,
+        });
+        return id;
       },
 
       markRoomConverted: (roomId, at = now()) => {

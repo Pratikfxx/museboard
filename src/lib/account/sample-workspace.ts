@@ -1,4 +1,4 @@
-import type { DemoMuseboardData } from "@/lib/demo/fixtures";
+import type { DemoMuseboardData, SampleThinkingRoomData } from "@/lib/demo/fixtures";
 import { EMPTY_CREATOR_MEMORY } from "@/domain/creator-intelligence";
 
 export const SAMPLE_WORKSPACE_DELETE_PHRASE = "DELETE SAMPLE WORKSPACE";
@@ -45,6 +45,7 @@ function workspaceData(state: WorkspaceLike): DemoMuseboardData {
 
 export function createSampleWorkspaceExport(
   state: WorkspaceLike,
+  thinkingRooms: SampleThinkingRoomData,
   exportedAt = new Date().toISOString(),
 ) {
   return {
@@ -54,6 +55,7 @@ export function createSampleWorkspaceExport(
     notice:
       "This is a local sample workspace export from this device. It is not a cloud account export.",
     workspace: workspaceData(state),
+    thinkingRooms,
   };
 }
 

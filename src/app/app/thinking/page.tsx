@@ -15,6 +15,7 @@ export default async function ThinkingPage() {
         userId: workspace.userId,
         displayName: workspace.displayName,
         canCreate: workspace.role !== "viewer",
+        canAssignDecisionOwner: workspace.role === "owner",
       } : undefined}
       mode="live"
     />

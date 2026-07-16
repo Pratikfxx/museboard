@@ -4,6 +4,10 @@ import { z } from "zod";
 import { getAuthenticatedWorkspace } from "@/lib/auth/workspace";
 import { createClient } from "@/lib/supabase/server";
 import {
+  assertAuthorizedThinkingRoomMutation,
+  ThinkingRoomAuthorizationError,
+} from "@/lib/thinking-rooms/authorization";
+import {
   createSupabaseThinkingRoomRepository,
   parseThinkingRoomAggregate,
   ThinkingRoomRevisionConflictError,
@@ -81,6 +85,28 @@ export async function PUT(request: Request, routeContext: RoomRouteContext) {
     ) {
       return NextResponse.json({ error: "You cannot edit this Thinking Room" }, { status: 403 });
     }
+    const current = await context.repository.load(
+      context.workspace.organizationId,
+      roomId,
+    );
+    if (!current) {
+      return NextResponse.json({ error: "Thinking Room was not found" }, { status: 404 });
+    }
+    if (body.expectedRevision !== current.room.revision) {
+      return NextResponse.json(
+        { code: "revision_conflict", error: "This Thinking Room changed elsewhere. Reload before saving again." },
+        { status: 409 },
+      );
+    }
+    assertAuthorizedThinkingRoomMutation({
+      current,
+      next: aggregate,
+      actor: {
+        userId: context.workspace.userId,
+        role: context.workspace.role,
+        displayName: context.workspace.displayName,
+      },
+    });
     const saved = await context.repository.save({
       expectedRevision: body.expectedRevision,
       aggregate,
@@ -94,6 +120,9 @@ export async function PUT(request: Request, routeContext: RoomRouteContext) {
         { code: "revision_conflict", error: error.message },
         { status: 409 },
       );
+    }
+    if (error instanceof ThinkingRoomAuthorizationError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
     if (error instanceof z.ZodError || error instanceof ThinkingRoomValidationError) {
       return NextResponse.json({ error: "Thinking Room data is invalid" }, { status: 400 });

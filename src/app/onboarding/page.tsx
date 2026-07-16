@@ -30,9 +30,11 @@ export default async function OnboardingPage() {
     workspace.organizationId,
     {
       userId: workspace.userId,
-      email: workspace.email,
-      displayName: workspace.displayName,
+      memberships: workspace.memberships,
+      currentActorMembershipId: workspace.currentActorMembershipId,
       plan: workspace.plan,
+      used: workspace.used,
+      reserved: workspace.reserved,
       resetAt: entitlementResetAt(workspace.plan),
     },
   );

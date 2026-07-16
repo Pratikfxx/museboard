@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { Plan } from "@/domain/entitlements";
 import type { DataMode } from "@/domain/schema";
 import type { DemoMuseboardData } from "@/lib/demo/fixtures";
+import type { Membership } from "@/domain/collaboration";
+import type { Entitlement } from "@/domain/entitlements";
 import { validatePersistedMuseboardData } from "@/lib/store/museboard-store";
 
 export const workspaceSnapshotSaveSchema = z.object({
@@ -13,11 +15,12 @@ export const workspaceSnapshotSaveSchema = z.object({
 
 export interface LiveWorkspaceAuthority {
   userId: string;
-  email?: string;
-  displayName: string;
+  memberships: Membership[];
+  currentActorMembershipId: string;
   plan: Plan;
+  used: Partial<Record<Entitlement, number>>;
+  reserved: Partial<Record<Entitlement, number>>;
   resetAt: string;
-  memberSince?: string;
 }
 
 export function normalizeLiveWorkspacePayload(
@@ -28,30 +31,24 @@ export function normalizeLiveWorkspacePayload(
   if (!parsed.success) {
     throw new Error("The durable workspace payload is invalid");
   }
-  const ownerId = `member-${authority.userId}`;
-  const memberSince = authority.memberSince ?? authority.resetAt;
+  if (
+    authority.currentActorMembershipId !== authority.userId ||
+    !authority.memberships.some(({ id, status }) => id === authority.userId && status === "active")
+  ) {
+    throw new Error("The authenticated workspace actor is not an active authoritative member");
+  }
 
   return {
     ...parsed.data,
     dataMode: "live",
     plannerUndo: undefined,
     recoveryNotice: undefined,
-    memberships: [
-      {
-        id: ownerId,
-        email: authority.email ?? "owner@museboard.invalid",
-        displayNameSnapshot: authority.displayName,
-        role: "owner",
-        status: "active",
-        invitedAt: memberSince,
-        joinedAt: memberSince,
-      },
-    ],
-    currentActorMembershipId: ownerId,
+    memberships: authority.memberships,
+    currentActorMembershipId: authority.currentActorMembershipId,
     entitlementUsage: {
       plan: authority.plan,
-      used: {},
-      reserved: {},
+      used: authority.used,
+      reserved: authority.reserved,
       resetAt: authority.resetAt,
     },
   };

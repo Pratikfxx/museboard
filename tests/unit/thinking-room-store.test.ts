@@ -216,6 +216,7 @@ describe("Thinking Room sample store", () => {
         roomId: roomId!,
         lens: "evidence",
         body: "Three comments repeat the same concern.",
+        sourceReferenceId: "https://example.com/comments",
         authorMembershipId: "member-sam",
         authorDisplayNameSnapshot: "Sam Rivera",
       },
@@ -248,6 +249,68 @@ describe("Thinking Room sample store", () => {
       ),
     ).toBe(true);
     expect(current.syncState).toBe("syncing");
+  });
+
+  it("persists contribution links and attributed challenge resolution", () => {
+    const state = useThinkingRoomStore.getState();
+    const roomId = state.createRoom({
+      organizationId: "org-sample",
+      workspaceId: "workspace-sample",
+      question: "Which objection changes the direction?",
+      templateId: "content-direction",
+      facilitatorMembershipId: "member-owner",
+    }, CREATED_AT)!;
+    const challengeId = state.addContribution({
+      roomId,
+      lens: "challenges",
+      body: "This could flatten the creator's voice.",
+      authorMembershipId: "member-owner",
+      authorDisplayNameSnapshot: "Maya Chen",
+    }, CREATED_AT)!;
+    const responseId = state.addContribution({
+      roomId,
+      lens: "possibilities",
+      body: "Vary the proof while retaining only one constraint.",
+      authorMembershipId: "member-owner",
+      authorDisplayNameSnapshot: "Maya Chen",
+    }, CREATED_AT)!;
+    const linkId = state.createLink({
+      roomId,
+      fromContributionId: responseId,
+      toContributionId: challengeId,
+      relationship: "challenges",
+      createdByMembershipId: "member-owner",
+    }, CREATED_AT)!;
+
+    expect(state.updateRoomStatus(roomId, "synthesizing", CREATED_AT)).toBe(true);
+    expect(state.resolveLink(linkId, "The proof now changes every week.", "member-owner", CREATED_AT)).toBe(true);
+    expect(useThinkingRoomStore.getState().links).toContainEqual(expect.objectContaining({
+      id: linkId,
+      resolutionStatus: "resolved",
+      resolutionNote: "The proof now changes every week.",
+      resolvedByMembershipId: "member-owner",
+      resolvedAt: CREATED_AT,
+    }));
+  });
+
+  it("rejects content mutations after decision until the room is reopened", () => {
+    const state = useThinkingRoomStore.getState();
+    const room = state.rooms[0];
+    expect(room.status).toBe("decided");
+    expect(state.addContribution({
+      roomId: room.id,
+      lens: "possibilities",
+      body: "This must not be appended to a decided room.",
+      authorMembershipId: "member-owner",
+      authorDisplayNameSnapshot: "Maya Chen",
+    }, CREATED_AT)).toBeUndefined();
+    expect(state.toggleReaction({
+      roomId: room.id,
+      contributionId: state.contributions[0].id,
+      membershipId: "member-owner",
+      kind: "agree",
+      active: true,
+    }, CREATED_AT)).toBe(false);
   });
 
   it("rehydrates an explicitly cleared room selection", async () => {

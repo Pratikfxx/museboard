@@ -192,5 +192,7 @@ describe("Thinking Room library", () => {
     expect(screen.getByRole("button", { name: "New Thinking Room" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    const createPayload = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(createPayload.aggregate.room).not.toHaveProperty("decisionOwnerMembershipId");
   });
 });

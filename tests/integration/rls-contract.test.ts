@@ -104,7 +104,9 @@ describe("production database boundary", () => {
       "thinking_rooms",
       "thinking_contributions",
       "thinking_contribution_reactions",
+      "thinking_contribution_links",
       "thinking_synthesis_revisions",
+      "thinking_room_content_origins",
     ]) {
       expect(thinkingRooms).toContain(`create table public.${table}`);
       expect(thinkingRooms).toContain(`alter table public.${table} enable row level security`);
@@ -114,7 +116,10 @@ describe("production database boundary", () => {
     }
     expect(thinkingRooms).toContain("thinking_contributions_room_org_fk");
     expect(thinkingRooms).toContain("thinking_reactions_contribution_room_org_fk");
+    expect(thinkingRooms).toContain("thinking_links_from_contribution_room_org_fk");
+    expect(thinkingRooms).toContain("thinking_links_to_contribution_room_org_fk");
     expect(thinkingRooms).toContain("thinking_synthesis_room_org_fk");
+    expect(thinkingRooms).toContain("thinking_content_origins_synthesis_room_org_fk");
     expect(thinkingRooms).not.toContain("workspace_snapshots");
   });
 
@@ -128,20 +133,17 @@ describe("production database boundary", () => {
     expect(thinkingRooms).not.toMatch(/member-[a-z0-9]/u);
   });
 
-  it("allows active members to read and only owners or editors to write room rows", () => {
+  it("allows active members to read while routing owner/editor writes through the guarded RPC", () => {
     expect(thinkingRooms).toContain("private.is_organization_member(organization_id)");
-    expect(thinkingRooms).toContain("private.is_organization_member(organization_id, array['owner', 'editor'])");
     expect(thinkingRooms).toContain("for select to authenticated");
-    expect(thinkingRooms).toContain("for insert to authenticated");
-    expect(thinkingRooms).toContain("for update to authenticated");
-    expect(thinkingRooms).toContain("for delete to authenticated");
-    expect(thinkingRooms).toContain("grant insert, update, delete on table public.thinking_rooms to authenticated");
+    expect(thinkingRooms).toContain("v_role not in ('owner', 'editor')");
+    expect(thinkingRooms).not.toContain("grant insert, update, delete on table public.thinking_rooms to authenticated");
   });
 
   it("exposes an authenticated room-scoped compare-and-swap save", () => {
     expect(thinkingRooms).toContain("create function public.save_thinking_room");
     expect(thinkingRooms).toContain("p_expected_revision bigint");
-    expect(thinkingRooms).toContain("security invoker");
+    expect(thinkingRooms).toContain("security definer");
     expect(thinkingRooms).toContain("revision = p_expected_revision");
     expect(thinkingRooms).toContain("thinking room revision conflict");
     expect(thinkingRooms).toContain("select auth.uid()");
@@ -149,9 +151,68 @@ describe("production database boundary", () => {
     expect(thinkingRooms).toContain("grant execute on function public.save_thinking_room");
   });
 
-  it("persists facilitator reassignment inside the room compare-and-swap", () => {
-    expect(thinkingRooms).toContain(
-      "facilitator_user_id = (p_room->>'facilitator_user_id')::uuid",
+  it("locks down aggregate writes and enforces immutable attribution inside the atomic save", () => {
+    expect(thinkingRooms).not.toContain(
+      "grant insert, update, delete on table public.thinking",
     );
+    expect(thinkingRooms).toContain("p_links jsonb");
+    expect(thinkingRooms).toContain("for update");
+    expect(thinkingRooms).toContain("only workspace owners may reassign thinking room owners");
+    expect(thinkingRooms).toContain("contribution attribution is immutable");
+    expect(thinkingRooms).toContain("v_author_display_name");
+    expect(thinkingRooms).toContain("user_record.email");
+    expect(thinkingRooms).toContain("profile.display_name");
+    expect(thinkingRooms).toContain("row.author_display_name_snapshot is distinct from v_author_display_name");
+    expect(thinkingRooms).toContain("only workspace owners may assign an initial decision owner");
+    expect(thinkingRooms).toContain("synthesis history is append-only");
+    expect(thinkingRooms).toContain("reaction attribution is immutable");
+    expect(thinkingRooms).toContain("contribution link history is append-only");
+    expect(thinkingRooms).toContain("only the assigned decision owner may accept synthesis");
+    expect(thinkingRooms).toContain("new contribution links must start open");
+    expect(thinkingRooms).toMatch(/link\.id is null[\s\S]+row\.resolution_status <> 'open'/u);
+    expect(thinkingRooms).toContain("v_existing_links");
+    expect(thinkingRooms).toContain("existing->>'resolved_at'");
+  });
+
+  it("enforces evidence provenance, one accepted synthesis, and legal lifecycle transitions in SQL", () => {
+    expect(thinkingRooms).toContain("constraint thinking_evidence_requires_source");
+    expect(thinkingRooms).toContain("create unique index one_accepted_synthesis_per_thinking_room");
+    expect(thinkingRooms).toContain("where status = 'accepted'");
+    expect(thinkingRooms).toContain("invalid thinking room lifecycle transition");
+    expect(thinkingRooms).toContain("reopen thinking room before mutation");
+    expect(thinkingRooms).toContain("synthesis.status = 'accepted'");
+    expect(thinkingRooms).toContain("row.status = 'superseded'");
+    expect(thinkingRooms).toContain("newer.status = 'accepted' and newer.number > synthesis.number");
+  });
+
+  it("gives active viewers a narrow own-reaction RPC without reasoning-table writes", () => {
+    expect(thinkingRooms).toContain("create function public.set_thinking_room_reaction");
+    expect(thinkingRooms).toContain("v_user_id uuid := (select auth.uid())");
+    expect(thinkingRooms).toContain("actor_user_id = v_user_id");
+    expect(thinkingRooms).toContain("status = 'active'");
+    expect(thinkingRooms).toContain("revision = revision + 1");
+    expect(thinkingRooms).toContain("grant execute on function public.set_thinking_room_reaction");
+  });
+
+  it("records immutable idempotent conversion per accepted synthesis", () => {
+    expect(thinkingRooms).toContain("create table public.thinking_room_content_origins");
+    expect(thinkingRooms).toContain("unique (organization_id, room_id, synthesis_revision_id)");
+    expect(thinkingRooms).toContain("create function public.convert_thinking_room");
+    expect(thinkingRooms).toContain("v_existing public.thinking_room_content_origins%rowtype");
+    expect(thinkingRooms).toContain("status = 'accepted'");
+    expect(thinkingRooms).toContain("decision_owner_user_id = synthesis.accepted_by_user_id");
+    expect(thinkingRooms).toContain("thinking room conversion revision conflict");
+    expect(thinkingRooms).toContain("insert into public.thinking_room_content_origins");
+    expect(thinkingRooms).toContain("created_by_user_id, created_at");
+    expect(thinkingRooms).toContain("values (p_organization_id, p_room_id, p_synthesis_revision_id, p_idea_id, v_user_id, now())");
+    expect(thinkingRooms).toContain("create function private.prevent_thinking_content_origin_mutation");
+    expect(thinkingRooms).toContain("before update or delete on public.thinking_room_content_origins");
+    expect(thinkingRooms).toContain("grant select, insert on table public.thinking_room_content_origins to service_role");
+    expect(thinkingRooms).not.toContain("grant all on table public.thinking_room_content_origins to service_role");
+    expect(thinkingRooms).toContain("jsonb_array_length(v_direction->'evidencecontributionids')");
+    expect(thinkingRooms).toContain("c.source_reference_id = evidence_reference.reference_id");
+    expect(thinkingRooms).toContain("c.id::text = any (v_evidence_contribution_ids)");
+    expect(thinkingRooms).toContain("grant execute on function public.convert_thinking_room");
+    expect(thinkingRooms).not.toContain("grant insert, update, delete on table public.thinking_room_content_origins");
   });
 });
