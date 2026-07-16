@@ -1,46 +1,41 @@
-# Task 7 report — creator team review
+# Task 7 report: Thinking Rooms browser, accessibility, and visual QA
 
 ## Delivered
 
-- Warm editorial `/app/team` workspace with responsive People, Review, and Inbox views.
-- Owner/editor/viewer roster plus pending, active, declined, revoked, expired, and soft-removed lifecycle support.
-- Exact seat enforcement for Free 1, Creator 1, Pro 2, and Studio 6, including the owner and pending invites.
-- Local invite drafting with explicit `delivery: not_sent`; no email-delivery claim.
-- Stage assignee/reviewer controls and recipient-scoped notifications with exact destinations.
-- Version- and stage-bound comments, mentions, resolve/reopen, and preserved author snapshots.
-- Append-only review request, approve, changes-requested, and stale history.
-- Shared workshop-save invalidation that appends a stale event and updates the current approval summary.
-- Historical notification links render the requested immutable version read-only with friendly context and a return-to-current link.
-- Ownership-transfer guard and soft removal without orphaning authored history.
-- Legacy persisted workspaces receive an isolated owner membership and empty collaboration collections; onboarding clears sample collaboration and starts on Free.
+- Added `tests/e2e/thinking-rooms.spec.ts` with the complete sample workflow:
+  - library room creation and keyboard navigation into the new room
+  - Evidence, Challenges, and Possibilities contributions
+  - mobile lens keyboard navigation
+  - suggested belief selection, edit, confidence, challenge resolution, and accepted decision
+  - Idea Board conversion, provenance, and backlink to the source room
+- Covered Chromium desktop at 1440x1000 and mobile Chrome at 390x844 in light and dark themes.
+- Asserted sticky desktop and inline mobile synthesis behavior, no horizontal overflow, hidden-until-focused skip navigation, and zero console/page errors.
+- Extended `tests/e2e/accessibility.spec.ts` with axe serious/critical gates for the Thinking Room library and seeded room route.
 
-## TDD evidence
+## Browser and visual QA
 
-- RED: `pnpm vitest run tests/integration/collaboration.test.tsx` failed because `@/components/collaboration/team-workspace` did not exist.
-- GREEN: `tests/integration/collaboration.test.tsx` — 3/3 passed, covering seats/plan copy, entitlement-gated assignment, reviewer-bound approvals, stale version history, contextual comments, and scoped mention destinations.
+- Inspected all 12 final screenshots at native output resolution.
+- Desktop captures are 1440x1000; mobile Chrome captures are 1024x2216 device pixels for the 390x844 CSS viewport.
+- Verified readable synthesis hierarchy, reachable controls above mobile navigation, coherent light/dark contrast, unclipped provenance/backlink content, and no horizontal overflow.
+- Early full-page screenshots displayed the skip link and mobile header mid-page because Chromium stitched fixed/sticky elements while capturing. Replaced these with viewport captures after scrolling the relevant synthesis/idea surface into view. The skip-link geometry assertion verifies it remains above the viewport until focused.
+- No product layout or accessibility defect required a production code change.
 
-## Fresh verification
+## Verification
 
-- `pnpm vitest run` — 13 files, 90 tests passed.
-- `pnpm typecheck` — passed.
-- `pnpm lint` — passed.
-- `pnpm build` — passed; `/app/team` emitted as a dynamic App Router route.
-- `pnpm playwright test tests/e2e/team-review.spec.ts --project=chromium --project=mobile-chrome` — 2/2 passed with zero captured console/page errors and no horizontal overflow.
-- `git diff --check` — passed.
-- Visual inspection: 1440×1024 desktop People view and Pixel 7 Review view inspected in light theme; hierarchy, spacing, fixed mobile navigation clearance, 44px controls, and responsive stacking were coherent.
+- Thinking Rooms workflow: 4 passed, 4 project-mismatch variants skipped.
+- Accessibility suite: 7 passed, including the 2 new Thinking Room route scans.
+- `pnpm typecheck`: passed after removing duplicate ignored declarations generated in `.next/dev/types` and `.next/types`.
+- `pnpm lint`: passed.
+- `pnpm build`: passed; 31 static pages generated and the Thinking Rooms routes included.
 
-## Intentional boundaries
+## Artifacts
 
-- Collaboration remains a persistent local sample adapter until production auth/data work lands. Invite records do not send email.
-- Local demo decisions use an explicit actor preview and still require that actor to match the assigned active reviewer; production replaces the preview with the authenticated session actor.
+- Final screenshots: `output/playwright/`
+  - `thinking-rooms-desktop-*-chromium/`
+  - `thinking-rooms-mobile-*-mobile-chrome/`
+- Each theme/viewport folder contains library, decided synthesis, and Idea Board provenance screenshots.
 
-## Review hardening follow-up
+## Remaining concerns
 
-- Today hook selection now performs one atomic `saveWorkshopVersion` mutation; an approved version edit appends exactly one stale event.
-- Removed the unused legacy hook, comment, and approval actions that could bypass append-only review history.
-- Notification links carry their notification ID and become read only after the exact mounted destination resolves; missing targets and unrelated IDs remain unread.
-- Demo collaboration has an explicit current-actor preview. Approval controls and inbox items are scoped to that actor and the assigned reviewer.
-- Stage assignments are immutable revision events with unique IDs, so historical notifications never retarget. Soft member removal preserves those events and display snapshots.
-- Actual active owner identity is recorded on stale events after ownership transfer.
-- Free/Creator assignment and comment-resolution controls are disabled with visible upgrade guidance; the rich sample is explicitly labeled as a Studio preview.
-- Follow-up verification: focused Today + collaboration 10/10, full Vitest 90/90, TypeScript, lint, production build, and Chromium + Pixel 7 workflow 2/2 passed with missing-target and read-on-mounted-destination assertions.
+- Next had stale duplicate ignored cache artifacts (`CURRENT 3` and generated `* 2.ts` declarations under both dev and build types). They were removed from `.next`; no tracked source was changed. A fresh checkout/build is unaffected.
+- Playwright emits the existing Node `NO_COLOR`/`FORCE_COLOR` warning; it does not affect browser behavior or results.

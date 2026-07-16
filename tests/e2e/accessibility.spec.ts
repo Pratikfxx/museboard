@@ -3,7 +3,13 @@ import { expect, test } from "@playwright/test";
 
 import { installSampleWorkspace } from "./helpers";
 
-for (const route of ["/", "/app/today", "/app/plan"] as const) {
+for (const route of [
+  "/",
+  "/app/today",
+  "/app/plan",
+  "/app/thinking",
+  "/app/thinking/thinking-room-sample-direction",
+] as const) {
   test(`${route} has no serious automated accessibility violations`, async ({ page }) => {
     await installSampleWorkspace(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -12,6 +18,10 @@ for (const route of ["/", "/app/today", "/app/plan"] as const) {
       await expect(page.getByRole("heading", { name: "Good morning, Maya" })).toBeVisible();
     } else if (route === "/app/plan") {
       await expect(page.getByRole("heading", { name: /production week/i })).toBeVisible();
+    } else if (route === "/app/thinking") {
+      await expect(page.getByRole("heading", { name: /bring the question/i })).toBeVisible();
+    } else if (route.includes("thinking-room-sample-direction")) {
+      await expect(page.getByRole("heading", { name: /sample room: which tension/i })).toBeVisible();
     } else {
       await page.getByRole("main").waitFor();
     }
