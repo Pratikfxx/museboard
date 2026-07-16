@@ -250,6 +250,7 @@ begin
         question = p_room->>'question',
         template_id = p_room->>'template_id',
         status = p_room->>'status',
+        facilitator_user_id = (p_room->>'facilitator_user_id')::uuid,
         decision_owner_user_id = (p_room->>'decision_owner_user_id')::uuid,
         context = p_room->>'context',
         decision_due_at = (p_room->>'decision_due_at')::timestamptz,

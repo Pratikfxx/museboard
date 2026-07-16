@@ -151,6 +151,40 @@ describe("authenticated Thinking Room API", () => {
     expect(response.status).toBe(400);
   });
 
+  it("rejects oversized collection and room mutations with 400", async () => {
+    const rpc = vi.fn();
+    mocks.createClient.mockResolvedValue({ from: vi.fn(), rpc });
+    const oversized = aggregate();
+    oversized.room.question = "q".repeat(2001);
+
+    expect((await createRoom(request("/api/thinking-rooms", "POST", {
+      aggregate: oversized,
+    }))).status).toBe(400);
+    expect((await saveRoom(
+      request(`/api/thinking-rooms/${roomId}`, "PUT", {
+        expectedRevision: 1,
+        aggregate: oversized,
+      }),
+      { params: Promise.resolve({ roomId }) },
+    )).status).toBe(400);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("maps a defensive database check-constraint failure to 400", async () => {
+    mocks.createClient.mockResolvedValue({
+      from: vi.fn(),
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: { code: "23514", message: "violates check constraint" },
+      })),
+    });
+
+    const response = await createRoom(request("/api/thinking-rooms", "POST", {
+      aggregate: aggregate(),
+    }));
+    expect(response.status).toBe(400);
+  });
+
   it("lists serialized organization rooms with private no-store caching", async () => {
     const client = listClient();
     mocks.createClient.mockResolvedValue(client);

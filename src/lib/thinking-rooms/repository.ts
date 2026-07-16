@@ -81,6 +81,13 @@ export class ThinkingRoomRevisionConflictError extends Error {
   }
 }
 
+export class ThinkingRoomValidationError extends Error {
+  constructor() {
+    super("Thinking Room data violates a persistence constraint.");
+    this.name = "ThinkingRoomValidationError";
+  }
+}
+
 const uuid = z.uuid();
 const nullableDate = z.iso.datetime().nullable().optional();
 const nullableUuid = z.uuid().nullable().optional();
@@ -235,6 +242,10 @@ export function parseThinkingRoomAggregate(input: unknown): ThinkingRoomAggregat
     synthesisRevisions: z.array(thinkingSynthesisRevisionSchema),
   }).parse(input);
 
+  z.string().max(160).parse(aggregate.room.workspaceId);
+  z.string().max(2000).parse(aggregate.room.question);
+  z.string().max(120).parse(aggregate.room.templateId);
+
   uuid.parse(aggregate.room.id);
   uuid.parse(aggregate.room.organizationId);
   uuid.parse(aggregate.room.facilitatorMembershipId);
@@ -246,6 +257,8 @@ export function parseThinkingRoomAggregate(input: unknown): ThinkingRoomAggregat
   for (const contribution of aggregate.contributions) {
     uuid.parse(contribution.id);
     uuid.parse(contribution.authorMembershipId);
+    z.string().max(20000).parse(contribution.body);
+    z.string().max(160).parse(contribution.authorDisplayNameSnapshot);
     if (contribution.mentionedMembershipId) uuid.parse(contribution.mentionedMembershipId);
     if (contribution.relatedContributionId) uuid.parse(contribution.relatedContributionId);
     if (contribution.roomId !== aggregate.room.id) {
@@ -274,6 +287,7 @@ export function parseThinkingRoomAggregate(input: unknown): ThinkingRoomAggregat
   for (const revision of aggregate.synthesisRevisions) {
     uuid.parse(revision.id);
     uuid.parse(revision.createdByMembershipId);
+    z.string().max(20000).parse(revision.belief);
     if (revision.acceptedByMembershipId) uuid.parse(revision.acceptedByMembershipId);
     if (
       revision.roomId !== aggregate.room.id ||
@@ -366,6 +380,9 @@ export function createSupabaseThinkingRoomRepository(
     if (error?.code === "40001" || error?.message.includes("revision conflict")) {
       throw new ThinkingRoomRevisionConflictError();
     }
+    if (error?.code === "23514" || error?.code === "22001") {
+      throw new ThinkingRoomValidationError();
+    }
     if (error) throw new Error(error.message);
     const revision = z.number().int().positive().parse(data);
     return { ...aggregate, room: { ...aggregate.room, revision } };
@@ -386,15 +403,16 @@ export function createSupabaseThinkingRoomRepository(
     async load(organizationId, roomId) {
       uuid.parse(organizationId);
       uuid.parse(roomId);
-      const roomQuery = client.from("thinking_rooms") as RoomLoadQuery;
-      const roomResult = await roomQuery
-        .select("*")
-        .eq("organization_id", organizationId)
-        .eq("id", roomId)
-        .maybeSingle();
-      if (roomResult.error) throw new Error(roomResult.error.message);
-      if (!roomResult.data) return null;
-
+      const loadRoomRow = async () => {
+        const roomQuery = client.from("thinking_rooms") as RoomLoadQuery;
+        const roomResult = await roomQuery
+          .select("*")
+          .eq("organization_id", organizationId)
+          .eq("id", roomId)
+          .maybeSingle();
+        if (roomResult.error) throw new Error(roomResult.error.message);
+        return roomResult.data ? roomRowSchema.parse(roomResult.data) : null;
+      };
       const child = async (table: string, order: string) => {
         const query = client.from(table) as ChildLoadQuery;
         const result = await query
@@ -405,17 +423,27 @@ export function createSupabaseThinkingRoomRepository(
         if (result.error) throw new Error(result.error.message);
         return z.array(z.unknown()).parse(result.data);
       };
-      const [contributionRows, reactionRows, synthesisRows] = await Promise.all([
-        child("thinking_contributions", "created_at"),
-        child("thinking_contribution_reactions", "created_at"),
-        child("thinking_synthesis_revisions", "number"),
-      ]);
-      return parseThinkingRoomAggregate({
-        room: roomFromRow(roomResult.data),
-        contributions: contributionRows.map(contributionFromRow),
-        reactions: reactionRows.map(reactionFromRow),
-        synthesisRevisions: synthesisRows.map(synthesisFromRow),
-      });
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const roomBefore = await loadRoomRow();
+        if (!roomBefore) return null;
+        const [contributionRows, reactionRows, synthesisRows] = await Promise.all([
+          child("thinking_contributions", "created_at"),
+          child("thinking_contribution_reactions", "created_at"),
+          child("thinking_synthesis_revisions", "number"),
+        ]);
+        const roomAfter = await loadRoomRow();
+        if (!roomAfter) return null;
+        if (roomBefore.revision === roomAfter.revision) {
+          return parseThinkingRoomAggregate({
+            room: roomFromRow(roomAfter),
+            contributions: contributionRows.map(contributionFromRow),
+            reactions: reactionRows.map(reactionFromRow),
+            synthesisRevisions: synthesisRows.map(synthesisFromRow),
+          });
+        }
+      }
+      throw new ThinkingRoomRevisionConflictError();
     },
 
     create(aggregate) {

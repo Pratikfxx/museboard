@@ -148,4 +148,10 @@ describe("production database boundary", () => {
     expect(thinkingRooms).toContain("revoke all on function public.save_thinking_room");
     expect(thinkingRooms).toContain("grant execute on function public.save_thinking_room");
   });
+
+  it("persists facilitator reassignment inside the room compare-and-swap", () => {
+    expect(thinkingRooms).toContain(
+      "facilitator_user_id = (p_room->>'facilitator_user_id')::uuid",
+    );
+  });
 });

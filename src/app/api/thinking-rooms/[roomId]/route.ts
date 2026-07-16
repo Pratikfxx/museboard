@@ -7,6 +7,7 @@ import {
   createSupabaseThinkingRoomRepository,
   parseThinkingRoomAggregate,
   ThinkingRoomRevisionConflictError,
+  ThinkingRoomValidationError,
   type SupabaseThinkingRoomClient,
 } from "@/lib/thinking-rooms/repository";
 
@@ -94,7 +95,7 @@ export async function PUT(request: Request, routeContext: RoomRouteContext) {
         { status: 409 },
       );
     }
-    if (error instanceof z.ZodError) {
+    if (error instanceof z.ZodError || error instanceof ThinkingRoomValidationError) {
       return NextResponse.json({ error: "Thinking Room data is invalid" }, { status: 400 });
     }
     return NextResponse.json({ error: "Thinking Room could not be saved" }, { status: 500 });

@@ -5,6 +5,7 @@ import { getAuthenticatedWorkspace } from "@/lib/auth/workspace";
 import {
   createSupabaseThinkingRoomRepository,
   parseThinkingRoomAggregate,
+  ThinkingRoomValidationError,
   type SupabaseThinkingRoomClient,
   type ThinkingRoomAggregate,
 } from "@/lib/thinking-rooms/repository";
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {
-    if (error instanceof z.ZodError) {
+    if (error instanceof z.ZodError || error instanceof ThinkingRoomValidationError) {
       return NextResponse.json({ error: "Thinking Room data is invalid" }, { status: 400 });
     }
     return NextResponse.json({ error: "Thinking Room could not be created" }, { status: 500 });
