@@ -14,6 +14,10 @@ const durableWorkspace = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260715105837_durable_workspace_snapshots.sql"),
   "utf8",
 ).toLowerCase();
+const thinkingRooms = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260716090000_thinking_rooms.sql"),
+  "utf8",
+).toLowerCase();
 
 describe("production database boundary", () => {
   it("makes Data API exposure explicit and enables RLS on every tenant table", () => {
@@ -93,5 +97,55 @@ describe("production database boundary", () => {
     expect(durableWorkspace).toContain("select auth.uid()");
     expect(durableWorkspace).toContain("revoke all on function public.save_workspace_snapshot");
     expect(durableWorkspace).toContain("grant execute on function public.save_workspace_snapshot");
+  });
+
+  it("normalizes Thinking Rooms outside workspace snapshots with tenant-safe foreign keys", () => {
+    for (const table of [
+      "thinking_rooms",
+      "thinking_contributions",
+      "thinking_contribution_reactions",
+      "thinking_synthesis_revisions",
+    ]) {
+      expect(thinkingRooms).toContain(`create table public.${table}`);
+      expect(thinkingRooms).toContain(`alter table public.${table} enable row level security`);
+      expect(thinkingRooms).toContain(`alter table public.${table} force row level security`);
+      expect(thinkingRooms).toContain(`revoke all on table public.${table} from anon, authenticated`);
+      expect(thinkingRooms).toContain(`grant select on table public.${table} to authenticated`);
+    }
+    expect(thinkingRooms).toContain("thinking_contributions_room_org_fk");
+    expect(thinkingRooms).toContain("thinking_reactions_contribution_room_org_fk");
+    expect(thinkingRooms).toContain("thinking_synthesis_room_org_fk");
+    expect(thinkingRooms).not.toContain("workspace_snapshots");
+  });
+
+  it("attributes durable room activity to Supabase users and snapshots author names", () => {
+    expect(thinkingRooms).toContain("facilitator_user_id uuid not null");
+    expect(thinkingRooms).toContain("author_user_id uuid not null");
+    expect(thinkingRooms).toContain("author_display_name_snapshot text not null");
+    expect(thinkingRooms).toContain("actor_user_id uuid not null");
+    expect(thinkingRooms).toContain("created_by_user_id uuid not null");
+    expect(thinkingRooms).toContain("references auth.users(id)");
+    expect(thinkingRooms).not.toMatch(/member-[a-z0-9]/u);
+  });
+
+  it("allows active members to read and only owners or editors to write room rows", () => {
+    expect(thinkingRooms).toContain("private.is_organization_member(organization_id)");
+    expect(thinkingRooms).toContain("private.is_organization_member(organization_id, array['owner', 'editor'])");
+    expect(thinkingRooms).toContain("for select to authenticated");
+    expect(thinkingRooms).toContain("for insert to authenticated");
+    expect(thinkingRooms).toContain("for update to authenticated");
+    expect(thinkingRooms).toContain("for delete to authenticated");
+    expect(thinkingRooms).toContain("grant insert, update, delete on table public.thinking_rooms to authenticated");
+  });
+
+  it("exposes an authenticated room-scoped compare-and-swap save", () => {
+    expect(thinkingRooms).toContain("create function public.save_thinking_room");
+    expect(thinkingRooms).toContain("p_expected_revision bigint");
+    expect(thinkingRooms).toContain("security invoker");
+    expect(thinkingRooms).toContain("revision = p_expected_revision");
+    expect(thinkingRooms).toContain("thinking room revision conflict");
+    expect(thinkingRooms).toContain("select auth.uid()");
+    expect(thinkingRooms).toContain("revoke all on function public.save_thinking_room");
+    expect(thinkingRooms).toContain("grant execute on function public.save_thinking_room");
   });
 });
