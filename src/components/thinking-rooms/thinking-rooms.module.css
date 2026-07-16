@@ -826,6 +826,7 @@
 
 .composer {
   display: grid;
+  min-width: 0;
   gap: 20px;
   margin-top: 18px;
   border: 1px solid var(--border);
@@ -839,18 +840,30 @@
 .composerHeading > div { display: grid; gap: 3px; }
 .composerHeading small, .synthesisHeader small { color: var(--coral); font-size: .64rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
 .composerHeading h2 { margin: 0; font-family: var(--font-instrument-serif), serif; font-size: 1.7rem; font-weight: 400; }
+.composer form,
+.composer fieldset,
+.composer label { min-width: 0; max-width: 100%; }
 .composer form { display: grid; gap: 8px; }
+.composer fieldset { display: grid; gap: 8px; margin: 8px 0 0; border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.composer fieldset label { display: grid; gap: 6px; }
 .composer label, .synthesisForm > label, .synthesisForm legend { color: var(--muted); font-size: .66rem; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
-.composer textarea, .synthesisForm textarea {
+.composer textarea,
+.composer input,
+.composer select,
+.synthesisForm textarea {
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
-  resize: vertical;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--background);
   padding: 14px;
   color: var(--ink);
+  font: inherit;
   line-height: 1.55;
 }
+.composer textarea, .synthesisForm textarea { resize: vertical; }
+.composer select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .composerFooter { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .composerFooter small { max-width: 450px; color: var(--muted); font-size: .67rem; line-height: 1.45; }
