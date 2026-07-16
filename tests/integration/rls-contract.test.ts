@@ -56,6 +56,11 @@ describe("production database boundary", () => {
     expect(presenceEdits).toContain("return null; -- keep the existing row and its edit claim/history in place");
     expect(presenceEdits).toContain("create index thinking_room_presence_expiry");
     expect(presenceEdits).toContain("create function private.cleanup_thinking_room_collaboration()");
+    expect(presenceEdits).toContain("create function private.cleanup_thinking_room_collaboration_room");
+    expect(presenceEdits).toContain("create extension if not exists pg_cron");
+    expect(presenceEdits).toContain("museboard-thinking-room-collaboration-cleanup");
+    expect(presenceEdits).toContain("perform private.cleanup_thinking_room_collaboration_room(p_organization_id, p_room_id)");
+    expect(presenceEdits).not.toContain("perform private.cleanup_thinking_room_collaboration();");
     expect(presenceEdits).toContain("alter table public.thinking_contribution_versions enable row level security");
     expect(presenceEdits).toContain("alter table public.thinking_contribution_versions force row level security");
     expect(presenceEdits).toContain("char_length(p_source_reference_id) > 2000");
@@ -71,6 +76,19 @@ describe("production database boundary", () => {
       "row.updated_at is distinct from contribution.updated_at",
       "row.deleted_at is distinct from contribution.deleted_at",
     ]) expect(presenceEdits).toContain(field);
+
+    const wrapperStart = presenceEdits.indexOf("create function public.save_thinking_room(\n");
+    const wrapperRevisionConflict = presenceEdits.indexOf("thinking room revision conflict", wrapperStart);
+    const wrapperSemanticCheck = presenceEdits.indexOf("existing contribution content is immutable through aggregate save", wrapperStart);
+    expect(wrapperStart).toBeGreaterThan(-1);
+    expect(wrapperRevisionConflict).toBeGreaterThan(wrapperStart);
+    expect(wrapperRevisionConflict).toBeLessThan(wrapperSemanticCheck);
+
+    const editStart = presenceEdits.indexOf("create function public.edit_thinking_contribution(");
+    const roomLock = presenceEdits.indexOf("select room.revision into v_room_revision", editStart);
+    const contributionLock = presenceEdits.indexOf("select contribution.* into v_contribution", editStart);
+    expect(roomLock).toBeGreaterThan(editStart);
+    expect(roomLock).toBeLessThan(contributionLock);
   });
   it("makes Data API exposure explicit and enables RLS on every tenant table", () => {
     const tenantTables = [

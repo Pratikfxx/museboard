@@ -122,8 +122,40 @@ end;
 $$;
 revoke all on function private.cleanup_thinking_room_collaboration() from public, anon, authenticated;
 grant execute on function private.cleanup_thinking_room_collaboration() to service_role;
--- Run private.cleanup_thinking_room_collaboration() from a Supabase scheduled function or pg_cron
--- when available. Every heartbeat and claim also performs this global cleanup opportunistically.
+
+create function private.cleanup_thinking_room_collaboration_room(p_organization_id uuid, p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from private.thinking_room_presence presence
+  where presence.organization_id = p_organization_id and presence.room_id = p_room_id
+    and (presence.expires_at <= now() or not exists (
+      select 1 from public.organization_memberships membership
+      where membership.organization_id = presence.organization_id
+        and membership.user_id = presence.actor_user_id and membership.status = 'active'
+    ));
+  delete from private.thinking_contribution_edit_claims claim
+  where claim.organization_id = p_organization_id and claim.room_id = p_room_id
+    and (claim.expires_at <= now() or not exists (
+      select 1 from public.organization_memberships membership
+      where membership.organization_id = claim.organization_id
+        and membership.user_id = claim.actor_user_id and membership.status = 'active'
+    ));
+end;
+$$;
+revoke all on function private.cleanup_thinking_room_collaboration_room(uuid, uuid) from public, anon, authenticated;
+
+-- Request paths clean only their room. Supabase Cron performs bounded-retention
+-- cleanup even when no room is active.
+create extension if not exists pg_cron;
+select cron.schedule(
+  'museboard-thinking-room-collaboration-cleanup',
+  '*/15 * * * *',
+  'select private.cleanup_thinking_room_collaboration();'
+);
 
 create function public.sync_thinking_room_presence(
   p_organization_id uuid, p_room_id uuid, p_session_id uuid, p_area text, p_is_composing boolean
@@ -145,7 +177,7 @@ begin
     or not exists (select 1 from public.thinking_rooms room where room.id = p_room_id and room.organization_id = p_organization_id)
   then raise exception 'thinking room not found' using errcode = '23503'; end if;
   v_display_name := private.thinking_room_actor_name(p_organization_id, v_user_id);
-  perform private.cleanup_thinking_room_collaboration();
+  perform private.cleanup_thinking_room_collaboration_room(p_organization_id, p_room_id);
   insert into private.thinking_room_presence (
     organization_id, room_id, actor_user_id, session_id, display_name_snapshot, area, is_composing, expires_at
   ) values (p_organization_id, p_room_id, v_user_id, p_session_id, v_display_name, p_area, p_is_composing, now() + interval '30 seconds')
@@ -193,7 +225,7 @@ begin
     raise exception 'only the original author may edit a contribution' using errcode = '42501';
   end if;
   perform pg_advisory_xact_lock(hashtextextended(p_contribution_id::text, 0));
-  perform private.cleanup_thinking_room_collaboration();
+  perform private.cleanup_thinking_room_collaboration_room(p_organization_id, p_room_id);
   if not p_active then
     delete from private.thinking_contribution_edit_claims
     where organization_id = p_organization_id and room_id = p_room_id and contribution_id = p_contribution_id
@@ -249,10 +281,14 @@ begin
   select role into v_role from public.organization_memberships
   where organization_id = p_organization_id and user_id = v_user_id and status = 'active';
   if v_user_id is null or v_role not in ('owner', 'editor') then raise exception 'thinking room edit permission denied' using errcode = '42501'; end if;
+  -- Match aggregate saves' room -> contribution lock order to prevent deadlocks.
+  select room.revision into v_room_revision from public.thinking_rooms room
+  where room.id = p_room_id and room.organization_id = p_organization_id
+    and room.status in ('exploring', 'synthesizing') for update;
+  if not found then raise exception 'thinking room contribution not found' using errcode = '23503'; end if;
   select contribution.* into v_contribution from public.thinking_contributions contribution
-  join public.thinking_rooms room on room.id = contribution.room_id and room.organization_id = contribution.organization_id
   where contribution.id = p_contribution_id and contribution.room_id = p_room_id and contribution.organization_id = p_organization_id
-    and room.status in ('exploring', 'synthesizing') for update of contribution;
+  for update;
   if not found then raise exception 'thinking room contribution not found' using errcode = '23503'; end if;
   if v_contribution.author_user_id <> v_user_id then raise exception 'only the original author may edit a contribution' using errcode = '42501'; end if;
   if not exists (select 1 from private.thinking_contribution_edit_claims claim
@@ -331,6 +367,17 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Revision conflicts take precedence over semantic authorization checks.
+  -- Lock the room first so this wrapper and dedicated edits use one lock order.
+  if p_expected_revision > 0 then
+    perform 1 from public.thinking_rooms room
+    where room.id = p_room_id and room.organization_id = p_organization_id
+      and room.revision = p_expected_revision
+    for update;
+    if not found then
+      raise exception 'thinking room revision conflict' using errcode = '40001';
+    end if;
+  end if;
   if exists (
     select 1 from public.thinking_contributions contribution
     join jsonb_to_recordset(p_contributions) as row(
